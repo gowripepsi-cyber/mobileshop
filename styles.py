@@ -322,4 +322,84 @@ QListWidget::item:selected {
     background-color: #6366f1;
     color: #ffffff;
 }
+
+/* Calendar Widget Styling */
+QCalendarWidget {
+    background-color: #151528;
+    border: 1px solid #2c2c54;
+    border-radius: 8px;
+}
+
+QCalendarWidget QWidget {
+    alternate-background-color: #1b1b32;
+    background-color: #151528;
+    color: #e2e8f0;
+}
+
+/* Navigation bar at the top */
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    background-color: #1b1b32;
+    border-bottom: 1px solid #2c2c54;
+}
+
+/* Tool buttons in navigation bar (Month, Year, Prev, Next) */
+QCalendarWidget QToolButton {
+    color: #ffffff;
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    margin: 3px;
+    padding: 4px 8px;
+    font-weight: bold;
+}
+
+QCalendarWidget QToolButton:hover {
+    background-color: rgba(99, 102, 241, 0.2);
+}
+
+QCalendarWidget QToolButton:pressed {
+    background-color: #6366f1;
+}
+
+/* The month/year drop down menus */
+QCalendarWidget QMenu {
+    background-color: #141426;
+    border: 1px solid #2c2c54;
+    color: #ffffff;
+}
+
+QCalendarWidget QMenu::item:selected {
+    background-color: #6366f1;
+    color: #ffffff;
+}
+
+/* Year SpinBox */
+QCalendarWidget QSpinBox {
+    background-color: #141426;
+    border: 1px solid #2c2c54;
+    border-radius: 4px;
+    color: #ffffff;
+    selection-background-color: #6366f1;
+}
+
+/* Grid view (the days table) */
+QCalendarWidget QAbstractItemView {
+    background-color: #151528;
+    color: #e2e8f0;
+    selection-background-color: #6366f1;
+    selection-color: #ffffff;
+}
+
+QCalendarWidget QAbstractItemView::item {
+    padding: 0px;
+    border: none;
+}
+
+QCalendarWidget QAbstractItemView:enabled {
+    color: #e2e8f0;
+}
+
+QCalendarWidget QAbstractItemView:disabled {
+    color: #475569;
+}
 """
