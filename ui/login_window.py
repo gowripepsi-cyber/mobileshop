@@ -1,0 +1,94 @@
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QWidget
+from PySide6.QtCore import Qt
+from database import Session, User, get_hash, Setting
+
+class LoginWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Login - Mobile Shop Management System")
+        self.setFixedSize(440, 350)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.user_data = None
+        self.init_ui()
+
+    def init_ui(self):
+        # Main Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 40, 30, 40)
+        layout.setSpacing(15)
+
+        # Title Label
+        session = Session()
+        try:
+            shop_name_setting = session.query(Setting).filter_by(key='shop_name').first()
+            shop_name = shop_name_setting.value.upper() if shop_name_setting else "GALAXY MOBILES"
+        except Exception:
+            shop_name = "GALAXY MOBILES"
+        finally:
+            session.close()
+
+        title_label = QLabel(shop_name)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #6366f1; letter-spacing: 2px;")
+        layout.addWidget(title_label)
+
+        # Subtitle
+        sub_label = QLabel("Management System Login")
+        sub_label.setAlignment(Qt.AlignCenter)
+        sub_label.setStyleSheet("font-size: 13px; color: #94a3b8; margin-bottom: 15px;")
+        layout.addWidget(sub_label)
+
+        # Username Input
+        self.username_input = QLineEdit()
+        self.username_input.setPlaceholderText("Username")
+        self.username_input.setFixedHeight(40)
+        layout.addWidget(self.username_input)
+
+        # Password Input
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Password")
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setFixedHeight(40)
+        layout.addWidget(self.password_input)
+
+        # Error label
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("color: #ef4444; font-size: 12px;")
+        self.error_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.error_label)
+
+        # Login Button
+        self.login_btn = QPushButton("Log In")
+        self.login_btn.setFixedHeight(42)
+        self.login_btn.clicked.connect(self.handle_login)
+        layout.addWidget(self.login_btn)
+
+        # Trigger login on return key
+        self.username_input.returnPressed.connect(self.handle_login)
+        self.password_input.returnPressed.connect(self.handle_login)
+
+    def handle_login(self):
+        username = self.username_input.text().strip()
+        password = self.password_input.text()
+
+        if not username or not password:
+            self.error_label.setText("Please enter both username and password.")
+            return
+
+        session = Session()
+        try:
+            hashed_pwd = get_hash(password)
+            user = session.query(User).filter_by(username=username, password_hash=hashed_pwd).first()
+            if user:
+                self.user_data = {
+                    "id": user.id,
+                    "username": user.username,
+                    "role": user.role
+                }
+                self.accept()
+            else:
+                self.error_label.setText("Invalid username or password.")
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
+        finally:
+            session.close()
