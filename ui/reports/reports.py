@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTable
                              QTableWidgetItem, QHeaderView, QPushButton, QCheckBox, 
                              QMessageBox, QFileDialog, QTabWidget, QFrame, QFormLayout)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from database import Session
 from sqlalchemy.orm import joinedload
 from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment
@@ -445,6 +446,7 @@ class ReportsView(QWidget):
         self.customer_breakup_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.customer_breakup_table.setSelectionMode(QTableWidget.NoSelection)
         self.customer_breakup_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.customer_breakup_table.cellClicked.connect(lambda row, col: self.on_breakup_cell_clicked(row, col, is_supplier=False))
         
         right_layout.addWidget(self.customer_breakup_table)
 
@@ -507,6 +509,7 @@ class ReportsView(QWidget):
         self.supplier_breakup_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.supplier_breakup_table.setSelectionMode(QTableWidget.NoSelection)
         self.supplier_breakup_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.supplier_breakup_table.cellClicked.connect(lambda row, col: self.on_breakup_cell_clicked(row, col, is_supplier=True))
         
         right_layout.addWidget(self.supplier_breakup_table)
 
@@ -596,7 +599,13 @@ class ReportsView(QWidget):
                 running_balance += tx["debit"] - tx["credit"]
                 
                 self.customer_breakup_table.setItem(i, 0, QTableWidgetItem(tx["date"].strftime("%Y-%m-%d")))
-                self.customer_breakup_table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
+                ref_item = QTableWidgetItem(tx["ref"])
+                if tx["ref"] != "OPENING":
+                    font = ref_item.font()
+                    font.setUnderline(True)
+                    ref_item.setFont(font)
+                    ref_item.setForeground(QColor("#6366f1"))
+                self.customer_breakup_table.setItem(i, 1, ref_item)
                 self.customer_breakup_table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
                 
                 deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
@@ -687,7 +696,13 @@ class ReportsView(QWidget):
                 running_balance += tx["credit"] - tx["debit"]
                 
                 self.supplier_breakup_table.setItem(i, 0, QTableWidgetItem(tx["date"].strftime("%Y-%m-%d")))
-                self.supplier_breakup_table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
+                ref_item = QTableWidgetItem(tx["ref"])
+                if tx["ref"] != "OPENING":
+                    font = ref_item.font()
+                    font.setUnderline(True)
+                    ref_item.setFont(font)
+                    ref_item.setForeground(QColor("#6366f1"))
+                self.supplier_breakup_table.setItem(i, 1, ref_item)
                 self.supplier_breakup_table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
                 
                 deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
@@ -707,6 +722,43 @@ class ReportsView(QWidget):
 
         except Exception as e:
             print(f"Error loading supplier breakup: {e}")
+        finally:
+            session.close()
+
+    def on_breakup_cell_clicked(self, row, column, is_supplier=False):
+        if column != 1:  # Only reference column (Ref / Type) is clickable
+            return
+
+        table = self.supplier_breakup_table if is_supplier else self.customer_breakup_table
+        item = table.item(row, column)
+        if not item:
+            return
+
+        ref_text = item.text().strip()
+        if not ref_text or ref_text == "OPENING":
+            return
+
+        main_window = self.window()
+        session = Session()
+        try:
+            if is_supplier:
+                purchase = session.query(PurchaseMaster).filter_by(invoice_number=ref_text).first()
+                if purchase and hasattr(main_window, 'purchase_view'):
+                    main_window.purchase_view.view_purchase_details(purchase.id)
+            else:
+                # 1. Check if it's a sales invoice
+                sale = session.query(SalesMaster).filter_by(invoice_number=ref_text).first()
+                if sale and hasattr(main_window, 'sales_view'):
+                    main_window.sales_view.view_invoice_details(sale.id)
+                    return
+
+                # 2. Check if it's a repair job card
+                job = session.query(ServiceJob).filter_by(job_number=ref_text).first()
+                if job and hasattr(main_window, 'services_view'):
+                    main_window.services_view.view_job_details(job.job_number)
+                    return
+        except Exception as e:
+            print(f"Error opening reference details: {e}")
         finally:
             session.close()
 
