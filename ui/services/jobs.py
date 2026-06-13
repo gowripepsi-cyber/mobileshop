@@ -317,7 +317,8 @@ class BillingDialog(QDialog):
         self.parts_table.setHorizontalHeaderLabels(["Part Name", "Qty", "Rate (₹)", "Total (₹)", "Action"])
         self.parts_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.parts_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.parts_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.parts_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        self.parts_table.setColumnWidth(4, 110)
         self.parts_table.verticalHeader().setVisible(False)
         self.parts_table.setMinimumHeight(180)
         self.parts_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -568,10 +569,18 @@ class BillingDialog(QDialog):
                 total_val = p["cost"] * p["qty"]
                 self.parts_table.setItem(i, 3, QTableWidgetItem(f"{total_val:.2f}"))
                 
+                # Remove button (centered wrapper container)
+                btn_container = QWidget()
+                btn_layout = QHBoxLayout(btn_container)
+                btn_layout.setContentsMargins(4, 4, 4, 4)
+                btn_layout.setSpacing(0)
+                btn_layout.setAlignment(Qt.AlignCenter)
+
                 del_btn = QPushButton("Remove")
-                del_btn.setProperty("class", "btn-danger")
+                del_btn.setProperty("class", "btn-action-delete")
                 del_btn.clicked.connect(lambda checked, idx=i: self.delete_part(idx))
-                self.parts_table.setCellWidget(i, 4, del_btn)
+                btn_layout.addWidget(del_btn)
+                self.parts_table.setCellWidget(i, 4, btn_container)
 
             self.recalculate_totals()
             self.handle_product_selection_change()

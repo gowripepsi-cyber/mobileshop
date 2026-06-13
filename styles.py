@@ -29,23 +29,56 @@ QWidget {
 #sidebar QPushButton {
     background-color: transparent;
     border: none;
-    color: #94a3b8;
-    text-align: left;
     padding: 12px 20px;
-    font-size: 14px;
     border-radius: 6px;
     margin: 4px 10px;
 }
 
 #sidebar QPushButton:hover {
     background-color: rgba(99, 102, 241, 0.1);
-    color: #ffffff;
 }
 
 #sidebar QPushButton:checked {
     background-color: #6366f1;
+}
+
+#sidebar QPushButton QLabel {
+    background: transparent;
+}
+
+#sidebar QPushButton QLabel#btn_label {
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+#sidebar QPushButton:hover QLabel#btn_label {
+    color: #ffffff;
+}
+
+#sidebar QPushButton:checked QLabel#btn_label {
     color: #ffffff;
     font-weight: bold;
+}
+
+#sidebar QPushButton QLabel#shortcut_label {
+    color: #475569;
+    font-size: 11px;
+    font-weight: normal;
+    background: transparent;
+    border: none;
+    padding: 0px;
+}
+
+#sidebar QPushButton:hover QLabel#shortcut_label {
+    color: #64748b;
+    background: transparent;
+    border: none;
+}
+
+#sidebar QPushButton:checked QLabel#shortcut_label {
+    color: #94a3b8;
+    background: transparent;
+    border: none;
 }
 
 /* Header Area */
@@ -194,6 +227,16 @@ QPushButton:pressed {
 .btn-success:hover {
     background-color: #059669;
 }
+
+/* Warning Button */
+.btn-warning {
+    background-color: #f59e0b;
+}
+
+.btn-warning:hover {
+    background-color: #d97706;
+}
+
 
 /* Tables */
 QTableWidget, QTableView {
@@ -401,5 +444,92 @@ QCalendarWidget QAbstractItemView:enabled {
 
 QCalendarWidget QAbstractItemView:disabled {
     color: #475569;
+}
+
+/* Tooltip styling */
+QToolTip {
+    background-color: #1e1e38;
+    color: #ffffff;
+    border: 1px solid #2c2c54;
+    border-radius: 4px;
+    padding: 5px;
+    font-size: 12px;
+}
+
+/* Table Action Buttons - Modern ERP/CRM styling */
+.btn-action-view {
+    background-color: #3b82f6;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 4px 10px;
+    min-height: 26px;
+    max-height: 26px;
+    min-width: 65px;
+    border: none;
+}
+.btn-action-view:hover {
+    background-color: #2563eb;
+}
+.btn-action-view:pressed {
+    background-color: #1d4ed8;
+}
+
+.btn-action-print {
+    background-color: #64748b;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 4px 10px;
+    min-height: 26px;
+    max-height: 26px;
+    min-width: 65px;
+    border: none;
+}
+.btn-action-print:hover {
+    background-color: #475569;
+}
+.btn-action-print:pressed {
+    background-color: #334155;
+}
+
+.btn-action-edit {
+    background-color: #f59e0b;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 4px 10px;
+    min-height: 26px;
+    max-height: 26px;
+    min-width: 65px;
+    border: none;
+}
+.btn-action-edit:hover {
+    background-color: #d97706;
+}
+.btn-action-edit:pressed {
+    background-color: #b45309;
+}
+
+.btn-action-delete {
+    background-color: #ef4444;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 4px 10px;
+    min-height: 26px;
+    max-height: 26px;
+    min-width: 75px;
+    border: none;
+}
+.btn-action-delete:hover {
+    background-color: #dc2626;
+}
+.btn-action-delete:pressed {
+    background-color: #b91c1c;
 }
 """

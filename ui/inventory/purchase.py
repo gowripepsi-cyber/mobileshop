@@ -120,7 +120,8 @@ class PurchaseView(QWidget):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Product Name", "Qty", "Rate (₹)", "Total (₹)", "Action"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 110)
         self.table.verticalHeader().setVisible(False)
         right_layout.addWidget(self.table)
 
@@ -250,11 +251,18 @@ class PurchaseView(QWidget):
             subtotal = item["qty"] * item["rate"]
             self.table.setItem(i, 3, QTableWidgetItem(f"{subtotal:.2f}"))
 
-            # Delete button
+            # Delete button (centered wrapper container)
+            btn_container = QWidget()
+            btn_layout = QHBoxLayout(btn_container)
+            btn_layout.setContentsMargins(4, 4, 4, 4)
+            btn_layout.setSpacing(0)
+            btn_layout.setAlignment(Qt.AlignCenter)
+
             del_btn = QPushButton("Delete")
-            del_btn.setProperty("class", "btn-danger")
+            del_btn.setProperty("class", "btn-action-delete")
             del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
-            self.table.setCellWidget(i, 4, del_btn)
+            btn_layout.addWidget(del_btn)
+            self.table.setCellWidget(i, 4, btn_container)
 
         self.update_summary()
 

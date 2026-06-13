@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.logo_label)
         self.update_shop_name()
 
-        # Navigation buttons mapping
+        # Navigation buttons mapping and shortcuts
         self.nav_buttons = {}
         nav_items = [
             ("Dashboard", 0),
@@ -59,9 +59,50 @@ class MainWindow(QMainWindow):
             ("Settings", 10),
         ]
 
+        # Map index to shortcut key
+        shortcuts = {
+            0: "Ctrl+1",
+            1: "Ctrl+2",
+            2: "Ctrl+3",
+            3: "Ctrl+4",
+            4: "Ctrl+5",
+            5: "Ctrl+6",
+            6: "Ctrl+7",
+            7: "Ctrl+8",
+            8: "Ctrl+9",
+            9: "Ctrl+0",
+            10: "Ctrl+,"
+        }
+
         for text, index in nav_items:
-            btn = QPushButton(text)
+            shortcut_key = shortcuts.get(index)
+            btn = QPushButton()
             btn.setCheckable(True)
+            
+            # Create horizontal layout inside the button to align title and shortcut
+            btn_layout = QHBoxLayout(btn)
+            btn_layout.setContentsMargins(0, 0, 0, 0)
+            btn_layout.setSpacing(8)
+            
+            # Title Label (left side)
+            lbl_text = QLabel(text)
+            lbl_text.setObjectName("btn_label")
+            lbl_text.setAttribute(Qt.WA_TransparentForMouseEvents)
+            btn_layout.addWidget(lbl_text)
+            
+            # Stretch spacer to push shortcut label to the right
+            btn_layout.addStretch()
+            
+            # Shortcut Badge (right side)
+            if shortcut_key:
+                btn.setShortcut(shortcut_key)
+                btn.setToolTip(f"{text} ({shortcut_key})")
+                
+                lbl_shortcut = QLabel(shortcut_key)
+                lbl_shortcut.setObjectName("shortcut_label")
+                lbl_shortcut.setAttribute(Qt.WA_TransparentForMouseEvents)
+                btn_layout.addWidget(lbl_shortcut)
+                
             btn.clicked.connect(lambda checked, idx=index: self.switch_view(idx))
             sidebar_layout.addWidget(btn)
             self.nav_buttons[index] = btn
