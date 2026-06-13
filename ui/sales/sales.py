@@ -751,8 +751,10 @@ class SalesView(QWidget):
             info_layout = QFormLayout(info_frame)
             info_layout.addRow("Invoice Number:", QLabel(sale.invoice_number))
             info_layout.addRow("Date:", QLabel(sale.date.strftime("%Y-%m-%d")))
-            info_layout.addRow("Customer Name:", QLabel(sale.customer.name))
-            info_layout.addRow("Customer Contact:", QLabel(sale.customer.mobile))
+            cust_name = sale.customer.name if sale.customer else "Unknown Customer (Deleted)"
+            cust_mobile = sale.customer.mobile if sale.customer else "N/A"
+            info_layout.addRow("Customer Name:", QLabel(cust_name))
+            info_layout.addRow("Customer Contact:", QLabel(cust_mobile))
             dlg_layout.addWidget(info_frame)
             
             # Items table
@@ -765,7 +767,10 @@ class SalesView(QWidget):
             items = session.query(SalesItem).filter_by(sales_id=sale_id).all()
             items_table.setRowCount(len(items))
             for i, item in enumerate(items):
-                display_name = f"{item.product.name} ({item.product.brand} {item.product.model})"
+                if item.product:
+                    display_name = f"{item.product.name} ({item.product.brand} {item.product.model})"
+                else:
+                    display_name = f"Unknown Product (ID: {item.product_id})"
                 items_table.setItem(i, 0, QTableWidgetItem(display_name))
                 items_table.setItem(i, 1, QTableWidgetItem(str(item.qty)))
                 items_table.setItem(i, 2, QTableWidgetItem(f"{item.rate:.2f}"))
