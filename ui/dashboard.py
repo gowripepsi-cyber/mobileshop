@@ -1,9 +1,10 @@
 import datetime
-from PySide6.QtWidgets import QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QFrame
+from PySide6.QtWidgets import (QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, 
+                             QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QLineEdit, QPushButton)
 from PySide6.QtCore import Qt
 from sqlalchemy import func
 from database import Session
-from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction
+from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction, PurchaseMaster
 
 class DashboardView(QWidget):
     def __init__(self, parent=None):
@@ -15,7 +16,22 @@ class DashboardView(QWidget):
         self.main_layout.setContentsMargins(20, 20, 20, 20)
         self.main_layout.setSpacing(20)
 
-        # 1. Grid layout for top metric cards
+        # 1. Search Bar at the very top of self.main_layout
+        search_layout = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("🔍 Search name, mobile number, job number, bill number...")
+        self.search_input.setStyleSheet("font-size: 14px; padding: 10px 15px; border-radius: 8px;")
+        self.search_input.textChanged.connect(self.handle_search)
+        search_layout.addWidget(self.search_input)
+        self.main_layout.addLayout(search_layout)
+
+        # 2. Container for default dashboard content (Metrics + Bank Table + Low Stock Table)
+        self.default_content = QWidget()
+        default_layout = QVBoxLayout(self.default_content)
+        default_layout.setContentsMargins(0, 0, 0, 0)
+        default_layout.setSpacing(20)
+
+        # Grid layout for top metric cards
         self.metrics_grid = QGridLayout()
         self.metrics_grid.setSpacing(15)
 
@@ -52,9 +68,9 @@ class DashboardView(QWidget):
             self.metrics_grid.addWidget(card, row, col)
             self.cards[title] = val_lbl
 
-        self.main_layout.addLayout(self.metrics_grid)
+        default_layout.addLayout(self.metrics_grid)
 
-        # 2. Bottom sections (Bank Account details and Low Stock table)
+        # Bottom sections (Bank Account details and Low Stock table)
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(20)
 
@@ -100,7 +116,33 @@ class DashboardView(QWidget):
 
         bottom_layout.addWidget(self.low_stock_card, 1)
 
-        self.main_layout.addLayout(bottom_layout)
+        default_layout.addLayout(bottom_layout)
+        self.main_layout.addWidget(self.default_content)
+
+        # 3. Search Results Panel (Card Frame) - Starts Hidden
+        self.search_results_card = QFrame()
+        self.search_results_card.setProperty("class", "CardFrame")
+        self.search_results_card.setVisible(False)
+        results_layout = QVBoxLayout(self.search_results_card)
+        results_layout.setContentsMargins(15, 15, 15, 15)
+
+        results_title = QLabel("Search Results")
+        results_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #6366f1; margin-bottom: 10px;")
+        results_layout.addWidget(results_title)
+
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(4)
+        self.results_table.setHorizontalHeaderLabels(["Type", "Reference / Name", "Details", "Action"])
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
+        self.results_table.setColumnWidth(3, 100)
+        self.results_table.verticalHeader().setVisible(False)
+        self.results_table.verticalHeader().setDefaultSectionSize(45)
+        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        results_layout.addWidget(self.results_table)
+
+        self.main_layout.addWidget(self.search_results_card)
 
     def refresh_data(self):
         session = Session()
@@ -171,3 +213,143 @@ class DashboardView(QWidget):
             print(f"Error fetching dashboard metrics: {e}")
         finally:
             session.close()
+
+    def handle_search(self, text):
+        query_text = text.strip()
+        if not query_text or len(query_text) < 2:
+            self.search_results_card.setVisible(False)
+            self.default_content.setVisible(True)
+            self.results_table.setRowCount(0)
+            return
+
+        self.default_content.setVisible(False)
+        self.search_results_card.setVisible(True)
+        self.perform_global_search(query_text)
+
+    def perform_global_search(self, query_text):
+        session = Session()
+        try:
+            results = []
+            
+            # 1. Search Customers by name or mobile number
+            customers = session.query(Customer).filter(
+                (Customer.name.ilike(f"%{query_text}%")) |
+                (Customer.mobile.ilike(f"%{query_text}%"))
+            ).limit(10).all()
+            for c in customers:
+                results.append({
+                    "type": "Customer",
+                    "ref": c.name,
+                    "details": f"Mobile: {c.mobile} | Outstanding: ₹{c.outstanding_balance:,.2f}",
+                    "id": c.id,
+                    "obj_ref": c.mobile
+                })
+
+            # 2. Search Suppliers by name or mobile number
+            suppliers = session.query(Supplier).filter(
+                (Supplier.name.ilike(f"%{query_text}%")) |
+                (Supplier.mobile.ilike(f"%{query_text}%"))
+            ).limit(10).all()
+            for s in suppliers:
+                results.append({
+                    "type": "Supplier",
+                    "ref": s.name,
+                    "details": f"Mobile: {s.mobile} | Outstanding: ₹{s.outstanding_balance:,.2f}",
+                    "id": s.id,
+                    "obj_ref": s.mobile
+                })
+
+            # 3. Search Sales Invoices by invoice_number or customer details
+            sales = session.query(SalesMaster).join(Customer).filter(
+                (SalesMaster.invoice_number.ilike(f"%{query_text}%")) |
+                (Customer.name.ilike(f"%{query_text}%")) |
+                (Customer.mobile.ilike(f"%{query_text}%"))
+            ).limit(10).all()
+            for s in sales:
+                results.append({
+                    "type": "Sales Invoice",
+                    "ref": s.invoice_number,
+                    "details": f"Customer: {s.customer.name if s.customer else 'Deleted'} | Total: ₹{s.total_amount:,.2f} | Date: {s.date.strftime('%Y-%m-%d')}",
+                    "id": s.id,
+                    "obj_ref": s.invoice_number
+                })
+
+            # 4. Search Purchase Invoices by invoice_number or supplier details
+            purchases = session.query(PurchaseMaster).join(Supplier).filter(
+                (PurchaseMaster.invoice_number.ilike(f"%{query_text}%")) |
+                (Supplier.name.ilike(f"%{query_text}%")) |
+                (Supplier.mobile.ilike(f"%{query_text}%"))
+            ).limit(10).all()
+            for p in purchases:
+                results.append({
+                    "type": "Purchase Bill",
+                    "ref": p.invoice_number,
+                    "details": f"Supplier: {p.supplier.name if p.supplier else 'Deleted'} | Total: ₹{p.total_amount:,.2f} | Date: {p.date.strftime('%Y-%m-%d')}",
+                    "id": p.id,
+                    "obj_ref": p.invoice_number
+                })
+
+            # 5. Search Repair Job Cards by job_number, customer_name, mobile, or device_model
+            jobs = session.query(ServiceJob).filter(
+                (ServiceJob.job_number.ilike(f"%{query_text}%")) |
+                (ServiceJob.customer_name.ilike(f"%{query_text}%")) |
+                (ServiceJob.mobile.ilike(f"%{query_text}%")) |
+                (ServiceJob.device_model.ilike(f"%{query_text}%"))
+            ).limit(10).all()
+            for j in jobs:
+                results.append({
+                    "type": "Repair Job Card",
+                    "ref": j.job_number,
+                    "details": f"Customer: {j.customer_name} | Device: {j.device_model} | Status: {j.status}",
+                    "id": j.id,
+                    "obj_ref": j.job_number
+                })
+
+            # Populate table
+            self.results_table.setRowCount(len(results))
+            for i, r in enumerate(results):
+                self.results_table.setItem(i, 0, QTableWidgetItem(r["type"]))
+                self.results_table.setItem(i, 1, QTableWidgetItem(r["ref"]))
+                self.results_table.setItem(i, 2, QTableWidgetItem(r["details"]))
+
+                # View details action button
+                btn_container = QWidget()
+                btn_layout = QHBoxLayout(btn_container)
+                btn_layout.setContentsMargins(4, 4, 4, 4)
+                btn_layout.setSpacing(0)
+                btn_layout.setAlignment(Qt.AlignCenter)
+
+                view_btn = QPushButton("View")
+                view_btn.setProperty("class", "btn-action-view")
+                view_btn.clicked.connect(lambda checked, res=r: self.open_search_result(res))
+                btn_layout.addWidget(view_btn)
+                self.results_table.setCellWidget(i, 3, btn_container)
+
+        except Exception as e:
+            print(f"Error performing search: {e}")
+        finally:
+            session.close()
+
+    def open_search_result(self, res):
+        main_window = self.window()
+        res_type = res["type"]
+        res_id = res["id"]
+        res_ref = res["obj_ref"]
+
+        if res_type == "Sales Invoice":
+            if hasattr(main_window, 'sales_view'):
+                main_window.sales_view.view_invoice_details(res_id)
+        elif res_type == "Purchase Bill":
+            if hasattr(main_window, 'purchase_view'):
+                main_window.purchase_view.view_purchase_details(res_id)
+        elif res_type == "Repair Job Card":
+            if hasattr(main_window, 'services_view'):
+                main_window.services_view.view_job_details(res_ref)
+        elif res_type == "Customer":
+            if hasattr(main_window, 'customers_view'):
+                main_window.switch_view(2)
+                main_window.customers_view.search_input.setText(res_ref)
+        elif res_type == "Supplier":
+            if hasattr(main_window, 'suppliers_view'):
+                main_window.switch_view(3)
+                main_window.suppliers_view.search_input.setText(res_ref)
