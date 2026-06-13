@@ -211,7 +211,7 @@ class PaymentsView(QWidget):
         
         # Actions column for View, Print, Delete
         self.history_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-        self.history_table.setColumnWidth(7, 260)
+        self.history_table.setColumnWidth(7, 180)
         
         self.history_table.verticalHeader().setVisible(False)
         self.history_table.verticalHeader().setDefaultSectionSize(54)
@@ -295,11 +295,6 @@ class PaymentsView(QWidget):
                 view_btn.setProperty("class", "btn-action-view")
                 view_btn.clicked.connect(lambda checked, pid=p.id: self.view_payment_details(pid))
                 actions_layout.addWidget(view_btn)
-                
-                print_btn = QPushButton("Print")
-                print_btn.setProperty("class", "btn-action-print")
-                print_btn.clicked.connect(lambda checked, pid=p.id: self.print_payment_receipt(pid))
-                actions_layout.addWidget(print_btn)
                 
                 del_btn = QPushButton("Delete")
                 del_btn.setProperty("class", "btn-action-delete")
@@ -514,9 +509,21 @@ class PaymentsView(QWidget):
             info_layout.addRow("Remarks / Notes:", QLabel(payment.remarks or "-"))
             dlg_layout.addWidget(info_frame)
             
-            buttons = QDialogButtonBox(QDialogButtonBox.Ok)
-            buttons.accepted.connect(dialog.accept)
-            dlg_layout.addWidget(buttons)
+            # Bottom Buttons (Print & Close)
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            
+            btn_text = "Print Receipt" if payment.party_type == 'customer' else "Print Voucher"
+            print_btn = QPushButton(btn_text)
+            print_btn.clicked.connect(lambda: self.print_payment_receipt(payment_id))
+            btn_layout.addWidget(print_btn)
+            
+            close_btn = QPushButton("Close")
+            close_btn.setProperty("class", "btn-secondary")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+            
+            dlg_layout.addLayout(btn_layout)
             
             dialog.exec()
         except Exception as e:

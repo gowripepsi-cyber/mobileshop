@@ -124,6 +124,16 @@ class ServiceJob(Base):
     created_at = Column(DateTime, default=datetime.datetime.now)
     
     parts = relationship("ServicePart", back_populates="job", cascade="all, delete-orphan")
+    status_history = relationship("ServiceJobStatusHistory", back_populates="job", cascade="all, delete-orphan")
+
+class ServiceJobStatusHistory(Base):
+    __tablename__ = 'service_job_status_history'
+    id = Column(Integer, primary_key=True)
+    job_id = Column(Integer, ForeignKey('service_jobs.id'), nullable=False)
+    status = Column(String, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.now)
+    
+    job = relationship("ServiceJob", back_populates="status_history")
 
 class ServicePart(Base):
     __tablename__ = 'service_parts'

@@ -31,6 +31,11 @@ class SettingsView(QWidget):
         self.setup_db_tab()
         self.tabs.addTab(self.db_tab, "Database Admin (Backup & Restore)")
 
+        # Tab 4: Software Activation
+        self.license_tab = QWidget()
+        self.setup_license_tab()
+        self.tabs.addTab(self.license_tab, "Software Activation")
+
         layout.addWidget(self.tabs)
 
     def setup_shop_tab(self):
@@ -277,3 +282,113 @@ class SettingsView(QWidget):
                 main_window.close()
             else:
                 QMessageBox.critical(self, "Restore Failed", msg)
+
+    def setup_license_tab(self):
+        from licensing import manager
+        from PySide6.QtWidgets import QApplication
+        
+        layout = QVBoxLayout(self.license_tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        lic_frame = QFrame()
+        lic_frame.setProperty("class", "CardFrame")
+        lic_frame.setMaximumWidth(500)
+        lic_layout = QVBoxLayout(lic_frame)
+        lic_layout.setContentsMargins(20, 20, 20, 20)
+        lic_layout.setSpacing(15)
+        
+        title = QLabel("Software Licensing Status")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        lic_layout.addWidget(title)
+        
+        status_info = manager.check_license_status()
+        status = status_info["status"]
+        mid = status_info["machine_id"]
+        
+        # Machine ID display
+        mid_layout = QHBoxLayout()
+        mid_lbl = QLabel("Machine ID:")
+        mid_lbl.setStyleSheet("font-weight: bold; color: #94a3b8;")
+        self.lic_mid_edit = QLineEdit(mid)
+        self.lic_mid_edit.setReadOnly(True)
+        self.lic_mid_edit.setFixedHeight(35)
+        self.lic_mid_edit.setStyleSheet("background-color: #141426; border: 1px solid #2c2c54; padding: 5px; font-family: monospace; font-size: 13px; color: #38bdf8;")
+        
+        btn_copy = QPushButton("Copy")
+        btn_copy.setFixedWidth(60)
+        btn_copy.setFixedHeight(35)
+        btn_copy.setStyleSheet("background-color: #334155;")
+        btn_copy.clicked.connect(lambda: [QApplication.clipboard().setText(mid), QMessageBox.information(self, "Success", "Machine ID copied to clipboard.")])
+        
+        mid_layout.addWidget(mid_lbl)
+        mid_layout.addWidget(self.lic_mid_edit)
+        mid_layout.addWidget(btn_copy)
+        lic_layout.addLayout(mid_layout)
+        
+        self.status_lbl = QLabel()
+        self.status_lbl.setStyleSheet("font-size: 13px; font-weight: bold;")
+        lic_layout.addWidget(self.status_lbl)
+        
+        self.action_btn = QPushButton()
+        self.action_btn.setFixedHeight(38)
+        lic_layout.addWidget(self.action_btn)
+        
+        self.update_license_ui_status(status)
+        
+        layout.addWidget(lic_frame, 0, Qt.AlignCenter)
+        layout.addStretch()
+
+    def update_license_ui_status(self, status):
+        from licensing import manager
+        status_info = manager.check_license_status()
+        
+        if status == "active":
+            self.status_lbl.setText("Status: Permanently Activated")
+            self.status_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #10b981;")
+            self.action_btn.setText("Deactivate License on This PC")
+            self.action_btn.setProperty("class", "btn-danger")
+            self.action_btn.setStyleSheet("background-color: #ef4444; color: #ffffff;")
+            try:
+                self.action_btn.clicked.disconnect()
+            except Exception:
+                pass
+            self.action_btn.clicked.connect(self.handle_deactivation)
+        else:
+            days = status_info.get("days_remaining", 0)
+            self.status_lbl.setText(f"Status: Trial Mode ({days} days remaining)")
+            self.status_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #f59e0b;")
+            self.action_btn.setText("Activate License")
+            self.action_btn.setProperty("class", "btn-success")
+            self.action_btn.setStyleSheet("background-color: #10b981; color: #ffffff;")
+            try:
+                self.action_btn.clicked.disconnect()
+            except Exception:
+                pass
+            self.action_btn.clicked.connect(self.handle_activation)
+
+    def handle_activation(self):
+        from licensing.ui_activation import ActivationDialog
+        from PySide6.QtWidgets import QDialog
+        from licensing import manager
+        
+        dlg = ActivationDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            status_info = manager.check_license_status()
+            self.update_license_ui_status(status_info["status"])
+
+    def handle_deactivation(self):
+        from licensing import manager
+        
+        confirm = QMessageBox.question(
+            self, "Confirm License Deactivation",
+            "Are you sure you want to deactivate this software license?\n\n"
+            "This will delete your local license file and close the application.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm == QMessageBox.Yes:
+            if manager.deactivate_software():
+                QMessageBox.information(self, "Deactivated", "License removed successfully. The application will now exit.")
+                self.window().close()
+            else:
+                QMessageBox.critical(self, "Error", "Failed to remove the license. Please check file permissions.")
+

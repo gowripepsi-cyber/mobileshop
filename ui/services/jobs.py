@@ -411,6 +411,47 @@ class BillingDialog(QDialog):
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area, 1)
 
+        # Status Update Panel with Radio Buttons
+        from PySide6.QtWidgets import QRadioButton, QButtonGroup
+        self.status_group = QButtonGroup(self)
+        
+        status_panel = QFrame()
+        status_panel.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px; padding: 12px;")
+        status_layout = QHBoxLayout(status_panel)
+        status_layout.setContentsMargins(20, 8, 20, 8)
+        status_layout.setSpacing(25)
+        
+        status_lbl = QLabel("Update Job Status:")
+        status_lbl.setStyleSheet("font-weight: bold; color: #94a3b8; font-size: 13px;")
+        status_layout.addWidget(status_lbl)
+        
+        self.radio_received = QRadioButton("Received")
+        self.radio_under_repair = QRadioButton("Under Repair")
+        self.radio_ready = QRadioButton("Ready")
+        self.radio_delivered = QRadioButton("Delivered")
+        
+        radio_style = "QRadioButton { color: #e2e8f0; font-size: 13px; font-weight: bold; } QRadioButton::indicator { width: 16px; height: 16px; }"
+        for r in [self.radio_received, self.radio_under_repair, self.radio_ready, self.radio_delivered]:
+            r.setStyleSheet(radio_style)
+            self.status_group.addButton(r)
+            status_layout.addWidget(r)
+            
+        status_layout.addStretch()
+        main_layout.addWidget(status_panel)
+
+        # Set default selection based on current job status
+        curr_status = self.job.status
+        if curr_status == "Received":
+            self.radio_received.setChecked(True)
+        elif curr_status == "Under Repair":
+            self.radio_under_repair.setChecked(True)
+        elif curr_status == "Ready":
+            self.radio_ready.setChecked(True)
+        elif curr_status == "Delivered":
+            self.radio_delivered.setChecked(True)
+        else:
+            self.radio_received.setChecked(True)
+
         # 3. Bottom Action Footer Bar (Always Visible and Reachable)
         footer_bar = QHBoxLayout()
         footer_bar.setContentsMargins(0, 10, 0, 0)
@@ -627,9 +668,29 @@ class BillingDialog(QDialog):
             job.total_amount = net_total
             job.paid_amount = paid
             job.balance = balance
-            # Mark status as Ready or Delivered automatically when fully paid/settled
-            if balance == 0:
-                job.status = "Delivered"
+            # Set status based on selected radio button
+            selected_status = "Received"
+            if self.radio_received.isChecked():
+                selected_status = "Received"
+            elif self.radio_under_repair.isChecked():
+                selected_status = "Under Repair"
+            elif self.radio_ready.isChecked():
+                selected_status = "Ready"
+            elif self.radio_delivered.isChecked():
+                selected_status = "Delivered"
+
+            status_changed = (job.status != selected_status)
+            job.status = selected_status
+
+            # Log status change with timestamp
+            if status_changed:
+                from models import ServiceJobStatusHistory
+                history_entry = ServiceJobStatusHistory(
+                    job_id=job.id,
+                    status=selected_status,
+                    updated_at=datetime.datetime.now()
+                )
+                session.add(history_entry)
 
             # 2. Restore stock for original parts
             original_parts = session.query(ServicePart).filter_by(job_id=job.id).all()
@@ -741,7 +802,7 @@ class ServicesView(QWidget):
         
         # Reallocate freed space to Actions column
         self.table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
-        self.table.setColumnWidth(8, 470)
+        self.table.setColumnWidth(8, 380)
         
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
@@ -804,11 +865,6 @@ class ServicesView(QWidget):
                 view_btn.clicked.connect(lambda checked, jnum=j.job_number: self.view_job_details(jnum))
                 actions_layout.addWidget(view_btn)
                 
-                print_btn = QPushButton("Print")
-                print_btn.setProperty("class", "btn-action-print")
-                print_btn.clicked.connect(lambda checked, jnum=j.job_number: self.print_job_invoice(jnum))
-                actions_layout.addWidget(print_btn)
-
                 bill_btn = QPushButton("Bill")
                 bill_btn.setProperty("class", "btn-action-success")
                 bill_btn.clicked.connect(lambda checked, jnum=j.job_number: self.bill_job(job_number=jnum))
@@ -948,10 +1004,20 @@ class ServicesView(QWidget):
             totals_layout.addRow("Balance Due:", QLabel(f"₹{job.balance:,.2f}"))
             dlg_layout.addWidget(totals_frame)
             
-            # Close button
-            buttons = QDialogButtonBox(QDialogButtonBox.Ok)
-            buttons.accepted.connect(dialog.accept)
-            dlg_layout.addWidget(buttons)
+            # Bottom Buttons (Print & Close)
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            
+            print_btn = QPushButton("Print Invoice")
+            print_btn.clicked.connect(lambda: self.print_job_invoice(job_number))
+            btn_layout.addWidget(print_btn)
+            
+            close_btn = QPushButton("Close")
+            close_btn.setProperty("class", "btn-secondary")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+            
+            dlg_layout.addLayout(btn_layout)
             
             dialog.exec()
         except Exception as e:

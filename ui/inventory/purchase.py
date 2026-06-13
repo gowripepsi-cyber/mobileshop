@@ -226,7 +226,7 @@ class PurchaseView(QWidget):
         ])
         self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.history_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
-        self.history_table.setColumnWidth(6, 360)
+        self.history_table.setColumnWidth(6, 270)
         self.history_table.verticalHeader().setVisible(False)
         self.history_table.verticalHeader().setDefaultSectionSize(54)
         layout.addWidget(self.history_table)
@@ -352,11 +352,6 @@ class PurchaseView(QWidget):
                 view_btn.setProperty("class", "btn-action-view")
                 view_btn.clicked.connect(lambda checked, pid=p.id: self.view_purchase_details(pid))
                 actions_layout.addWidget(view_btn)
-                
-                print_btn = QPushButton("Print")
-                print_btn.setProperty("class", "btn-action-print")
-                print_btn.clicked.connect(lambda checked, pid=p.id: self.print_purchase_invoice(pid))
-                actions_layout.addWidget(print_btn)
                 
                 edit_btn = QPushButton("Edit")
                 edit_btn.setProperty("class", "btn-action-edit")
@@ -690,10 +685,20 @@ class PurchaseView(QWidget):
             totals_layout.addRow("Balance Payable:", QLabel(f"₹{purchase.balance_payable:,.2f}"))
             dlg_layout.addWidget(totals_frame)
             
-            # Close button
-            buttons = QDialogButtonBox(QDialogButtonBox.Ok)
-            buttons.accepted.connect(dialog.accept)
-            dlg_layout.addWidget(buttons)
+            # Bottom Buttons (Print Invoice & Close)
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            
+            print_btn = QPushButton("Print Invoice")
+            print_btn.clicked.connect(lambda: self.print_purchase_invoice(purchase_id))
+            btn_layout.addWidget(print_btn)
+            
+            close_btn = QPushButton("Close")
+            close_btn.setProperty("class", "btn-secondary")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+            
+            dlg_layout.addLayout(btn_layout)
             
             dialog.exec()
         except Exception as e:
