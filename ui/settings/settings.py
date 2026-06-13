@@ -39,7 +39,8 @@ class SettingsView(QWidget):
 
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setMaximumWidth(550)
+        form_frame.setMinimumWidth(700)
+        form_frame.setMaximumWidth(800)
         form_layout = QFormLayout(form_frame)
         form_layout.setContentsMargins(20, 20, 20, 20)
         form_layout.setSpacing(15)
@@ -106,6 +107,7 @@ class SettingsView(QWidget):
 
         db_frame = QFrame()
         db_frame.setProperty("class", "CardFrame")
+        db_frame.setMinimumHeight(280)
         db_frame.setMaximumWidth(500)
         db_layout = QVBoxLayout(db_frame)
         db_layout.setContentsMargins(20, 20, 20, 20)
@@ -116,11 +118,11 @@ class SettingsView(QWidget):
         db_layout.addWidget(title)
 
         desc = QLabel(
-            "It is highly recommended to perform backups periodically.\n"
+            "It is highly recommended to perform backups periodically.<br/>"
             "Restoring a previous backup database will overwrite your current dataset entirely."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #94a3b8; line-height: 18px;")
+        desc.setStyleSheet("color: #94a3b8;")
         db_layout.addWidget(desc)
 
         db_layout.addSpacing(10)
