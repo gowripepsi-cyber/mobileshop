@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
             
             # Create horizontal layout inside the button to align title and shortcut
             btn_layout = QHBoxLayout(btn)
-            btn_layout.setContentsMargins(0, 0, 0, 0)
+            btn_layout.setContentsMargins(15, 0, 15, 0)
             btn_layout.setSpacing(8)
             
             # Title Label (left side)
