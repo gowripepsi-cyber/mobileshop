@@ -6,7 +6,7 @@ class LoginWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Login - Mobile Shop Management System")
-        self.setFixedSize(440, 350)
+        self.setFixedSize(484, 350)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.user_data = None
         self.init_ui()
