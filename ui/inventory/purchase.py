@@ -654,8 +654,10 @@ class PurchaseView(QWidget):
             info_layout = QFormLayout(info_frame)
             info_layout.addRow("Invoice Number:", QLabel(purchase.invoice_number))
             info_layout.addRow("Date:", QLabel(purchase.date.strftime("%Y-%m-%d")))
-            info_layout.addRow("Supplier Name:", QLabel(purchase.supplier.name))
-            info_layout.addRow("Supplier Contact:", QLabel(purchase.supplier.mobile))
+            supp_name = purchase.supplier.name if purchase.supplier else "Unknown Supplier (Deleted)"
+            supp_mobile = purchase.supplier.mobile if purchase.supplier else "N/A"
+            info_layout.addRow("Supplier Name:", QLabel(supp_name))
+            info_layout.addRow("Supplier Contact:", QLabel(supp_mobile))
             dlg_layout.addWidget(info_frame)
             
             # Items table
@@ -668,7 +670,10 @@ class PurchaseView(QWidget):
             items = session.query(PurchaseItem).filter_by(purchase_id=purchase_id).all()
             items_table.setRowCount(len(items))
             for i, item in enumerate(items):
-                display_name = f"{item.product.name} ({item.product.brand} {item.product.model})"
+                if item.product:
+                    display_name = f"{item.product.name} ({item.product.brand} {item.product.model})"
+                else:
+                    display_name = f"Unknown Product (ID: {item.product_id})"
                 items_table.setItem(i, 0, QTableWidgetItem(display_name))
                 items_table.setItem(i, 1, QTableWidgetItem(str(item.qty)))
                 items_table.setItem(i, 2, QTableWidgetItem(f"{item.rate:.2f}"))
