@@ -118,6 +118,11 @@ class CustomersView(QWidget):
         self.edit_btn.clicked.connect(self.edit_customer)
         top_bar.addWidget(self.edit_btn, 1)
 
+        self.ledger_btn = QPushButton("View Ledger")
+        self.ledger_btn.setProperty("class", "btn-warning")
+        self.ledger_btn.clicked.connect(self.view_ledger)
+        top_bar.addWidget(self.ledger_btn, 1)
+
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setProperty("class", "btn-danger")
         self.delete_btn.clicked.connect(self.delete_customer)
@@ -221,3 +226,21 @@ class CustomersView(QWidget):
                 QMessageBox.critical(self, "Error", f"Could not delete customer: {e}")
             finally:
                 session.close()
+
+    def view_ledger(self):
+        cust_id = self.get_selected_customer_id()
+        if cust_id is None:
+            QMessageBox.information(self, "No Selection", "Please select a customer to view ledger.")
+            return
+
+        session = Session()
+        try:
+            cust = session.query(Customer).get(cust_id)
+            if cust:
+                from ui.masters.ledger_dialog import LedgerBreakupDialog
+                dlg = LedgerBreakupDialog(party_type='customer', party_id=cust.id, party_name=cust.name, parent=self)
+                dlg.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not load customer ledger: {e}")
+        finally:
+            session.close()

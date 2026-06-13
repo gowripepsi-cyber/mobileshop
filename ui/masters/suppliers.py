@@ -137,6 +137,11 @@ class SuppliersView(QWidget):
         self.edit_btn.clicked.connect(self.edit_supplier)
         top_bar.addWidget(self.edit_btn, 1)
 
+        self.ledger_btn = QPushButton("View Ledger")
+        self.ledger_btn.setProperty("class", "btn-warning")
+        self.ledger_btn.clicked.connect(self.view_ledger)
+        top_bar.addWidget(self.ledger_btn, 1)
+
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setProperty("class", "btn-danger")
         self.delete_btn.clicked.connect(self.delete_supplier)
@@ -252,3 +257,21 @@ class SuppliersView(QWidget):
                 QMessageBox.critical(self, "Error", f"Could not delete supplier: {e}")
             finally:
                 session.close()
+
+    def view_ledger(self):
+        supp_id = self.get_selected_supplier_id()
+        if supp_id is None:
+            QMessageBox.information(self, "No Selection", "Please select a supplier to view ledger.")
+            return
+
+        session = Session()
+        try:
+            supp = session.query(Supplier).get(supp_id)
+            if supp:
+                from ui.masters.ledger_dialog import LedgerBreakupDialog
+                dlg = LedgerBreakupDialog(party_type='supplier', party_id=supp.id, party_name=supp.name, parent=self)
+                dlg.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not load supplier ledger: {e}")
+        finally:
+            session.close()

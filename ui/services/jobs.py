@@ -1,11 +1,13 @@
 import datetime
+import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, 
                              QFrame, QFormLayout, QDialog, QTextEdit, QDoubleSpinBox, QSpacerItem, QSizePolicy,
-                             QApplication, QScrollArea, QSpinBox)
+                             QApplication, QScrollArea, QSpinBox, QDialogButtonBox)
 from PySide6.QtCore import Qt
-from database import Session
+from database import Session, Setting
 from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product
+from utils.pdf_generator import generate_service_pdf
 
 class JobCardDialog(QDialog):
     def __init__(self, job=None, parent=None):
@@ -717,28 +719,32 @@ class ServicesView(QWidget):
         self.add_btn.clicked.connect(self.add_job)
         top_bar.addWidget(self.add_btn, 1)
 
-        self.bill_btn = QPushButton("Billing & Estimate")
-        self.bill_btn.setProperty("class", "btn-success")
-        self.bill_btn.clicked.connect(self.bill_job)
-        top_bar.addWidget(self.bill_btn, 1)
-
-        self.edit_btn = QPushButton("Edit Info")
-        self.edit_btn.setProperty("class", "btn-secondary")
-        self.edit_btn.clicked.connect(self.edit_job)
-        top_bar.addWidget(self.edit_btn, 1)
-
         layout.addLayout(top_bar)
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
-            "Job Number", "Customer Name", "Mobile", "Device Model", 
-            "Status", "Service Charge", "Total Bill", "Balance Due"
+            "Job #", "Customer", "Mobile", "Device Model", 
+            "Status", "Labor (₹)", "Total (₹)", "Balance (₹)", "Actions"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        
+        # Reduce width of Labor, Total, and Balance columns by ~10%
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 80)
+        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.table.setColumnWidth(6, 90)
+        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.table.setColumnWidth(7, 90)
+        
+        # Reallocate freed space to Actions column
+        self.table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
+        self.table.setColumnWidth(8, 470)
+        
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(54)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.doubleClicked.connect(self.edit_job)
@@ -786,6 +792,40 @@ class ServicesView(QWidget):
                     bal_item.setForeground(Qt.red)
                 self.table.setItem(i, 7, bal_item)
 
+                # Action Buttons
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout(actions_widget)
+                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setSpacing(8)
+                actions_layout.setAlignment(Qt.AlignCenter)
+                
+                view_btn = QPushButton("View")
+                view_btn.setProperty("class", "btn-action-view")
+                view_btn.clicked.connect(lambda checked, jnum=j.job_number: self.view_job_details(jnum))
+                actions_layout.addWidget(view_btn)
+                
+                print_btn = QPushButton("Print")
+                print_btn.setProperty("class", "btn-action-print")
+                print_btn.clicked.connect(lambda checked, jnum=j.job_number: self.print_job_invoice(jnum))
+                actions_layout.addWidget(print_btn)
+
+                bill_btn = QPushButton("Bill")
+                bill_btn.setProperty("class", "btn-action-success")
+                bill_btn.clicked.connect(lambda checked, jnum=j.job_number: self.bill_job(job_number=jnum))
+                actions_layout.addWidget(bill_btn)
+                
+                edit_btn = QPushButton("Edit")
+                edit_btn.setProperty("class", "btn-action-edit")
+                edit_btn.clicked.connect(lambda checked, jnum=j.job_number: self.edit_job(job_number=jnum))
+                actions_layout.addWidget(edit_btn)
+                
+                del_btn = QPushButton("Delete")
+                del_btn.setProperty("class", "btn-action-delete")
+                del_btn.clicked.connect(lambda checked, jnum=j.job_number: self.delete_job_invoice(jnum))
+                actions_layout.addWidget(del_btn)
+                
+                self.table.setCellWidget(i, 8, actions_widget)
+
         except Exception as e:
             print(f"Error loading service jobs: {e}")
         finally:
@@ -802,8 +842,12 @@ class ServicesView(QWidget):
         if dlg.exec() == QDialog.Accepted:
             self.refresh_data()
 
-    def edit_job(self):
-        job_num = self.get_selected_job_number()
+    def edit_job(self, *args, job_number=None):
+        if not job_number:
+            job_num = self.get_selected_job_number()
+        else:
+            job_num = job_number
+
         if job_num is None:
             QMessageBox.information(self, "No Selection", "Please select a job card to edit.")
             return
@@ -820,8 +864,12 @@ class ServicesView(QWidget):
         finally:
             session.close()
 
-    def bill_job(self):
-        job_num = self.get_selected_job_number()
+    def bill_job(self, job_number=None):
+        if not job_number:
+            job_num = self.get_selected_job_number()
+        else:
+            job_num = job_number
+
         if job_num is None:
             QMessageBox.information(self, "No Selection", "Please select a job card for billing.")
             return
@@ -835,5 +883,195 @@ class ServicesView(QWidget):
                     self.refresh_data()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not load billing window: {e}")
+        finally:
+            session.close()
+
+    def view_job_details(self, job_number):
+        session = Session()
+        try:
+            job = session.query(ServiceJob).filter_by(job_number=job_number).first()
+            if not job:
+                QMessageBox.warning(self, "Error", "Job card not found.")
+                return
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Job Card Details - {job.job_number}")
+            dialog.setMinimumSize(600, 500)
+            
+            dlg_layout = QVBoxLayout(dialog)
+            
+            # Header info
+            info_frame = QFrame()
+            info_frame.setProperty("class", "CardFrame")
+            info_layout = QFormLayout(info_frame)
+            info_layout.addRow("Job Number:", QLabel(job.job_number))
+            info_layout.addRow("Date Created:", QLabel(job.created_at.strftime("%Y-%m-%d %H:%M")))
+            info_layout.addRow("Customer Name:", QLabel(job.customer_name))
+            info_layout.addRow("Customer Contact:", QLabel(job.mobile))
+            info_layout.addRow("Device Model:", QLabel(job.device_model))
+            info_layout.addRow("IMEI / Serial:", QLabel(job.imei))
+            info_layout.addRow("Complaint details:", QLabel(job.complaint or "-"))
+            info_layout.addRow("Technician:", QLabel(job.technician or "-"))
+            info_layout.addRow("Job Status:", QLabel(job.status))
+            dlg_layout.addWidget(info_frame)
+            
+            # Items table
+            items_table = QTableWidget()
+            items_table.setColumnCount(4)
+            items_table.setHorizontalHeaderLabels(["Description", "Qty", "Rate (₹)", "Total (₹)"])
+            items_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            items_table.verticalHeader().setVisible(False)
+            
+            # Row items list
+            items = []
+            # Service Labor
+            items.append(("Service Labor & Diagnostic Charges", 1, job.service_charge, job.service_charge))
+            # Spare Parts
+            parts = session.query(ServicePart).filter_by(job_id=job.id).all()
+            for part in parts:
+                items.append((part.part_name, part.qty, part.cost, part.qty * part.cost))
+                
+            items_table.setRowCount(len(items))
+            for i, (desc, qty, rate, subtotal) in enumerate(items):
+                items_table.setItem(i, 0, QTableWidgetItem(desc))
+                items_table.setItem(i, 1, QTableWidgetItem(str(qty)))
+                items_table.setItem(i, 2, QTableWidgetItem(f"{rate:.2f}"))
+                items_table.setItem(i, 3, QTableWidgetItem(f"{subtotal:.2f}"))
+                
+            dlg_layout.addWidget(items_table)
+            
+            # Totals
+            totals_frame = QFrame()
+            totals_layout = QFormLayout(totals_frame)
+            totals_layout.addRow("Total Amount:", QLabel(f"₹{job.total_amount:,.2f}"))
+            totals_layout.addRow("Paid Amount:", QLabel(f"₹{job.paid_amount:,.2f}"))
+            totals_layout.addRow("Balance Due:", QLabel(f"₹{job.balance:,.2f}"))
+            dlg_layout.addWidget(totals_frame)
+            
+            # Close button
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+            buttons.accepted.connect(dialog.accept)
+            dlg_layout.addWidget(buttons)
+            
+            dialog.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load job details: {e}")
+        finally:
+            session.close()
+
+    def print_job_invoice(self, job_number):
+        session = Session()
+        try:
+            job = session.query(ServiceJob).filter_by(job_number=job_number).first()
+            if not job:
+                QMessageBox.warning(self, "Error", "Job card not found.")
+                return
+                
+            # Retrieve Settings details
+            s_name = session.query(Setting).filter_by(key='shop_name').first().value
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first().value
+            s_address = session.query(Setting).filter_by(key='shop_address').first().value
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first().value
+
+            # Prepare items list (spare parts)
+            pdf_parts = []
+            for item in job.parts:
+                pdf_parts.append({
+                    "name": item.part_name,
+                    "qty": item.qty,
+                    "cost": item.cost,
+                    "total": item.qty * item.cost
+                })
+
+            # Prepare Service PDF data
+            pdf_data = {
+                "shop_name": s_name,
+                "shop_contact": s_contact,
+                "shop_address": s_address,
+                "shop_gst": s_gst,
+                "job_number": job.job_number,
+                "date": job.created_at.strftime("%Y-%m-%d %H:%M"),
+                "customer_name": job.customer_name,
+                "customer_mobile": job.mobile,
+                "device_model": job.device_model,
+                "imei": job.imei,
+                "complaint": job.complaint,
+                "status": job.status,
+                "technician": job.technician,
+                "service_charge": job.service_charge,
+                "parts": pdf_parts,
+                "total_amount": job.total_amount,
+                "paid_amount": job.paid_amount,
+                "balance": job.balance
+            }
+
+            os.makedirs("invoices", exist_ok=True)
+            path = os.path.abspath(f"invoices/{job.job_number}.pdf")
+            generate_service_pdf(pdf_data, path)
+            
+            QMessageBox.information(self, "Success", f"Service Invoice PDF generated at:\n{path}")
+            
+            # Auto-open
+            try:
+                os.startfile(path)
+            except Exception as e:
+                print(f"Could not auto-open PDF: {e}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to print/generate PDF: {e}")
+        finally:
+            session.close()
+
+    def delete_job_invoice(self, job_number):
+        confirm = QMessageBox.question(
+            self, "Confirm Delete", 
+            "Are you sure you want to delete this job card?\nAll inventory stock, customer outstanding, and ledger payments will be reverted.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+            
+        session = Session()
+        try:
+            job = session.query(ServiceJob).filter_by(job_number=job_number).first()
+            if not job:
+                QMessageBox.warning(self, "Error", "Job card not found.")
+                session.close()
+                return
+                
+            # Revert inventory stock of spare parts used (add back stock)
+            for part in job.parts:
+                if part.product_id:
+                    prod = session.query(Product).get(part.product_id)
+                    if prod:
+                        prod.stock_qty += part.qty
+                    
+            # Revert customer outstanding balance
+            cust = session.query(Customer).filter_by(mobile=job.mobile).first()
+            if cust:
+                cust.outstanding_balance -= job.balance
+                
+            # Revert/delete ledger entries (CashTransaction/BankTransaction)
+            cash_txs = session.query(CashTransaction).filter_by(source_type='service', source_id=job.id).all()
+            for tx in cash_txs:
+                session.delete(tx)
+                
+            bank_txs = session.query(BankTransaction).filter_by(source_type='service', source_id=job.id).all()
+            for tx in bank_txs:
+                # Revert bank account balance (deduct funds received from service)
+                bank = session.query(BankAccount).get(tx.account_id)
+                if bank:
+                    bank.balance -= tx.amount
+                session.delete(tx)
+                
+            # Delete Job Card (cascading deletes parts)
+            session.delete(job)
+            
+            session.commit()
+            QMessageBox.information(self, "Success", "Job card deleted and related records reverted successfully.")
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to delete job card: {e}")
         finally:
             session.close()

@@ -1,10 +1,12 @@
 import datetime
+import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QDoubleSpinBox, QPushButton, QTableWidget, QTableWidgetItem, 
-                             QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget)
+                             QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate
-from database import Session
+from database import Session, Setting
 from models import Payment, Customer, Supplier, BankAccount, CashTransaction, BankTransaction
+from utils.pdf_generator import generate_payment_pdf
 
 class PaymentsView(QWidget):
     def __init__(self, parent=None):
@@ -194,13 +196,25 @@ class PaymentsView(QWidget):
         layout.setSpacing(12)
 
         self.history_table = QTableWidget()
-        self.history_table.setColumnCount(7)
+        self.history_table.setColumnCount(8)
         self.history_table.setHorizontalHeaderLabels([
-            "ID", "Date", "Party Type", "Party Name", "Amount (₹)", "Payment Mode", "Remarks"
+            "ID", "Date", "Party Type", "Party Name", "Amount (₹)", "Payment Mode", "Remarks", "Actions"
         ])
         self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.history_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        
+        # Consistent sizing for columns
+        self.history_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        self.history_table.setColumnWidth(4, 110)
+        self.history_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
+        self.history_table.setColumnWidth(5, 120)
+        
+        # Actions column for View, Print, Delete
+        self.history_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.history_table.setColumnWidth(7, 260)
+        
         self.history_table.verticalHeader().setVisible(False)
+        self.history_table.verticalHeader().setDefaultSectionSize(54)
         layout.addWidget(self.history_table)
 
     def toggle_c_bank(self, mode):
@@ -269,6 +283,30 @@ class PaymentsView(QWidget):
                 
                 self.history_table.setItem(i, 5, QTableWidgetItem(p.payment_mode))
                 self.history_table.setItem(i, 6, QTableWidgetItem(p.remarks or ""))
+                
+                # Action Buttons
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout(actions_widget)
+                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setSpacing(8)
+                actions_layout.setAlignment(Qt.AlignCenter)
+                
+                view_btn = QPushButton("View")
+                view_btn.setProperty("class", "btn-action-view")
+                view_btn.clicked.connect(lambda checked, pid=p.id: self.view_payment_details(pid))
+                actions_layout.addWidget(view_btn)
+                
+                print_btn = QPushButton("Print")
+                print_btn.setProperty("class", "btn-action-print")
+                print_btn.clicked.connect(lambda checked, pid=p.id: self.print_payment_receipt(pid))
+                actions_layout.addWidget(print_btn)
+                
+                del_btn = QPushButton("Delete")
+                del_btn.setProperty("class", "btn-action-delete")
+                del_btn.clicked.connect(lambda checked, pid=p.id: self.delete_payment_record(pid))
+                actions_layout.addWidget(del_btn)
+                
+                self.history_table.setCellWidget(i, 7, actions_widget)
 
         except Exception as e:
             print(f"Error loading payments view data: {e}")
@@ -325,19 +363,20 @@ class PaymentsView(QWidget):
                 amount=amount, payment_mode=mode, bank_id=bank_id, remarks=remarks
             )
             session.add(payment)
+            session.flush() # Generate payment.id
 
             # 3. Log Cash/Bank Ledger
             desc = f"Collection from customer {cust.name}. Details: {remarks or '-'}"
             if mode == 'Cash':
                 tx = CashTransaction(
                     date=tx_date, transaction_type='in', amount=amount,
-                    source_type='payment', description=desc
+                    source_type='payment', source_id=payment.id, description=desc
                 )
                 session.add(tx)
             else:
                 tx = BankTransaction(
                     date=tx_date, transaction_type='deposit', account_id=bank_id,
-                    amount=amount, source_type='payment', description=desc
+                    amount=amount, source_type='payment', source_id=payment.id, description=desc
                 )
                 session.add(tx)
                 
@@ -392,19 +431,20 @@ class PaymentsView(QWidget):
                 amount=amount, payment_mode=mode, bank_id=bank_id, remarks=remarks
             )
             session.add(payment)
+            session.flush() # Generate payment.id
 
             # 3. Log Cash/Bank Ledger
             desc = f"Payment to supplier {supp.name}. Details: {remarks or '-'}"
             if mode == 'Cash':
                 tx = CashTransaction(
                     date=tx_date, transaction_type='out', amount=amount,
-                    source_type='payment', description=desc
+                    source_type='payment', source_id=payment.id, description=desc
                 )
                 session.add(tx)
             else:
                 tx = BankTransaction(
                     date=tx_date, transaction_type='withdrawal', account_id=bank_id,
-                    amount=amount, source_type='payment', description=desc
+                    amount=amount, source_type='payment', source_id=payment.id, description=desc
                 )
                 session.add(tx)
                 
@@ -422,5 +462,199 @@ class PaymentsView(QWidget):
         except Exception as e:
             session.rollback()
             QMessageBox.critical(self, "Error", f"Failed to save supplier payment: {e}")
+        finally:
+            session.close()
+
+    def view_payment_details(self, payment_id):
+        session = Session()
+        try:
+            payment = session.query(Payment).get(payment_id)
+            if not payment:
+                QMessageBox.warning(self, "Error", "Payment record not found.")
+                return
+
+            dialog = QDialog(self)
+            title = "Payment Receipt Details" if payment.party_type == 'customer' else "Payment Voucher Details"
+            dialog.setWindowTitle(f"{title} - #{payment.id}")
+            dialog.setMinimumSize(450, 350)
+            
+            dlg_layout = QVBoxLayout(dialog)
+            
+            info_frame = QFrame()
+            info_frame.setProperty("class", "CardFrame")
+            info_layout = QFormLayout(info_frame)
+            
+            # Fetch party details
+            party_name = "-"
+            party_mobile = "-"
+            if payment.party_type == 'customer':
+                party = session.query(Customer).get(payment.party_id)
+                if party:
+                    party_name = party.name
+                    party_mobile = party.mobile
+            else:
+                party = session.query(Supplier).get(payment.party_id)
+                if party:
+                    party_name = party.name
+                    party_mobile = party.mobile
+                    
+            info_layout.addRow("Receipt / Voucher ID:", QLabel(f"#{payment.id}"))
+            info_layout.addRow("Date:", QLabel(payment.date.strftime("%Y-%m-%d")))
+            info_layout.addRow("Party Type:", QLabel(payment.party_type.capitalize()))
+            info_layout.addRow("Party Name:", QLabel(party_name))
+            info_layout.addRow("Party Contact:", QLabel(party_mobile))
+            info_layout.addRow("Amount Paid (₹):", QLabel(f"₹{payment.amount:,.2f}"))
+            info_layout.addRow("Payment Mode:", QLabel(payment.payment_mode))
+            
+            if payment.payment_mode == 'Bank' and payment.bank_id:
+                bank = session.query(BankAccount).get(payment.bank_id)
+                if bank:
+                    info_layout.addRow("Bank Account:", QLabel(f"{bank.bank_name} ({bank.account_name})"))
+                    
+            info_layout.addRow("Remarks / Notes:", QLabel(payment.remarks or "-"))
+            dlg_layout.addWidget(info_frame)
+            
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+            buttons.accepted.connect(dialog.accept)
+            dlg_layout.addWidget(buttons)
+            
+            dialog.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load payment details: {e}")
+        finally:
+            session.close()
+
+    def print_payment_receipt(self, payment_id):
+        session = Session()
+        try:
+            payment = session.query(Payment).get(payment_id)
+            if not payment:
+                QMessageBox.warning(self, "Error", "Payment record not found.")
+                return
+                
+            # Retrieve Settings details
+            s_name = session.query(Setting).filter_by(key='shop_name').first().value
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first().value
+            s_address = session.query(Setting).filter_by(key='shop_address').first().value
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first().value
+
+            # Fetch party details
+            party_name = "-"
+            party_mobile = "-"
+            if payment.party_type == 'customer':
+                party = session.query(Customer).get(payment.party_id)
+                if party:
+                    party_name = party.name
+                    party_mobile = party.mobile
+            else:
+                party = session.query(Supplier).get(payment.party_id)
+                if party:
+                    party_name = party.name
+                    party_mobile = party.mobile
+
+            # Prepare PDF data
+            pdf_data = {
+                "shop_name": s_name,
+                "shop_contact": s_contact,
+                "shop_address": s_address,
+                "shop_gst": s_gst,
+                "payment_id": payment.id,
+                "date": payment.date.strftime("%Y-%m-%d"),
+                "party_type": payment.party_type,
+                "party_name": party_name,
+                "party_mobile": party_mobile,
+                "amount": payment.amount,
+                "payment_mode": payment.payment_mode,
+                "remarks": payment.remarks
+            }
+
+            os.makedirs("invoices", exist_ok=True)
+            path = os.path.abspath(f"invoices/payment_{payment.id}.pdf")
+            generate_payment_pdf(pdf_data, path)
+            
+            QMessageBox.information(self, "Success", f"Payment PDF generated at:\n{path}")
+            
+            # Auto-open
+            try:
+                os.startfile(path)
+            except Exception as e:
+                print(f"Could not auto-open PDF: {e}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to print/generate PDF: {e}")
+        finally:
+            session.close()
+
+    def delete_payment_record(self, payment_id):
+        confirm = QMessageBox.question(
+            self, "Confirm Delete", 
+            "Are you sure you want to delete this payment record?\nThe party outstanding balance and ledger transactions will be reverted.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+            
+        session = Session()
+        try:
+            payment = session.query(Payment).get(payment_id)
+            if not payment:
+                QMessageBox.warning(self, "Error", "Payment record not found.")
+                session.close()
+                return
+                
+            # 1. Revert party outstanding balance
+            if payment.party_type == 'customer':
+                cust = session.query(Customer).get(payment.party_id)
+                if cust:
+                    cust.outstanding_balance += payment.amount  # add back outstanding since payment is deleted
+            else:
+                supp = session.query(Supplier).get(payment.party_id)
+                if supp:
+                    supp.outstanding_balance += payment.amount  # add back outstanding since payment is deleted
+                    
+            # 2. Revert/delete ledger entries (CashTransaction/BankTransaction)
+            # Find by source_id first
+            cash_txs = session.query(CashTransaction).filter_by(source_type='payment', source_id=payment.id).all()
+            if not cash_txs and payment.payment_mode == 'Cash':
+                # Fallback for legacy database entries without source_id
+                tx_type = 'in' if payment.party_type == 'customer' else 'out'
+                cash_txs = session.query(CashTransaction).filter(
+                    CashTransaction.source_type == 'payment',
+                    CashTransaction.transaction_type == tx_type,
+                    CashTransaction.amount == payment.amount,
+                    CashTransaction.date == payment.date
+                ).all()
+            for tx in cash_txs:
+                session.delete(tx)
+                
+            bank_txs = session.query(BankTransaction).filter_by(source_type='payment', source_id=payment.id).all()
+            if not bank_txs and payment.payment_mode == 'Bank':
+                # Fallback for legacy database entries without source_id
+                tx_type = 'deposit' if payment.party_type == 'customer' else 'withdrawal'
+                bank_txs = session.query(BankTransaction).filter(
+                    BankTransaction.source_type == 'payment',
+                    BankTransaction.transaction_type == tx_type,
+                    BankTransaction.amount == payment.amount,
+                    BankTransaction.date == payment.date
+                ).all()
+            for tx in bank_txs:
+                # Revert bank account balance
+                bank = session.query(BankAccount).get(tx.account_id)
+                if bank:
+                    if tx.transaction_type == 'deposit':
+                        bank.balance -= tx.amount
+                    else:
+                        bank.balance += tx.amount
+                session.delete(tx)
+                
+            # 3. Delete Payment
+            session.delete(payment)
+            
+            session.commit()
+            QMessageBox.information(self, "Success", "Payment record deleted and related accounts reverted successfully.")
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to delete payment record: {e}")
         finally:
             session.close()

@@ -532,4 +532,23 @@ QToolTip {
 .btn-action-delete:pressed {
     background-color: #b91c1c;
 }
+
+.btn-action-success {
+    background-color: #10b981;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 4px 10px;
+    min-height: 26px;
+    max-height: 26px;
+    min-width: 65px;
+    border: none;
+}
+.btn-action-success:hover {
+    background-color: #059669;
+}
+.btn-action-success:pressed {
+    background-color: #047857;
+}
 """

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTable
 from PySide6.QtCore import Qt
 from database import Session
 from sqlalchemy.orm import joinedload
-from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, ServiceJob, ServicePart, CashTransaction, BankTransaction
+from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment
 
 class ReportsView(QWidget):
     def __init__(self, parent=None):
@@ -35,6 +35,16 @@ class ReportsView(QWidget):
         self.exports_tab = QWidget()
         self.setup_exports_tab()
         self.tabs.addTab(self.exports_tab, "Export Data Reports")
+
+        # Tab 4: Customer Receivables
+        self.receivables_tab = QWidget()
+        self.setup_receivables_tab()
+        self.tabs.addTab(self.receivables_tab, "Customer Receivables")
+
+        # Tab 5: Supplier Payables
+        self.payables_tab = QWidget()
+        self.setup_payables_tab()
+        self.tabs.addTab(self.payables_tab, "Supplier Payables")
 
         layout.addWidget(self.tabs)
 
@@ -250,6 +260,26 @@ class ReportsView(QWidget):
             else:
                 self.net_profit_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #ef4444;")
 
+            # 4. Populate Customer Receivables List
+            customers = session.query(Customer).filter(Customer.outstanding_balance != 0).all()
+            self.receivables_table.setRowCount(len(customers))
+            for i, c in enumerate(customers):
+                name_item = QTableWidgetItem(c.name)
+                name_item.setData(Qt.UserRole, c.id)
+                self.receivables_table.setItem(i, 0, name_item)
+                self.receivables_table.setItem(i, 1, QTableWidgetItem(c.mobile))
+                self.receivables_table.setItem(i, 2, QTableWidgetItem(f"₹{c.outstanding_balance:,.2f}"))
+
+            # 5. Populate Supplier Payables List
+            suppliers = session.query(Supplier).filter(Supplier.outstanding_balance != 0).all()
+            self.payables_table.setRowCount(len(suppliers))
+            for i, s in enumerate(suppliers):
+                name_item = QTableWidgetItem(s.name)
+                name_item.setData(Qt.UserRole, s.id)
+                self.payables_table.setItem(i, 0, name_item)
+                self.payables_table.setItem(i, 1, QTableWidgetItem(s.mobile))
+                self.payables_table.setItem(i, 2, QTableWidgetItem(f"₹{s.outstanding_balance:,.2f}"))
+
         except Exception as e:
             print(f"Error loading reports: {e}")
         finally:
@@ -333,7 +363,7 @@ class ReportsView(QWidget):
 
                 # 5. Customer Outstanding
                 if self.chk_receivables.isChecked():
-                    custs = session.query(Customer).filter(Customer.outstanding_balance > 0).all()
+                    custs = session.query(Customer).filter(Customer.outstanding_balance != 0).all()
                     data = [{
                         "Customer ID": c.id,
                         "Customer Name": c.name,
@@ -346,7 +376,7 @@ class ReportsView(QWidget):
 
                 # 6. Supplier Outstanding
                 if self.chk_payables.isChecked():
-                    supps = session.query(Supplier).filter(Supplier.outstanding_balance > 0).all()
+                    supps = session.query(Supplier).filter(Supplier.outstanding_balance != 0).all()
                     data = [{
                         "Supplier ID": s.id,
                         "Supplier Name": s.name,
@@ -359,6 +389,324 @@ class ReportsView(QWidget):
             QMessageBox.information(self, "Success", f"Data exported successfully to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export data to Excel: {e}")
+        finally:
+            session.close()
+
+    def setup_receivables_tab(self):
+        main_layout = QHBoxLayout(self.receivables_tab)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
+
+        # Left Column: Party List
+        left_frame = QFrame()
+        left_frame.setProperty("class", "CardFrame")
+        left_frame.setFixedWidth(320)
+        left_layout = QVBoxLayout(left_frame)
+        left_layout.setContentsMargins(12, 12, 12, 12)
+        left_layout.setSpacing(10)
+        
+        left_layout.addWidget(QLabel("<b>Customer Outstanding Balances</b>"))
+        
+        self.receivables_table = QTableWidget()
+        self.receivables_table.setColumnCount(3)
+        self.receivables_table.setHorizontalHeaderLabels(["Customer", "Mobile", "Outstanding"])
+        self.receivables_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.receivables_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.receivables_table.verticalHeader().setVisible(False)
+        self.receivables_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.receivables_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.receivables_table.itemSelectionChanged.connect(self.load_customer_breakup)
+        
+        left_layout.addWidget(self.receivables_table)
+        main_layout.addWidget(left_frame)
+
+        # Right Column: Detailed Ledger Breakup
+        right_frame = QFrame()
+        right_frame.setProperty("class", "CardFrame")
+        right_layout = QVBoxLayout(right_frame)
+        right_layout.setContentsMargins(15, 15, 15, 15)
+        right_layout.setSpacing(10)
+
+        self.customer_breakup_lbl = QLabel("<b>Select a customer to view ledger breakup</b>")
+        self.customer_breakup_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #6366f1;")
+        right_layout.addWidget(self.customer_breakup_lbl)
+
+        self.customer_breakup_table = QTableWidget()
+        self.customer_breakup_table.setColumnCount(6)
+        self.customer_breakup_table.setHorizontalHeaderLabels([
+            "Date", "Ref / Type", "Description", "Debit (+) (₹)", "Credit (-) (₹)", "Balance (₹)"
+        ])
+        self.customer_breakup_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.customer_breakup_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        
+        history_table_vertical_header = self.customer_breakup_table.verticalHeader()
+        history_table_vertical_header.setVisible(False)
+        history_table_vertical_header.setDefaultSectionSize(40)
+        self.customer_breakup_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.customer_breakup_table.setSelectionMode(QTableWidget.NoSelection)
+        self.customer_breakup_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        right_layout.addWidget(self.customer_breakup_table)
+
+        self.customer_total_outstanding_lbl = QLabel("Net Outstanding: ₹0.00")
+        self.customer_total_outstanding_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
+        right_layout.addWidget(self.customer_total_outstanding_lbl)
+
+        main_layout.addWidget(right_frame)
+
+    def setup_payables_tab(self):
+        main_layout = QHBoxLayout(self.payables_tab)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
+
+        # Left Column: Party List
+        left_frame = QFrame()
+        left_frame.setProperty("class", "CardFrame")
+        left_frame.setFixedWidth(320)
+        left_layout = QVBoxLayout(left_frame)
+        left_layout.setContentsMargins(12, 12, 12, 12)
+        left_layout.setSpacing(10)
+        
+        left_layout.addWidget(QLabel("<b>Supplier Outstanding Balables</b>"))
+        
+        self.payables_table = QTableWidget()
+        self.payables_table.setColumnCount(3)
+        self.payables_table.setHorizontalHeaderLabels(["Supplier", "Mobile", "Payable"])
+        self.payables_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.payables_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.payables_table.verticalHeader().setVisible(False)
+        self.payables_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.payables_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.payables_table.itemSelectionChanged.connect(self.load_supplier_breakup)
+        
+        left_layout.addWidget(self.payables_table)
+        main_layout.addWidget(left_frame)
+
+        # Right Column: Detailed Ledger Breakup
+        right_frame = QFrame()
+        right_frame.setProperty("class", "CardFrame")
+        right_layout = QVBoxLayout(right_frame)
+        right_layout.setContentsMargins(15, 15, 15, 15)
+        right_layout.setSpacing(10)
+
+        self.supplier_breakup_lbl = QLabel("<b>Select a supplier to view ledger breakup</b>")
+        self.supplier_breakup_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
+        right_layout.addWidget(self.supplier_breakup_lbl)
+
+        self.supplier_breakup_table = QTableWidget()
+        self.supplier_breakup_table.setColumnCount(6)
+        self.supplier_breakup_table.setHorizontalHeaderLabels([
+            "Date", "Ref / Type", "Description", "Debit (-) (₹)", "Credit (+) (₹)", "Balance (₹)"
+        ])
+        self.supplier_breakup_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.supplier_breakup_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        
+        supplier_table_vertical_header = self.supplier_breakup_table.verticalHeader()
+        supplier_table_vertical_header.setVisible(False)
+        supplier_table_vertical_header.setDefaultSectionSize(40)
+        self.supplier_breakup_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.supplier_breakup_table.setSelectionMode(QTableWidget.NoSelection)
+        self.supplier_breakup_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        right_layout.addWidget(self.supplier_breakup_table)
+
+        self.supplier_total_payable_lbl = QLabel("Net Payable: ₹0.00")
+        self.supplier_total_payable_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
+        right_layout.addWidget(self.supplier_total_payable_lbl)
+
+        main_layout.addWidget(right_frame)
+
+    def load_customer_breakup(self):
+        selected = self.receivables_table.selectedItems()
+        if not selected:
+            self.customer_breakup_lbl.setText("<b>Select a customer to view ledger breakup</b>")
+            self.customer_breakup_table.setRowCount(0)
+            self.customer_total_outstanding_lbl.setText("Net Outstanding: ₹0.00")
+            return
+
+        row = selected[0].row()
+        cust_id = self.receivables_table.item(row, 0).data(Qt.UserRole)
+        cust_name = self.receivables_table.item(row, 0).text()
+
+        self.customer_breakup_lbl.setText(f"<b>Ledger breakup for Customer: {cust_name}</b>")
+
+        session = Session()
+        try:
+            customer = session.query(Customer).get(cust_id)
+            if not customer:
+                return
+
+            transactions = []
+
+            # 1. Sales Invoices
+            sales = session.query(SalesMaster).filter_by(customer_id=cust_id).all()
+            for s in sales:
+                transactions.append({
+                    "date": s.date,
+                    "ref": s.invoice_number,
+                    "desc": "Sales Invoice Billing",
+                    "debit": s.total_amount,
+                    "credit": s.paid_amount
+                })
+
+            # 2. Service Center repair jobs (linked by mobile number)
+            jobs = session.query(ServiceJob).filter_by(mobile=customer.mobile).all()
+            for j in jobs:
+                j_date = j.created_at.date() if isinstance(j.created_at, datetime.datetime) else j.created_at
+                transactions.append({
+                    "date": j_date,
+                    "ref": j.job_number,
+                    "desc": f"Repair Svc: {j.device_model}",
+                    "debit": j.total_amount,
+                    "credit": j.paid_amount
+                })
+
+            # 3. Custom payment collections (Payment Table)
+            payments = session.query(Payment).filter_by(party_type='customer', party_id=cust_id).all()
+            for p in payments:
+                transactions.append({
+                    "date": p.date,
+                    "ref": f"Receipt #{p.id}",
+                    "desc": p.remarks or "Payment Collection",
+                    "debit": 0.0,
+                    "credit": p.amount
+                })
+
+            # Sort chronologically by date
+            transactions.sort(key=lambda x: x["date"])
+
+            # Add Opening Balance/Untracked Legacy Balance if there's a discrepancy
+            total_tx_balance = sum(tx["debit"] - tx["credit"] for tx in transactions)
+            opening_balance = customer.outstanding_balance - total_tx_balance
+            if abs(opening_balance) > 0.01:
+                earliest_date = transactions[0]["date"] if transactions else datetime.date.today()
+                if isinstance(earliest_date, datetime.datetime):
+                    earliest_date = earliest_date.date()
+                transactions.insert(0, {
+                    "date": earliest_date,
+                    "ref": "OPENING",
+                    "desc": "Opening / Legacy Balance",
+                    "debit": opening_balance if opening_balance > 0 else 0.0,
+                    "credit": -opening_balance if opening_balance < 0 else 0.0
+                })
+
+            self.customer_breakup_table.setRowCount(len(transactions))
+            running_balance = 0.0
+            for i, tx in enumerate(transactions):
+                running_balance += tx["debit"] - tx["credit"]
+                
+                self.customer_breakup_table.setItem(i, 0, QTableWidgetItem(tx["date"].strftime("%Y-%m-%d")))
+                self.customer_breakup_table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
+                self.customer_breakup_table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
+                
+                deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
+                if tx["debit"] > 0:
+                    deb_item.setForeground(Qt.red)
+                self.customer_breakup_table.setItem(i, 3, deb_item)
+
+                cred_item = QTableWidgetItem(f"₹{tx['credit']:,.2f}" if tx["credit"] > 0 else "-")
+                if tx["credit"] > 0:
+                    cred_item.setForeground(Qt.green)
+                self.customer_breakup_table.setItem(i, 4, cred_item)
+
+                bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
+                self.customer_breakup_table.setItem(i, 5, bal_item)
+
+            self.customer_total_outstanding_lbl.setText(f"Net Outstanding: ₹{running_balance:,.2f}")
+
+        except Exception as e:
+            print(f"Error loading customer breakup: {e}")
+        finally:
+            session.close()
+
+    def load_supplier_breakup(self):
+        selected = self.payables_table.selectedItems()
+        if not selected:
+            self.supplier_breakup_lbl.setText("<b>Select a supplier to view ledger breakup</b>")
+            self.supplier_breakup_table.setRowCount(0)
+            self.supplier_total_payable_lbl.setText("Net Payable: ₹0.00")
+            return
+
+        row = selected[0].row()
+        supp_id = self.payables_table.item(row, 0).data(Qt.UserRole)
+        supp_name = self.payables_table.item(row, 0).text()
+
+        self.supplier_breakup_lbl.setText(f"<b>Ledger breakup for Supplier: {supp_name}</b>")
+
+        session = Session()
+        try:
+            supplier = session.query(Supplier).get(supp_id)
+            if not supplier:
+                return
+
+            transactions = []
+
+            # 1. Purchase Bills
+            purchases = session.query(PurchaseMaster).filter_by(supplier_id=supp_id).all()
+            for p in purchases:
+                transactions.append({
+                    "date": p.date,
+                    "ref": p.invoice_number,
+                    "desc": "Purchase Bill Billing",
+                    "debit": p.paid_amount,
+                    "credit": p.total_amount
+                })
+
+            # 2. Custom supplier payments (Payment Table)
+            payments = session.query(Payment).filter_by(party_type='supplier', party_id=supp_id).all()
+            for p in payments:
+                transactions.append({
+                    "date": p.date,
+                    "ref": f"Voucher #{p.id}",
+                    "desc": p.remarks or "Supplier Payment",
+                    "debit": p.amount,
+                    "credit": 0.0
+                })
+
+            # Sort chronologically by date
+            transactions.sort(key=lambda x: x["date"])
+
+            # Add Opening Balance/Untracked Legacy Balance if there's a discrepancy
+            total_tx_balance = sum(tx["credit"] - tx["debit"] for tx in transactions)
+            opening_balance = supplier.outstanding_balance - total_tx_balance
+            if abs(opening_balance) > 0.01:
+                earliest_date = transactions[0]["date"] if transactions else datetime.date.today()
+                if isinstance(earliest_date, datetime.datetime):
+                    earliest_date = earliest_date.date()
+                transactions.insert(0, {
+                    "date": earliest_date,
+                    "ref": "OPENING",
+                    "desc": "Opening / Legacy Balance",
+                    "debit": -opening_balance if opening_balance < 0 else 0.0,
+                    "credit": opening_balance if opening_balance > 0 else 0.0
+                })
+
+            self.supplier_breakup_table.setRowCount(len(transactions))
+            running_balance = 0.0
+            for i, tx in enumerate(transactions):
+                running_balance += tx["credit"] - tx["debit"]
+                
+                self.supplier_breakup_table.setItem(i, 0, QTableWidgetItem(tx["date"].strftime("%Y-%m-%d")))
+                self.supplier_breakup_table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
+                self.supplier_breakup_table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
+                
+                deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
+                if tx["debit"] > 0:
+                    deb_item.setForeground(Qt.green)
+                self.supplier_breakup_table.setItem(i, 3, deb_item)
+
+                cred_item = QTableWidgetItem(f"₹{tx['credit']:,.2f}" if tx["credit"] > 0 else "-")
+                if tx["credit"] > 0:
+                    cred_item.setForeground(Qt.red)
+                self.supplier_breakup_table.setItem(i, 4, cred_item)
+
+                bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
+                self.supplier_breakup_table.setItem(i, 5, bal_item)
+
+            self.supplier_total_payable_lbl.setText(f"Net Payable: ₹{running_balance:,.2f}")
+
+        except Exception as e:
+            print(f"Error loading supplier breakup: {e}")
         finally:
             session.close()
 
