@@ -394,22 +394,28 @@ class ReportsView(QWidget):
             # 4. Populate Customer Receivables List
             customers = session.query(Customer).filter(Customer.outstanding_balance != 0).all()
             self.receivables_table.setRowCount(len(customers))
+            total_receivable = 0.0
             for i, c in enumerate(customers):
                 name_item = QTableWidgetItem(c.name)
                 name_item.setData(Qt.UserRole, c.id)
                 self.receivables_table.setItem(i, 0, name_item)
                 self.receivables_table.setItem(i, 1, QTableWidgetItem(c.mobile))
                 self.receivables_table.setItem(i, 2, QTableWidgetItem(f"₹{c.outstanding_balance:,.2f}"))
+                total_receivable += c.outstanding_balance
+            self.receivables_total_lbl.setText(f"Total: ₹{total_receivable:,.2f}")
 
             # 5. Populate Supplier Payables List
             suppliers = session.query(Supplier).filter(Supplier.outstanding_balance != 0).all()
             self.payables_table.setRowCount(len(suppliers))
+            total_payable = 0.0
             for i, s in enumerate(suppliers):
                 name_item = QTableWidgetItem(s.name)
                 name_item.setData(Qt.UserRole, s.id)
                 self.payables_table.setItem(i, 0, name_item)
                 self.payables_table.setItem(i, 1, QTableWidgetItem(s.mobile))
                 self.payables_table.setItem(i, 2, QTableWidgetItem(f"₹{s.outstanding_balance:,.2f}"))
+                total_payable += s.outstanding_balance
+            self.payables_total_lbl.setText(f"Total: ₹{total_payable:,.2f}")
 
         except Exception as e:
             print(f"Error loading reports: {e}")
@@ -531,7 +537,7 @@ class ReportsView(QWidget):
         # Left Column: Party List
         left_frame = QFrame()
         left_frame.setProperty("class", "CardFrame")
-        left_frame.setFixedWidth(320)
+        left_frame.setFixedWidth(350)
         left_layout = QVBoxLayout(left_frame)
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(10)
@@ -549,6 +555,27 @@ class ReportsView(QWidget):
         self.receivables_table.itemSelectionChanged.connect(self.load_customer_breakup)
         
         left_layout.addWidget(self.receivables_table)
+
+        # Bottom controls for Left Frame: Total Receivable label & View/Print button
+        left_bottom = QHBoxLayout()
+        self.receivables_total_lbl = QLabel("Total: ₹0.00")
+        self.receivables_total_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #f59e0b;")
+        left_bottom.addWidget(self.receivables_total_lbl)
+        
+        left_bottom.addStretch()
+        
+        self.c_view_statement_btn = QPushButton("View Statement")
+        self.c_view_statement_btn.setEnabled(False)
+        self.c_view_statement_btn.clicked.connect(self.view_customer_statement)
+        self.c_view_statement_btn.setStyleSheet("padding: 5px 10px; font-size: 12px;")
+        left_bottom.addWidget(self.c_view_statement_btn)
+
+        self.c_print_all_btn = QPushButton("Print All")
+        self.c_print_all_btn.clicked.connect(self.print_all_customer_outstanding)
+        self.c_print_all_btn.setStyleSheet("padding: 5px 10px; font-size: 12px;")
+        left_bottom.addWidget(self.c_print_all_btn)
+        
+        left_layout.addLayout(left_bottom)
         main_layout.addWidget(left_frame)
 
         # Right Column: Detailed Ledger Breakup
@@ -585,13 +612,6 @@ class ReportsView(QWidget):
         self.customer_total_outstanding_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
         bottom_layout.addWidget(self.customer_total_outstanding_lbl)
         
-        bottom_layout.addStretch()
-        
-        self.c_view_statement_btn = QPushButton("View/Print Statement")
-        self.c_view_statement_btn.setEnabled(False)
-        self.c_view_statement_btn.clicked.connect(self.view_customer_statement)
-        bottom_layout.addWidget(self.c_view_statement_btn)
-        
         right_layout.addLayout(bottom_layout)
 
         main_layout.addWidget(right_frame)
@@ -604,7 +624,7 @@ class ReportsView(QWidget):
         # Left Column: Party List
         left_frame = QFrame()
         left_frame.setProperty("class", "CardFrame")
-        left_frame.setFixedWidth(320)
+        left_frame.setFixedWidth(350)
         left_layout = QVBoxLayout(left_frame)
         left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.setSpacing(10)
@@ -622,6 +642,27 @@ class ReportsView(QWidget):
         self.payables_table.itemSelectionChanged.connect(self.load_supplier_breakup)
         
         left_layout.addWidget(self.payables_table)
+
+        # Bottom controls for Left Frame: Total Payable label & View/Print button
+        left_bottom = QHBoxLayout()
+        self.payables_total_lbl = QLabel("Total: ₹0.00")
+        self.payables_total_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #ef4444;")
+        left_bottom.addWidget(self.payables_total_lbl)
+        
+        left_bottom.addStretch()
+        
+        self.s_view_statement_btn = QPushButton("View Statement")
+        self.s_view_statement_btn.setEnabled(False)
+        self.s_view_statement_btn.clicked.connect(self.view_supplier_statement)
+        self.s_view_statement_btn.setStyleSheet("padding: 5px 10px; font-size: 12px;")
+        left_bottom.addWidget(self.s_view_statement_btn)
+
+        self.s_print_all_btn = QPushButton("Print All")
+        self.s_print_all_btn.clicked.connect(self.print_all_supplier_outstanding)
+        self.s_print_all_btn.setStyleSheet("padding: 5px 10px; font-size: 12px;")
+        left_bottom.addWidget(self.s_print_all_btn)
+        
+        left_layout.addLayout(left_bottom)
         main_layout.addWidget(left_frame)
 
         # Right Column: Detailed Ledger Breakup
@@ -657,13 +698,6 @@ class ReportsView(QWidget):
         self.supplier_total_payable_lbl = QLabel("Net Payable: ₹0.00")
         self.supplier_total_payable_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
         bottom_layout.addWidget(self.supplier_total_payable_lbl)
-        
-        bottom_layout.addStretch()
-        
-        self.s_view_statement_btn = QPushButton("View/Print Statement")
-        self.s_view_statement_btn.setEnabled(False)
-        self.s_view_statement_btn.clicked.connect(self.view_supplier_statement)
-        bottom_layout.addWidget(self.s_view_statement_btn)
         
         right_layout.addLayout(bottom_layout)
 
@@ -939,6 +973,108 @@ class ReportsView(QWidget):
         from ui.masters.ledger_dialog import LedgerBreakupDialog
         dlg = LedgerBreakupDialog(party_type='supplier', party_id=supp_id, party_name=supp_name, parent=self)
         dlg.exec()
+
+    def print_all_customer_outstanding(self):
+        from database import Setting
+        session = Session()
+        try:
+            s_name = session.query(Setting).filter_by(key='shop_name').first().value
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first().value
+            s_address = session.query(Setting).filter_by(key='shop_address').first().value
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first().value
+
+            customers = session.query(Customer).filter(Customer.outstanding_balance != 0).all()
+            if not customers:
+                QMessageBox.information(self, "No Outstanding", "There are no customer outstanding balances.")
+                return
+
+            items = []
+            total_amount = 0.0
+            for c in customers:
+                items.append({
+                    "name": c.name,
+                    "mobile": c.mobile or "N/A",
+                    "balance": c.outstanding_balance
+                })
+                total_amount += c.outstanding_balance
+
+            report_data = {
+                "shop_name": s_name,
+                "shop_contact": s_contact,
+                "shop_address": s_address,
+                "shop_gst": s_gst,
+                "date": datetime.date.today().strftime("%Y-%m-%d"),
+                "party_type": 'customer',
+                "items": items,
+                "total_amount": total_amount
+            }
+
+            os.makedirs("statements", exist_ok=True)
+            file_path = os.path.abspath("statements/all_customer_outstanding.pdf")
+
+            from utils.pdf_generator import generate_outstanding_pdf
+            generate_outstanding_pdf(report_data, file_path)
+
+            try:
+                os.startfile(file_path)
+            except Exception as e:
+                print(f"Could not auto-open PDF: {e}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate report: {e}")
+        finally:
+            session.close()
+
+    def print_all_supplier_outstanding(self):
+        from database import Setting
+        session = Session()
+        try:
+            s_name = session.query(Setting).filter_by(key='shop_name').first().value
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first().value
+            s_address = session.query(Setting).filter_by(key='shop_address').first().value
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first().value
+
+            suppliers = session.query(Supplier).filter(Supplier.outstanding_balance != 0).all()
+            if not suppliers:
+                QMessageBox.information(self, "No Outstanding", "There are no supplier outstanding balances.")
+                return
+
+            items = []
+            total_amount = 0.0
+            for s in suppliers:
+                items.append({
+                    "name": s.name,
+                    "mobile": s.mobile or "N/A",
+                    "balance": s.outstanding_balance
+                })
+                total_amount += s.outstanding_balance
+
+            report_data = {
+                "shop_name": s_name,
+                "shop_contact": s_contact,
+                "shop_address": s_address,
+                "shop_gst": s_gst,
+                "date": datetime.date.today().strftime("%Y-%m-%d"),
+                "party_type": 'supplier',
+                "items": items,
+                "total_amount": total_amount
+            }
+
+            os.makedirs("statements", exist_ok=True)
+            file_path = os.path.abspath("statements/all_supplier_outstanding.pdf")
+
+            from utils.pdf_generator import generate_outstanding_pdf
+            generate_outstanding_pdf(report_data, file_path)
+
+            try:
+                os.startfile(file_path)
+            except Exception as e:
+                print(f"Could not auto-open PDF: {e}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate report: {e}")
+        finally:
+            session.close()
 
 # Helper function
 def func_sum(column):

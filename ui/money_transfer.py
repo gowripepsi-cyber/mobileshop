@@ -47,80 +47,47 @@ class MoneyTransferView(QWidget):
         
         self.main_layout.addLayout(kpi_layout)
 
-        # 2. Main Content Split (Form on Left, Log on Right)
-        split_layout = QHBoxLayout()
-        split_layout.setSpacing(20)
-
-        # Left Column: Form Card
+        # 2. Form Card (Top, spanning full width, arranged in 2 horizontal rows)
         self.form_frame = QFrame()
         self.form_frame.setProperty("class", "CardFrame")
-        self.form_frame.setFixedWidth(400)
         form_layout = QVBoxLayout(self.form_frame)
-        form_layout.setContentsMargins(15, 15, 15, 15)
+        form_layout.setContentsMargins(15, 12, 15, 12)
         form_layout.setSpacing(10)
 
         self.form_title = QLabel("New Money Transfer")
         self.form_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 2px;")
         form_layout.addWidget(self.form_title)
 
-        # Row 1: Dates (Transfer Date & Deadline Date)
+        # Row 1: Names, Type, and Dynamic Fields
         row1 = QWidget()
         row1_layout = QHBoxLayout(row1)
         row1_layout.setContentsMargins(0, 0, 0, 0)
         row1_layout.setSpacing(10)
-        
-        self.t_date = QDateEdit()
-        self.t_date.setCalendarPopup(True)
-        self.t_date.setDate(QDate.currentDate())
-        
-        self.t_deadline = QDateEdit()
-        self.t_deadline.setCalendarPopup(True)
-        self.t_deadline.setDate(QDate.currentDate().addDays(1))
-        
-        row1_layout.addWidget(self.create_field_group("Transfer Date:", self.t_date))
-        row1_layout.addWidget(self.create_field_group("Deadline Date *:", self.t_deadline))
-        form_layout.addWidget(row1)
 
-        # Row 2: Sender & Beneficiary
-        row2 = QWidget()
-        row2_layout = QHBoxLayout(row2)
-        row2_layout.setContentsMargins(0, 0, 0, 0)
-        row2_layout.setSpacing(10)
-        
         self.t_cust_name = QLineEdit()
-        self.t_cust_name.setPlaceholderText("Sender Customer Name")
+        self.t_cust_name.setPlaceholderText("Sender Customer Name (Optional)")
+        t_cust_grp = self.create_field_group("Sender Name:", self.t_cust_name)
         
         self.t_beneficiary_name = QLineEdit()
-        self.t_beneficiary_name.setPlaceholderText("Beneficiary Full Name")
-        
-        row2_layout.addWidget(self.create_field_group("Sender Name *:", self.t_cust_name))
-        row2_layout.addWidget(self.create_field_group("Beneficiary Name *:", self.t_beneficiary_name))
-        form_layout.addWidget(row2)
+        self.t_beneficiary_name.setPlaceholderText("Beneficiary Full Name (Optional)")
+        t_beneficiary_grp = self.create_field_group("Beneficiary Name:", self.t_beneficiary_name)
 
-        # Row 3: Transfer Type (Radio Buttons)
-        row3 = QWidget()
-        row3_layout = QHBoxLayout(row3)
-        row3_layout.setContentsMargins(0, 0, 0, 0)
-        row3_layout.setSpacing(10)
-        
         self.r_upi = QRadioButton("UPI")
         self.r_bank = QRadioButton("Bank Transfer")
         self.r_upi.setChecked(True)
-        
         self.r_upi.toggled.connect(self.on_transfer_type_changed)
         self.r_bank.toggled.connect(self.on_transfer_type_changed)
         
         radio_container = QWidget()
         radio_layout = QHBoxLayout(radio_container)
         radio_layout.setContentsMargins(5, 5, 5, 5)
-        radio_layout.setSpacing(15)
+        radio_layout.setSpacing(12)
         radio_layout.addWidget(self.r_upi)
         radio_layout.addWidget(self.r_bank)
-        
-        row3_layout.addWidget(self.create_field_group("Transfer Type *:", radio_container))
-        form_layout.addWidget(row3)
+        radio_grp = self.create_field_group("Transfer Type *:", radio_container)
+        radio_grp.setMaximumWidth(180)
 
-        # Row 4: Dynamic Fields Container (Full Width)
+        # Dynamic Fields Container (Full Width)
         self.dynamic_container = QWidget()
         dyn_layout = QHBoxLayout(self.dynamic_container)
         dyn_layout.setContentsMargins(0, 0, 0, 0)
@@ -146,44 +113,70 @@ class MoneyTransferView(QWidget):
         
         dyn_layout.addWidget(self.upi_widget)
         dyn_layout.addWidget(self.bank_widget)
-        form_layout.addWidget(self.dynamic_container)
 
-        # Row 5: Amount & Service Charge
-        row5 = QWidget()
-        row5_layout = QHBoxLayout(row5)
-        row5_layout.setContentsMargins(0, 0, 0, 0)
-        row5_layout.setSpacing(10)
-        
+        row1_layout.addWidget(t_cust_grp, 2)
+        row1_layout.addWidget(t_beneficiary_grp, 2)
+        row1_layout.addWidget(radio_grp)
+        row1_layout.addWidget(self.dynamic_container, 3)
+        form_layout.addWidget(row1)
+
+        # Row 2: Amount, Service Charge, Payout Bank Account, Remarks, Submit button
+        row2 = QWidget()
+        row2_layout = QHBoxLayout(row2)
+        row2_layout.setContentsMargins(0, 0, 0, 0)
+        row2_layout.setSpacing(10)
+
         self.t_amount = QDoubleSpinBox()
         self.t_amount.setRange(0.01, 9999999.0)
         self.t_amount.setDecimals(2)
+        t_amount_grp = self.create_field_group("Amount (₹) *:", self.t_amount)
+        t_amount_grp.setMaximumWidth(130)
         
         self.t_charge = QDoubleSpinBox()
         self.t_charge.setRange(0.0, 999999.0)
         self.t_charge.setDecimals(2)
-        
-        row5_layout.addWidget(self.create_field_group("Amount (₹) *:", self.t_amount))
-        row5_layout.addWidget(self.create_field_group("Service Charge (₹):", self.t_charge))
-        form_layout.addWidget(row5)
+        t_charge_grp = self.create_field_group("Service Charge (₹):", self.t_charge)
+        t_charge_grp.setMaximumWidth(130)
 
-        # Row 6: Shop Payout Bank (Always Bank)
         self.t_payout_bank = QComboBox()
-        form_layout.addWidget(self.create_field_group("Payout Bank Account (Online Transfer) *:", self.t_payout_bank))
+        t_payout_grp = self.create_field_group("Payout Bank Account (Online) *:", self.t_payout_bank)
 
-        # Row 7: Remarks (Full Width - Last Input Field)
+        self.r_paid = QRadioButton("Paid")
+        self.r_pay_later = QRadioButton("Pay Later")
+        self.r_paid.setChecked(True)
+        
+        status_radio_container = QWidget()
+        status_radio_layout = QHBoxLayout(status_radio_container)
+        status_radio_layout.setContentsMargins(5, 5, 5, 5)
+        status_radio_layout.setSpacing(15)
+        status_radio_layout.addWidget(self.r_paid)
+        status_radio_layout.addWidget(self.r_pay_later)
+        
+        status_grp = self.create_field_group("Status *:", status_radio_container)
+        status_grp.setMaximumWidth(180)
+
         self.t_remarks = QLineEdit()
         self.t_remarks.setPlaceholderText("Optional remarks")
-        form_layout.addWidget(self.create_field_group("Remarks:", self.t_remarks))
+        t_remarks_grp = self.create_field_group("Remarks:", self.t_remarks)
 
-        # Row 8: Submit button
         self.save_btn = QPushButton("Submit Money Transfer")
         self.save_btn.setProperty("class", "btn-success")
         self.save_btn.clicked.connect(self.save_transfer)
-        form_layout.addWidget(self.save_btn)
+        save_btn_grp = self.create_field_group(" ", self.save_btn)
+        save_btn_grp.setMinimumWidth(180)
+        save_btn_grp.setMaximumWidth(220)
 
-        split_layout.addWidget(self.form_frame)
+        row2_layout.addWidget(t_amount_grp)
+        row2_layout.addWidget(t_charge_grp)
+        row2_layout.addWidget(t_payout_grp, 2)
+        row2_layout.addWidget(status_grp)
+        row2_layout.addWidget(t_remarks_grp, 2)
+        row2_layout.addWidget(save_btn_grp, 1)
+        form_layout.addWidget(row2)
 
-        # Right Column: Search filters + Grid Log
+        self.main_layout.addWidget(self.form_frame)
+
+        # 3. History Log (Bottom Column: Search filters + Grid Log)
         history_frame = QFrame()
         history_frame.setProperty("class", "CardFrame")
         history_layout = QVBoxLayout(history_frame)
@@ -236,14 +229,12 @@ class MoneyTransferView(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-        self.table.setColumnWidth(7, 230)
+        self.table.setColumnWidth(7, 280)
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.verticalHeader().setDefaultSectionSize(54)
         history_layout.addWidget(self.table)
 
-        split_layout.addWidget(history_frame)
-
-        self.main_layout.addLayout(split_layout)
+        self.main_layout.addWidget(history_frame, 1)
 
     def create_kpi_card(self, title, val, border_color):
         card = QFrame()
@@ -353,8 +344,8 @@ class MoneyTransferView(QWidget):
                 # Actions Panel
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(4, 2, 4, 2)
-                actions_layout.setSpacing(5)
+                actions_layout.setContentsMargins(6, 2, 6, 2)
+                actions_layout.setSpacing(8)
                 actions_layout.setAlignment(Qt.AlignCenter)
 
                 status_btn = QPushButton("Toggle")
@@ -387,11 +378,8 @@ class MoneyTransferView(QWidget):
         charge = self.t_charge.value()
         remarks = self.t_remarks.text().strip() or None
 
-        date_q = self.t_date.date()
-        tx_date = datetime.date(date_q.year(), date_q.month(), date_q.day())
-
-        dl_q = self.t_deadline.date()
-        dl_date = datetime.date(dl_q.year(), dl_q.month(), dl_q.day())
+        tx_date = datetime.date.today()
+        dl_date = datetime.date.today() + datetime.timedelta(days=1)
 
         # Sub-fields
         upi_id = self.t_upi_id.text().strip() if t_type == "UPI" else None
@@ -408,10 +396,7 @@ class MoneyTransferView(QWidget):
             QMessageBox.warning(self, "Validation Error", "Please select a Payout Bank Account.")
             return
 
-        # Validation
-        if not sender or not beneficiary:
-            QMessageBox.warning(self, "Validation Error", "Please enter Sender Name and Beneficiary Name.")
-            return
+        # Sender and Beneficiary names are optional (will record empty string if not provided)
 
         if t_type == "UPI" and not upi_id:
             QMessageBox.warning(self, "Validation Error", "UPI ID / Mobile Number is required.")
@@ -458,7 +443,7 @@ class MoneyTransferView(QWidget):
                 total_amount=total_amt,
                 deadline_date=dl_date,
                 remarks=remarks,
-                status='Pending',
+                status='Completed' if self.r_paid.isChecked() else 'Pending',
                 payment_mode=pay_mode,
                 payment_bank_id=pay_bank_id,
                 payout_mode=payout_mode,
@@ -468,7 +453,8 @@ class MoneyTransferView(QWidget):
             session.flush() # get id
 
             # Log Ledger Inflow (payment from customer)
-            desc_in = f"Inflow for Money Transfer {tx_no} from customer {sender}"
+            sender_display = sender if sender else "N/A"
+            desc_in = f"Inflow for Money Transfer {tx_no} from customer {sender_display}"
             if pay_mode == "Cash":
                 tx_in = CashTransaction(
                     date=tx_date, transaction_type='in', amount=total_amt,
@@ -485,7 +471,8 @@ class MoneyTransferView(QWidget):
                 pay_bank_obj.balance += total_amt
 
             # Log Ledger Outflow (transfer routed out by shop)
-            desc_out = f"Outflow for Money Transfer {tx_no} to beneficiary {beneficiary}"
+            beneficiary_display = beneficiary if beneficiary else "N/A"
+            desc_out = f"Outflow for Money Transfer {tx_no} to beneficiary {beneficiary_display}"
             if payout_mode == "Cash":
                 tx_out = CashTransaction(
                     date=tx_date, transaction_type='out', amount=amount,
@@ -513,6 +500,7 @@ class MoneyTransferView(QWidget):
             self.t_amount.setValue(0.0)
             self.t_charge.setValue(0.0)
             self.t_remarks.clear()
+            self.r_paid.setChecked(True)
             self.refresh_data()
             
         except Exception as e:
@@ -526,9 +514,16 @@ class MoneyTransferView(QWidget):
         try:
             mt = session.query(MoneyTransfer).get(transfer_id)
             if mt:
-                mt.status = 'Completed' if mt.status == 'Pending' else 'Pending'
-                session.commit()
-                self.refresh_data()
+                new_status = 'Completed' if mt.status == 'Pending' else 'Pending'
+                confirm = QMessageBox.question(
+                    self, "Confirm Status Change", 
+                    f"Are you sure you want to change the status of transaction {mt.transaction_number} to {new_status}?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if confirm == QMessageBox.Yes:
+                    mt.status = new_status
+                    session.commit()
+                    self.refresh_data()
         except Exception as e:
             print(f"Error toggling transfer status: {e}")
         finally:

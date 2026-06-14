@@ -113,6 +113,13 @@ class DashboardView(QWidget):
         self.check_now_btn.setStyleSheet("font-size: 11px; background-color: #3b82f6; color: white; border-radius: 4px; margin-bottom: 10px; padding: 0px 10px;")
         self.check_now_btn.clicked.connect(self.trigger_manual_low_stock_check)
         title_btn_layout.addWidget(self.check_now_btn)
+
+        self.print_preview_btn = QPushButton("📄 Print Preview")
+        self.print_preview_btn.setFixedWidth(120)
+        self.print_preview_btn.setFixedHeight(44)
+        self.print_preview_btn.setStyleSheet("font-size: 11px; background-color: #10b981; color: white; border-radius: 4px; margin-bottom: 10px; padding: 0px 10px;")
+        self.print_preview_btn.clicked.connect(self.show_low_stock_print_preview)
+        title_btn_layout.addWidget(self.print_preview_btn)
         
         low_stock_layout.addLayout(title_btn_layout)
 
@@ -372,3 +379,63 @@ class DashboardView(QWidget):
         main_win = self.window()
         if hasattr(main_win, 'check_low_stock_alert'):
             main_win.check_low_stock_alert(manual=True)
+
+    def show_low_stock_print_preview(self):
+        import os
+        from database import Session, Setting
+        from models import Product
+        from utils.pdf_generator import generate_low_stock_pdf
+        from PySide6.QtWidgets import QMessageBox
+        
+        session = Session()
+        try:
+            # 1. Fetch Shop details
+            s_name = session.query(Setting).filter_by(key='shop_name').first()
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first()
+            s_address = session.query(Setting).filter_by(key='shop_address').first()
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first()
+            
+            shop_name = s_name.value if s_name else "Galaxy Mobiles"
+            shop_contact = s_contact.value if s_contact else "N/A"
+            shop_address = s_address.value if s_address else "N/A"
+            shop_gst = s_gst.value if s_gst else "N/A"
+            
+            # 2. Fetch Low Stock items
+            low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
+            if not low_stock_products:
+                QMessageBox.information(self, "No Low Stock", "There are currently no products with low stock to print!")
+                return
+                
+            # Prepare data
+            items_data = []
+            for p in low_stock_products:
+                items_data.append({
+                    "name": p.name,
+                    "brand_model": f"{p.brand} / {p.model}",
+                    "current_stock": p.stock_qty,
+                    "low_limit": p.low_stock_limit
+                })
+                
+            report_data = {
+                "shop_name": shop_name,
+                "shop_contact": shop_contact,
+                "shop_address": shop_address,
+                "shop_gst": shop_gst,
+                "date": datetime.date.today().strftime("%Y-%m-%d"),
+                "items": items_data
+            }
+            
+            os.makedirs("statements", exist_ok=True)
+            path = os.path.abspath("statements/low_stock_report.pdf")
+            generate_low_stock_pdf(report_data, path)
+            
+            QMessageBox.information(self, "Success", f"Low Stock Report PDF generated at:\n{path}")
+            try:
+                os.startfile(path)
+            except Exception as e:
+                print(f"Could not auto-open PDF: {e}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate Low Stock Report: {e}")
+        finally:
+            session.close()

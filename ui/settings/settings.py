@@ -78,7 +78,8 @@ class SettingsView(QWidget):
 
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setMaximumWidth(500)
+        form_frame.setMinimumWidth(800)
+        form_frame.setMaximumWidth(900)
         form_layout = QFormLayout(form_frame)
         form_layout.setContentsMargins(20, 20, 20, 20)
         form_layout.setSpacing(15)
@@ -113,7 +114,8 @@ class SettingsView(QWidget):
         db_frame = QFrame()
         db_frame.setProperty("class", "CardFrame")
         db_frame.setMinimumHeight(280)
-        db_frame.setMaximumWidth(500)
+        db_frame.setMinimumWidth(800)
+        db_frame.setMaximumWidth(900)
         db_layout = QVBoxLayout(db_frame)
         db_layout.setContentsMargins(20, 20, 20, 20)
         db_layout.setSpacing(15)
@@ -294,6 +296,7 @@ class SettingsView(QWidget):
         
         lic_frame = QFrame()
         lic_frame.setProperty("class", "CardFrame")
+        lic_frame.setMinimumWidth(800)
         lic_frame.setMaximumWidth(1000)
         lic_layout = QVBoxLayout(lic_frame)
         lic_layout.setContentsMargins(20, 20, 20, 20)
@@ -317,7 +320,7 @@ class SettingsView(QWidget):
         self.lic_mid_edit.setStyleSheet("background-color: #141426; border: 1px solid #2c2c54; padding: 5px; font-family: monospace; font-size: 13px; color: #38bdf8;")
         
         btn_copy = QPushButton("Copy")
-        btn_copy.setFixedWidth(60)
+        btn_copy.setFixedWidth(120)
         btn_copy.setFixedHeight(35)
         btn_copy.setStyleSheet("background-color: #334155;")
         btn_copy.clicked.connect(lambda: [QApplication.clipboard().setText(mid), QMessageBox.information(self, "Success", "Machine ID copied to clipboard.")])
