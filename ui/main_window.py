@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QStackedWidget, QMessageBox, QSpacerItem, QSizePolicy
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 
 # Import views
 from ui.dashboard import DashboardView
@@ -21,6 +21,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Mobile Shop Management System")
         self.setMinimumSize(1200, 750)
         self.init_ui()
+        QTimer.singleShot(100, self.check_low_stock_alert)
 
     def init_ui(self):
         # Central widget and horizontal layout
@@ -225,3 +226,31 @@ class MainWindow(QMainWindow):
         )
         if confirm == QMessageBox.Yes:
             self.close()
+
+    def check_low_stock_alert(self, manual=False):
+        from database import Session
+        from models import Product
+        session = Session()
+        try:
+            low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
+            if low_stock_products:
+                msg = "The following items are low in stock:\n\n"
+                for p in low_stock_products:
+                    status = "OUT OF STOCK" if p.stock_qty == 0 else f"Qty: {p.stock_qty} (Limit: {p.low_stock_limit})"
+                    msg += f"• {p.name} ({p.brand} {p.model}) - {status}\n"
+                
+                QMessageBox.warning(
+                    self,
+                    "Low Stock Alert",
+                    msg
+                )
+            elif manual:
+                QMessageBox.information(
+                    self,
+                    "Low Stock Alert",
+                    "All products are well stocked!\n(No items below their individual low stock limits)."
+                )
+        except Exception as e:
+            print(f"Error checking low stock alert: {e}")
+        finally:
+            session.close()

@@ -47,6 +47,7 @@ class Product(Base):
     purchase_price = Column(Float, default=0.0)
     selling_price = Column(Float, default=0.0)
     stock_qty = Column(Integer, default=0)
+    low_stock_limit = Column(Integer, default=5)
 
 class BankAccount(Base):
     __tablename__ = 'bank_accounts'

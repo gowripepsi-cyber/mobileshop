@@ -3,7 +3,8 @@ import os
 import pandas as pd
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QPushButton, QCheckBox, 
-                             QMessageBox, QFileDialog, QTabWidget, QFrame, QFormLayout)
+                             QMessageBox, QFileDialog, QTabWidget, QFrame, QFormLayout,
+                             QComboBox, QDateEdit)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from database import Session
@@ -97,6 +98,46 @@ class ReportsView(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
 
+        # Date filter controls frame/panel
+        filter_frame = QFrame()
+        filter_frame.setProperty("class", "CardFrame")
+        filter_frame.setMaximumWidth(600)
+        filter_layout = QHBoxLayout(filter_frame)
+        filter_layout.setContentsMargins(15, 10, 15, 10)
+        filter_layout.setSpacing(10)
+
+        filter_layout.addWidget(QLabel("Date Filter:"))
+        self.pl_date_filter_combo = QComboBox()
+        self.pl_date_filter_combo.addItems(["All Time", "This Month", "This Year", "Custom Range"])
+        self.pl_date_filter_combo.currentIndexChanged.connect(self.on_pl_date_filter_changed)
+        filter_layout.addWidget(self.pl_date_filter_combo, 2)
+
+        self.pl_start_label = QLabel("Start Date:")
+        self.pl_start_date = QDateEdit()
+        self.pl_start_date.setCalendarPopup(True)
+        self.pl_start_date.setDisplayFormat("yyyy-MM-dd")
+        self.pl_start_date.setDate(datetime.date.today())
+        self.pl_start_date.dateChanged.connect(self.on_pl_custom_date_changed)
+        filter_layout.addWidget(self.pl_start_label)
+        filter_layout.addWidget(self.pl_start_date, 1.5)
+
+        self.pl_end_label = QLabel("End Date:")
+        self.pl_end_date = QDateEdit()
+        self.pl_end_date.setCalendarPopup(True)
+        self.pl_end_date.setDisplayFormat("yyyy-MM-dd")
+        self.pl_end_date.setDate(datetime.date.today())
+        self.pl_end_date.dateChanged.connect(self.on_pl_custom_date_changed)
+        filter_layout.addWidget(self.pl_end_label)
+        filter_layout.addWidget(self.pl_end_date, 1.5)
+
+        # Hide start/end date pickers by default
+        self.pl_start_label.hide()
+        self.pl_start_date.hide()
+        self.pl_end_label.hide()
+        self.pl_end_date.hide()
+
+        layout.addWidget(filter_frame, 0, Qt.AlignCenter)
+
         pl_frame = QFrame()
         pl_frame.setProperty("class", "CardFrame")
         pl_frame.setMaximumWidth(600)
@@ -105,9 +146,9 @@ class ReportsView(QWidget):
         form_layout.setContentsMargins(20, 20, 20, 20)
         form_layout.setSpacing(15)
 
-        title = QLabel("Income & Expense Statement (P&L)")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 15px;")
-        form_layout.addRow(title)
+        self.pl_title_lbl = QLabel("Income & Expense Statement (P&L)")
+        self.pl_title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 15px;")
+        form_layout.addRow(self.pl_title_lbl)
 
         # Revenue rows
         self.sales_rev_lbl = QLabel("₹0.00")
@@ -137,6 +178,24 @@ class ReportsView(QWidget):
 
         layout.addWidget(pl_frame, 0, Qt.AlignCenter)
         layout.addStretch()
+
+    def on_pl_date_filter_changed(self, index):
+        filter_text = self.pl_date_filter_combo.currentText()
+        if filter_text == "Custom Range":
+            self.pl_start_label.show()
+            self.pl_start_date.show()
+            self.pl_end_label.show()
+            self.pl_end_date.show()
+        else:
+            self.pl_start_label.hide()
+            self.pl_start_date.hide()
+            self.pl_end_label.hide()
+            self.pl_end_date.hide()
+        
+        self.refresh_data()
+
+    def on_pl_custom_date_changed(self, qdate):
+        self.refresh_data()
 
     def setup_exports_tab(self):
         layout = QVBoxLayout(self.exports_tab)
@@ -223,27 +282,98 @@ class ReportsView(QWidget):
             self.bank_balance_lbl.setText(f"Total Bank Balances: ₹{total_bank_balance:,.2f}")
 
             # 3. Populate P&L Statement
-            sales_rev = session.query(func_sum(SalesMaster.total_amount)).scalar() or 0.0
-            service_rev = session.query(func_sum(ServiceJob.total_amount)).scalar() or 0.0
-            total_rev = sales_rev + service_rev
+            if hasattr(self, 'pl_date_filter_combo'):
+                # Determine date range for P&L Statement
+                start_date = None
+                end_date = None
+                
+                filter_text = self.pl_date_filter_combo.currentText()
+                today = datetime.date.today()
+                
+                if filter_text == "This Month":
+                    start_date = today.replace(day=1)
+                    import calendar
+                    _, last_day = calendar.monthrange(today.year, today.month)
+                    end_date = today.replace(day=last_day)
+                elif filter_text == "This Year":
+                    start_date = datetime.date(today.year, 1, 1)
+                    end_date = datetime.date(today.year, 12, 31)
+                elif filter_text == "Custom Range":
+                    qstart = self.pl_start_date.date()
+                    start_date = datetime.date(qstart.year(), qstart.month(), qstart.day())
+                    qend = self.pl_end_date.date()
+                    end_date = datetime.date(qend.year(), qend.month(), qend.day())
 
-            # Calculate Cost of Goods Sold (cogs)
-            # COGS = Sum of SalesItem.qty * Product.purchase_price
-            cogs = 0.0
-            sales_items = session.query(SalesItem).all()
-            for si in sales_items:
-                if si.product:
-                    cogs += si.qty * si.product.purchase_price
+                # Update card title dynamically
+                title_text = "Income & Expense Statement (P&L)"
+                if filter_text == "All Time":
+                    title_text += " - All Time"
+                elif filter_text == "This Month":
+                    title_text += f" - {start_date.strftime('%B %Y')}"
+                elif filter_text == "This Year":
+                    title_text += f" - Year {today.year}"
+                elif filter_text == "Custom Range":
+                    title_text += f" ({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})"
+                
+                self.pl_title_lbl.setText(title_text)
 
-            # Service Spare Parts Expense
-            parts_exp = 0.0
-            service_parts = session.query(ServicePart).options(joinedload(ServicePart.product)).all()
-            for sp in service_parts:
-                if sp.product_id and sp.product:
-                    parts_exp += sp.qty * sp.product.purchase_price
-                else:
-                    parts_exp += sp.qty * sp.cost
-            total_exp = cogs + parts_exp
+                # Query database with date filters
+                sales_query = session.query(func_sum(SalesMaster.total_amount))
+                service_query = session.query(func_sum(ServiceJob.total_amount))
+                sales_item_query = session.query(SalesItem).join(SalesMaster)
+                service_part_query = session.query(ServicePart).join(ServiceJob).options(joinedload(ServicePart.product))
+
+                if start_date:
+                    sales_query = sales_query.filter(SalesMaster.date >= start_date)
+                    service_query = service_query.filter(ServiceJob.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
+                    sales_item_query = sales_item_query.filter(SalesMaster.date >= start_date)
+                    service_part_query = service_part_query.filter(ServiceJob.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
+
+                if end_date:
+                    sales_query = sales_query.filter(SalesMaster.date <= end_date)
+                    service_query = service_query.filter(ServiceJob.created_at <= datetime.datetime.combine(end_date, datetime.time.max))
+                    sales_item_query = sales_item_query.filter(SalesMaster.date <= end_date)
+                    service_part_query = service_part_query.filter(ServiceJob.created_at <= datetime.datetime.combine(end_date, datetime.time.max))
+
+                sales_rev = sales_query.scalar() or 0.0
+                service_rev = service_query.scalar() or 0.0
+                total_rev = sales_rev + service_rev
+
+                # Calculate Cost of Goods Sold (cogs)
+                cogs = 0.0
+                sales_items = sales_item_query.all()
+                for si in sales_items:
+                    if si.product:
+                        cogs += si.qty * si.product.purchase_price
+
+                # Service Spare Parts Expense
+                parts_exp = 0.0
+                service_parts = service_part_query.all()
+                for sp in service_parts:
+                    if sp.product_id and sp.product:
+                        parts_exp += sp.qty * sp.product.purchase_price
+                    else:
+                        parts_exp += sp.qty * sp.cost
+                total_exp = cogs + parts_exp
+            else:
+                sales_rev = session.query(func_sum(SalesMaster.total_amount)).scalar() or 0.0
+                service_rev = session.query(func_sum(ServiceJob.total_amount)).scalar() or 0.0
+                total_rev = sales_rev + service_rev
+
+                cogs = 0.0
+                sales_items = session.query(SalesItem).all()
+                for si in sales_items:
+                    if si.product:
+                        cogs += si.qty * si.product.purchase_price
+
+                parts_exp = 0.0
+                service_parts = session.query(ServicePart).options(joinedload(ServicePart.product)).all()
+                for sp in service_parts:
+                    if sp.product_id and sp.product:
+                        parts_exp += sp.qty * sp.product.purchase_price
+                    else:
+                        parts_exp += sp.qty * sp.cost
+                total_exp = cogs + parts_exp
 
             net_profit = total_rev - total_exp
 

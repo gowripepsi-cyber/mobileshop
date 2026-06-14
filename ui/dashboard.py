@@ -101,13 +101,24 @@ class DashboardView(QWidget):
         low_stock_layout = QVBoxLayout(self.low_stock_card)
         low_stock_layout.setContentsMargins(15, 15, 15, 15)
 
-        low_stock_title = QLabel("Low Stock Alerts (Qty <= 5)")
-        low_stock_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ef4444; margin-bottom: 10px;")
-        low_stock_layout.addWidget(low_stock_title)
+        title_btn_layout = QHBoxLayout()
+        self.low_stock_title_lbl = QLabel("Low Stock Alerts (Per-Item Limits)")
+        self.low_stock_title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ef4444; margin-bottom: 10px;")
+        title_btn_layout.addWidget(self.low_stock_title_lbl)
+        title_btn_layout.addStretch()
+        
+        self.check_now_btn = QPushButton("🔔 Check Alert")
+        self.check_now_btn.setFixedWidth(110)
+        self.check_now_btn.setFixedHeight(26)
+        self.check_now_btn.setStyleSheet("font-size: 11px; background-color: #3b82f6; color: white; border-radius: 4px; margin-bottom: 10px;")
+        self.check_now_btn.clicked.connect(self.trigger_manual_low_stock_check)
+        title_btn_layout.addWidget(self.check_now_btn)
+        
+        low_stock_layout.addLayout(title_btn_layout)
 
         self.low_stock_table = QTableWidget()
-        self.low_stock_table.setColumnCount(3)
-        self.low_stock_table.setHorizontalHeaderLabels(["Product Name", "Brand / Model", "Current Stock"])
+        self.low_stock_table.setColumnCount(4)
+        self.low_stock_table.setHorizontalHeaderLabels(["Product Name", "Brand / Model", "Current Stock", "Low Limit"])
         self.low_stock_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.low_stock_table.verticalHeader().setVisible(False)
         self.low_stock_table.setFixedHeight(180)
@@ -178,8 +189,9 @@ class DashboardView(QWidget):
             self.cards["Supplier Outstanding"].setText(f"₹{supp_outstanding:,.2f}")
 
             # Low Stock Items Count
-            low_stock_qty_limit = 5
-            low_stock_count = session.query(Product).filter(Product.stock_qty <= low_stock_qty_limit).count()
+            self.low_stock_title_lbl.setText("Low Stock Alerts (Per-Item Limits)")
+            
+            low_stock_count = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).count()
             self.cards["Low Stock Items"].setText(str(low_stock_count))
 
             # Populate Bank breakdown
@@ -197,7 +209,7 @@ class DashboardView(QWidget):
                 self.bank_table.setItem(row, 2, QTableWidgetItem(f"₹{b.balance:,.2f}"))
 
             # Populate Low Stock List
-            low_stock_products = session.query(Product).filter(Product.stock_qty <= low_stock_qty_limit).all()
+            low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
             self.low_stock_table.setRowCount(len(low_stock_products))
             for i, p in enumerate(low_stock_products):
                 self.low_stock_table.setItem(i, 0, QTableWidgetItem(p.name))
@@ -208,6 +220,7 @@ class DashboardView(QWidget):
                 else:
                     qty_item.setForeground(Qt.yellow)
                 self.low_stock_table.setItem(i, 2, qty_item)
+                self.low_stock_table.setItem(i, 3, QTableWidgetItem(str(p.low_stock_limit)))
 
         except Exception as e:
             print(f"Error fetching dashboard metrics: {e}")
@@ -353,3 +366,8 @@ class DashboardView(QWidget):
             if hasattr(main_window, 'suppliers_view'):
                 main_window.switch_view(3)
                 main_window.suppliers_view.search_input.setText(res_ref)
+
+    def trigger_manual_low_stock_check(self):
+        main_win = self.window()
+        if hasattr(main_win, 'check_low_stock_alert'):
+            main_win.check_low_stock_alert(manual=True)

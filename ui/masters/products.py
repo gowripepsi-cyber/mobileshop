@@ -215,6 +215,8 @@ class ProductDialog(QDialog):
         self.selling_price_input.setText("0.00")
         self.stock_qty_input = QLineEdit()
         self.stock_qty_input.setText("0")
+        self.low_stock_limit_input = QLineEdit()
+        self.low_stock_limit_input.setText("5")
 
         form_layout.addRow("Product Name *:", self.name_input)
         form_layout.addRow("Category *:", self.category_combo)
@@ -224,6 +226,7 @@ class ProductDialog(QDialog):
         form_layout.addRow("Purchase Price (₹) *:", self.purchase_price_input)
         form_layout.addRow("Selling Price (₹) *:", self.selling_price_input)
         form_layout.addRow("Initial Stock Qty *:", self.stock_qty_input)
+        form_layout.addRow("Low Stock Limit *:", self.low_stock_limit_input)
         
         layout.addLayout(form_layout)
 
@@ -257,8 +260,7 @@ class ProductDialog(QDialog):
             self.purchase_price_input.setText(str(self.product.purchase_price))
             self.selling_price_input.setText(str(self.product.selling_price))
             self.stock_qty_input.setText(str(self.product.stock_qty))
-            # If editing, stock is usually adjusted via Purchase/Sales, but let's allow it in master
-            # Or make it read-only/editable as standard. Let's keep it editable for manual adjustments.
+            self.low_stock_limit_input.setText(str(self.product.low_stock_limit))
 
     def handle_save(self):
         name = self.name_input.text().strip()
@@ -275,10 +277,11 @@ class ProductDialog(QDialog):
             purchase_price = float(self.purchase_price_input.text())
             selling_price = float(self.selling_price_input.text())
             stock_qty = int(self.stock_qty_input.text())
-            if purchase_price < 0 or selling_price < 0 or stock_qty < 0:
+            low_stock_limit = int(self.low_stock_limit_input.text())
+            if purchase_price < 0 or selling_price < 0 or stock_qty < 0 or low_stock_limit < 0:
                 raise ValueError
         except ValueError:
-            QMessageBox.warning(self, "Validation Error", "Please enter valid non-negative numbers for prices and stock.")
+            QMessageBox.warning(self, "Validation Error", "Please enter valid non-negative numbers for prices, stock, and low stock limit.")
             return
 
         session = Session()
@@ -302,11 +305,13 @@ class ProductDialog(QDialog):
                 prod.purchase_price = purchase_price
                 prod.selling_price = selling_price
                 prod.stock_qty = stock_qty
+                prod.low_stock_limit = low_stock_limit
             else:
                 # Add
                 new_prod = Product(
                     name=name, category=category, brand=brand, model=model, imei=imei,
-                    purchase_price=purchase_price, selling_price=selling_price, stock_qty=stock_qty
+                    purchase_price=purchase_price, selling_price=selling_price, stock_qty=stock_qty,
+                    low_stock_limit=low_stock_limit
                 )
                 session.add(new_prod)
 
@@ -359,10 +364,10 @@ class ProductsView(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels([
             "ID", "Product Name", "Category", "Brand", "Model", "IMEI Number", 
-            "Purchase Price", "Selling Price", "Stock Qty"
+            "Purchase Price", "Selling Price", "Stock Qty", "Low Limit"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -400,9 +405,11 @@ class ProductsView(QWidget):
                 stock_item = QTableWidgetItem(str(p.stock_qty))
                 if p.stock_qty <= 0:
                     stock_item.setForeground(Qt.red)
-                elif p.stock_qty <= 5:
+                elif p.stock_qty <= p.low_stock_limit:
                     stock_item.setForeground(Qt.yellow)
                 self.table.setItem(i, 8, stock_item)
+                
+                self.table.setItem(i, 9, QTableWidgetItem(str(p.low_stock_limit)))
                 
         except Exception as e:
             print(f"Error loading products: {e}")

@@ -17,3 +17,7 @@ env/
 # IDEs
 .vscode/
 .idea/
+
+# Statements
+statements/
+

@@ -31,6 +31,9 @@ def init_db():
     if 'category' not in prod_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE products ADD COLUMN category TEXT NOT NULL DEFAULT 'Phones'"))
+    if 'low_stock_limit' not in prod_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products ADD COLUMN low_stock_limit INTEGER DEFAULT 5"))
 
     # Schema migration: check and add missing columns to suppliers table
     supp_columns = [c['name'] for c in inspector.get_columns('suppliers')]
@@ -128,6 +131,9 @@ def init_db():
         shop_gst = session.query(Setting).filter_by(key='shop_gst').first()
         if not shop_gst:
             session.add(Setting(key='shop_gst', value='27AAAAA1111A1Z1'))
+        low_stock_limit = session.query(Setting).filter_by(key='low_stock_limit').first()
+        if not low_stock_limit:
+            session.add(Setting(key='low_stock_limit', value='5'))
 
         # 5. Seed default categories if empty
         cat_count = session.query(Category).count()
