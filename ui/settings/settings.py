@@ -287,6 +287,8 @@ class SettingsView(QWidget):
         from licensing import manager
         from PySide6.QtWidgets import QApplication
         
+        self._lic_connection = None
+        
         layout = QVBoxLayout(self.license_tab)
         layout.setContentsMargins(15, 15, 15, 15)
         
@@ -348,11 +350,13 @@ class SettingsView(QWidget):
             self.action_btn.setText("Deactivate License on This PC")
             self.action_btn.setProperty("class", "btn-danger")
             self.action_btn.setStyleSheet("background-color: #ef4444; color: #ffffff;")
-            try:
-                self.action_btn.clicked.disconnect()
-            except Exception:
-                pass
-            self.action_btn.clicked.connect(self.handle_deactivation)
+            if getattr(self, '_lic_connection', None) is not None:
+                try:
+                    self.action_btn.clicked.disconnect(self._lic_connection)
+                except Exception:
+                    pass
+                self._lic_connection = None
+            self._lic_connection = self.action_btn.clicked.connect(self.handle_deactivation)
         else:
             days = status_info.get("days_remaining", 0)
             self.status_lbl.setText(f"Status: Trial Mode ({days} days remaining)")
@@ -360,11 +364,13 @@ class SettingsView(QWidget):
             self.action_btn.setText("Activate License")
             self.action_btn.setProperty("class", "btn-success")
             self.action_btn.setStyleSheet("background-color: #10b981; color: #ffffff;")
-            try:
-                self.action_btn.clicked.disconnect()
-            except Exception:
-                pass
-            self.action_btn.clicked.connect(self.handle_activation)
+            if getattr(self, '_lic_connection', None) is not None:
+                try:
+                    self.action_btn.clicked.disconnect(self._lic_connection)
+                except Exception:
+                    pass
+                self._lic_connection = None
+            self._lic_connection = self.action_btn.clicked.connect(self.handle_activation)
 
     def handle_activation(self):
         from licensing.ui_activation import ActivationDialog

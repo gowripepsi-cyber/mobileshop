@@ -89,7 +89,7 @@ class DashboardView(QWidget):
         self.bank_table.setHorizontalHeaderLabels(["Account/Bank", "Account Name", "Current Balance"])
         self.bank_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.bank_table.verticalHeader().setVisible(False)
-        self.bank_table.setFixedHeight(180)
+        self.bank_table.setFixedHeight(432)
         self.bank_table.setEditTriggers(QTableWidget.NoEditTriggers)
         bank_card_layout.addWidget(self.bank_table)
 
@@ -107,10 +107,10 @@ class DashboardView(QWidget):
         title_btn_layout.addWidget(self.low_stock_title_lbl)
         title_btn_layout.addStretch()
         
-        self.check_now_btn = QPushButton("🔔 Check Alert")
+        self.check_now_btn = QPushButton("🔔 Check Now")
         self.check_now_btn.setFixedWidth(110)
         self.check_now_btn.setFixedHeight(26)
-        self.check_now_btn.setStyleSheet("font-size: 11px; background-color: #3b82f6; color: white; border-radius: 4px; margin-bottom: 10px;")
+        self.check_now_btn.setStyleSheet("font-size: 11px; background-color: #3b82f6; color: white; border-radius: 4px; margin-bottom: 10px; padding: 0px 10px;")
         self.check_now_btn.clicked.connect(self.trigger_manual_low_stock_check)
         title_btn_layout.addWidget(self.check_now_btn)
         
@@ -121,13 +121,14 @@ class DashboardView(QWidget):
         self.low_stock_table.setHorizontalHeaderLabels(["Product Name", "Brand / Model", "Current Stock", "Low Limit"])
         self.low_stock_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.low_stock_table.verticalHeader().setVisible(False)
-        self.low_stock_table.setFixedHeight(180)
+        self.low_stock_table.setFixedHeight(432)
         self.low_stock_table.setEditTriggers(QTableWidget.NoEditTriggers)
         low_stock_layout.addWidget(self.low_stock_table)
 
         bottom_layout.addWidget(self.low_stock_card, 1)
 
         default_layout.addLayout(bottom_layout)
+        default_layout.addStretch(1)
         self.main_layout.addWidget(self.default_content)
 
         # 3. Search Results Panel (Card Frame) - Starts Hidden
