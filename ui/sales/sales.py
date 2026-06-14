@@ -121,42 +121,48 @@ class SalesView(QWidget):
         entry_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         right_layout.addWidget(entry_title)
 
-        entry_bar = QHBoxLayout()
+        row1_layout = QHBoxLayout()
         
         self.category_combo = QComboBox()
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
-        entry_bar.addWidget(self.category_combo, 2)
+        row1_layout.addWidget(QLabel("Category:"), 0)
+        row1_layout.addWidget(self.category_combo, 2)
         
         self.product_combo = QComboBox()
         self.product_combo.setPlaceholderText("Select Product")
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        entry_bar.addWidget(self.product_combo, 3)
+        row1_layout.addWidget(QLabel("Product:"), 0)
+        row1_layout.addWidget(self.product_combo, 5)
+
+        right_layout.addLayout(row1_layout)
+
+        row2_layout = QHBoxLayout()
 
         self.qty_input = QSpinBox()
         self.qty_input.setRange(1, 1000)
         self.qty_input.setValue(1)
-        entry_bar.addWidget(QLabel("Qty:"), 0)
-        entry_bar.addWidget(self.qty_input, 1)
+        row2_layout.addWidget(QLabel("Qty:"), 0)
+        row2_layout.addWidget(self.qty_input, 1)
 
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        entry_bar.addWidget(QLabel("Rate (₹):"), 0)
-        entry_bar.addWidget(self.rate_input, 2)
+        row2_layout.addWidget(QLabel("Rate (₹):"), 0)
+        row2_layout.addWidget(self.rate_input, 2)
 
         self.discount_input = QDoubleSpinBox()
         self.discount_input.setRange(0.0, 999999.0)
         self.discount_input.setValue(0.0)
         self.discount_input.setDecimals(2)
-        entry_bar.addWidget(QLabel("Disc (₹):"), 0)
-        entry_bar.addWidget(self.discount_input, 1.5)
+        row2_layout.addWidget(QLabel("Disc (₹):"), 0)
+        row2_layout.addWidget(self.discount_input, 1.5)
 
         self.add_item_btn = QPushButton("Add Item")
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        entry_bar.addWidget(self.add_item_btn, 1)
+        row2_layout.addWidget(self.add_item_btn, 2)
 
-        right_layout.addLayout(entry_bar)
+        right_layout.addLayout(row2_layout)
 
         # Items Table
         self.table = QTableWidget()
@@ -905,6 +911,22 @@ class SalesView(QWidget):
                     bank.balance -= tx.amount
                 session.delete(tx)
                 
+            # Delete payments logged against this sales invoice
+            from models import Payment
+            payments = session.query(Payment).filter_by(sales_id=sale.id).all()
+            for p_rec in payments:
+                # Revert CashTransaction and BankTransaction of the payment
+                p_cash_txs = session.query(CashTransaction).filter_by(source_type='payment', source_id=p_rec.id).all()
+                for tx in p_cash_txs:
+                    session.delete(tx)
+                p_bank_txs = session.query(BankTransaction).filter_by(source_type='payment', source_id=p_rec.id).all()
+                for tx in p_bank_txs:
+                    bank = session.query(BankAccount).get(tx.account_id)
+                    if bank:
+                        bank.balance -= tx.amount
+                    session.delete(tx)
+                session.delete(p_rec)
+
             # Delete SalesMaster (which cascades to delete SalesItems)
             session.delete(sale)
             

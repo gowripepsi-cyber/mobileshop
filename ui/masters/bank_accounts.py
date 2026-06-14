@@ -10,7 +10,7 @@ class BankAccountDialog(QDialog):
         super().__init__(parent)
         self.account = account
         self.setWindowTitle("Edit Bank Account" if account else "Add Bank Account")
-        self.setFixedSize(400, 320)
+        self.setFixedSize(400, 380)
         self.init_ui()
 
     def init_ui(self):

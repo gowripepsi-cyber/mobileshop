@@ -1,9 +1,13 @@
 import datetime
+import os
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                               QTableWidget, QTableWidgetItem, QHeaderView, QPushButton)
+                               QTableWidget, QTableWidgetItem, QHeaderView, QPushButton,
+                               QFileDialog, QMessageBox)
 from PySide6.QtCore import Qt
-from database import Session
+from database import Session, Setting
 from models import Customer, Supplier, SalesMaster, PurchaseMaster, ServiceJob, Payment
+from utils.pdf_generator import generate_ledger_pdf
+
 
 class LedgerBreakupDialog(QDialog):
     def __init__(self, party_type, party_id, party_name, parent=None):
@@ -66,6 +70,12 @@ class LedgerBreakupDialog(QDialog):
         
         footer_layout.addStretch()
         
+        self.print_btn = QPushButton("Print Statement")
+        self.print_btn.setProperty("class", "btn-success")
+        self.print_btn.setFixedWidth(140)
+        self.print_btn.clicked.connect(self.print_statement)
+        footer_layout.addWidget(self.print_btn)
+        
         close_btn = QPushButton("Close")
         close_btn.setProperty("class", "btn-secondary")
         close_btn.setFixedWidth(100)
@@ -110,10 +120,17 @@ class LedgerBreakupDialog(QDialog):
                 # 3. Custom payment collections (Payment Table)
                 payments = session.query(Payment).filter_by(party_type='customer', party_id=self.party_id).all()
                 for p in payments:
+                    desc_text = p.remarks or "Payment Collection"
+                    if p.sales_id:
+                        sal = session.query(SalesMaster).get(p.sales_id)
+                        if sal:
+                            desc_text = f"Collection against invoice {sal.invoice_number}"
+                            if p.remarks:
+                                desc_text += f" ({p.remarks})"
                     transactions.append({
                         "date": p.date,
                         "ref": f"Receipt #{p.id}",
-                        "desc": p.remarks or "Payment Collection",
+                        "desc": desc_text,
                         "debit": 0.0,
                         "credit": p.amount
                     })
@@ -137,9 +154,19 @@ class LedgerBreakupDialog(QDialog):
                     })
 
                 self.table.setRowCount(len(transactions))
+                self.transactions_data = []
                 running_balance = 0.0
                 for i, tx in enumerate(transactions):
                     running_balance += tx["debit"] - tx["credit"]
+                    
+                    self.transactions_data.append({
+                        "date": tx["date"].strftime("%Y-%m-%d") if isinstance(tx["date"], (datetime.date, datetime.datetime)) else str(tx["date"]),
+                        "ref": tx["ref"],
+                        "desc": tx["desc"],
+                        "debit": tx["debit"],
+                        "credit": tx["credit"],
+                        "balance": running_balance
+                    })
                     
                     self.table.setItem(i, 0, QTableWidgetItem(tx["date"].strftime("%Y-%m-%d")))
                     self.table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
@@ -158,6 +185,7 @@ class LedgerBreakupDialog(QDialog):
                     bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
                     self.table.setItem(i, 5, bal_item)
 
+                self.net_balance = running_balance
                 self.total_lbl.setText(f"Net Outstanding Balance: ₹{running_balance:,.2f}")
                 if running_balance > 0:
                     self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
@@ -183,10 +211,17 @@ class LedgerBreakupDialog(QDialog):
                 # 2. Custom supplier payments (Payment Table)
                 payments = session.query(Payment).filter_by(party_type='supplier', party_id=self.party_id).all()
                 for p in payments:
+                    desc_text = p.remarks or "Supplier Payment"
+                    if p.purchase_id:
+                        pur = session.query(PurchaseMaster).get(p.purchase_id)
+                        if pur:
+                            desc_text = f"Payment against bill {pur.invoice_number}"
+                            if p.remarks:
+                                desc_text += f" ({p.remarks})"
                     transactions.append({
                         "date": p.date,
                         "ref": f"Voucher #{p.id}",
-                        "desc": p.remarks or "Supplier Payment",
+                        "desc": desc_text,
                         "debit": p.amount,
                         "credit": 0.0
                     })
@@ -210,9 +245,19 @@ class LedgerBreakupDialog(QDialog):
                     })
 
                 self.table.setRowCount(len(transactions))
+                self.transactions_data = []
                 running_balance = 0.0
                 for i, tx in enumerate(transactions):
                     running_balance += tx["credit"] - tx["debit"]
+                    
+                    self.transactions_data.append({
+                        "date": tx["date"].strftime("%Y-%m-%d") if isinstance(tx["date"], (datetime.date, datetime.datetime)) else str(tx["date"]),
+                        "ref": tx["ref"],
+                        "desc": tx["desc"],
+                        "debit": tx["debit"],
+                        "credit": tx["credit"],
+                        "balance": running_balance
+                    })
                     
                     self.table.setItem(i, 0, QTableWidgetItem(tx["date"].strftime("%Y-%m-%d")))
                     self.table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
@@ -231,6 +276,7 @@ class LedgerBreakupDialog(QDialog):
                     bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
                     self.table.setItem(i, 5, bal_item)
 
+                self.net_balance = running_balance
                 self.total_lbl.setText(f"Net Payable Balance: ₹{running_balance:,.2f}")
                 if running_balance > 0:
                     self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
@@ -241,3 +287,66 @@ class LedgerBreakupDialog(QDialog):
             print(f"Error loading ledger breakup dialog: {e}")
         finally:
             session.close()
+
+    def print_statement(self):
+        if not hasattr(self, 'transactions_data') or not self.transactions_data:
+            QMessageBox.warning(self, "No Data", "There are no transactions to print.")
+            return
+
+        session = Session()
+        try:
+            # Retrieve Settings details for PDF Header
+            s_name = session.query(Setting).filter_by(key='shop_name').first().value
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first().value
+            s_address = session.query(Setting).filter_by(key='shop_address').first().value
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first().value
+
+            # Retrieve Party Details
+            party_mobile = "N/A"
+            party_address = "N/A"
+            if self.party_type == 'customer':
+                customer = session.query(Customer).get(self.party_id)
+                if customer:
+                    party_mobile = customer.mobile or "N/A"
+                    party_address = customer.address or "N/A"
+            else:
+                supplier = session.query(Supplier).get(self.party_id)
+                if supplier:
+                    party_mobile = supplier.mobile or "N/A"
+                    party_address = supplier.address or "N/A"
+
+            # Prepare PDF Ledger data
+            ledger_data = {
+                "shop_name": s_name,
+                "shop_contact": s_contact,
+                "shop_address": s_address,
+                "shop_gst": s_gst,
+                "date": datetime.date.today().strftime("%Y-%m-%d"),
+                "party_type": self.party_type,
+                "party_name": self.party_name,
+                "party_mobile": party_mobile,
+                "party_address": party_address,
+                "transactions": self.transactions_data,
+                "net_balance": self.net_balance,
+                "balance_label": "Net Outstanding Balance" if self.party_type == 'customer' else "Net Payable Balance"
+            }
+
+            # Generate PDF directly without prompting
+            os.makedirs("statements", exist_ok=True)
+            clean_name = "".join(c for c in self.party_name if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+            file_path = os.path.abspath(f"statements/{clean_name}_ledger.pdf")
+
+            # Generate PDF
+            generate_ledger_pdf(ledger_data, file_path)
+
+            # Auto-open PDF on Windows
+            try:
+                os.startfile(file_path)
+            except Exception as e:
+                print(f"Could not auto-open PDF: {e}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate statement: {e}")
+        finally:
+            session.close()
+

@@ -9,7 +9,7 @@ class CustomerDialog(QDialog):
         super().__init__(parent)
         self.customer = customer
         self.setWindowTitle("Edit Customer" if customer else "Add New Customer")
-        self.setFixedSize(400, 300)
+        self.setFixedSize(400, 360)
         self.init_ui()
 
     def init_ui(self):

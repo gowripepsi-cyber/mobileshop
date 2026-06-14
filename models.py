@@ -156,9 +156,13 @@ class Payment(Base):
     amount = Column(Float, default=0.0)
     payment_mode = Column(String, nullable=False)  # Cash, Bank
     bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    purchase_id = Column(Integer, ForeignKey('purchase_master.id'), nullable=True)
+    sales_id = Column(Integer, ForeignKey('sales_master.id'), nullable=True)
     remarks = Column(Text)
     
     bank_account = relationship("BankAccount")
+    purchase = relationship("PurchaseMaster")
+    sales = relationship("SalesMaster")
 
 class CashTransaction(Base):
     __tablename__ = 'cash_transactions'

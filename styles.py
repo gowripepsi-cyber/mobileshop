@@ -139,7 +139,8 @@ QLineEdit, QPlainTextEdit, QTextEdit {
     background-color: #141426;
     border: 1px solid #2c2c54;
     border-radius: 6px;
-    padding: 8px 12px;
+    padding: 6px 12px;
+    min-height: 28px;
     color: #ffffff;
     selection-background-color: #6366f1;
 }
@@ -152,7 +153,8 @@ QComboBox {
     background-color: #141426;
     border: 1px solid #2c2c54;
     border-radius: 6px;
-    padding: 8px 12px;
+    padding: 6px 12px;
+    min-height: 28px;
     color: #ffffff;
 }
 
@@ -174,7 +176,8 @@ QSpinBox, QDoubleSpinBox, QDateEdit {
     background-color: #141426;
     border: 1px solid #2c2c54;
     border-radius: 6px;
-    padding: 8px 12px;
+    padding: 6px 12px;
+    min-height: 28px;
     color: #ffffff;
 }
 

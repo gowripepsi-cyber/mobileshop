@@ -182,7 +182,7 @@ class ProductDialog(QDialog):
         super().__init__(parent)
         self.product = product
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        self.setFixedSize(400, 350)
+        self.setFixedSize(400, 420)
         self.init_ui()
 
     def load_categories(self):

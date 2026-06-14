@@ -9,7 +9,7 @@ class SupplierDialog(QDialog):
         super().__init__(parent)
         self.supplier = supplier
         self.setWindowTitle("Edit Supplier" if supplier else "Add New Supplier")
-        self.setFixedSize(450, 420)
+        self.setFixedSize(450, 490)
         self.init_ui()
 
     def init_ui(self):

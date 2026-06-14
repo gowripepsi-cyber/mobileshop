@@ -14,7 +14,7 @@ class JobCardDialog(QDialog):
         super().__init__(parent)
         self.job = job
         self.setWindowTitle("Edit Repair Job" if job else "New Repair Job Card")
-        self.setFixedSize(450, 480)
+        self.setFixedSize(450, 540)
         self.init_ui()
 
     def init_ui(self):
@@ -494,7 +494,7 @@ class BillingDialog(QDialog):
         
         for p in products:
             self.products_cache[p.id] = p
-            display_txt = f"{p.name} ({p.brand} - {p.model})"
+            display_txt = f"{p.name} ({p.brand} - {p.model}) [Stock: {p.stock_qty}]"
             if p.imei:
                 display_txt += f" [IMEI: {p.imei}]"
             self.part_product_combo.addItem(display_txt, p.id)

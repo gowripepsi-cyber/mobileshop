@@ -56,6 +56,15 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE bank_accounts ADD COLUMN account_type TEXT DEFAULT 'Current'"))
 
+    # Schema migration: check and add purchase_id to payments table
+    pay_columns = [c['name'] for c in inspector.get_columns('payments')]
+    if 'purchase_id' not in pay_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE payments ADD COLUMN purchase_id INTEGER REFERENCES purchase_master(id)"))
+    if 'sales_id' not in pay_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE payments ADD COLUMN sales_id INTEGER REFERENCES sales_master(id)"))
+
     session = Session()
     try:
         # 1. Seed admin user if it doesn't exist

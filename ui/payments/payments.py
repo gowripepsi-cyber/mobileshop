@@ -60,6 +60,9 @@ class PaymentsView(QWidget):
         self.c_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
         self.c_outstanding_lbl.setStyleSheet("font-weight: bold; color: #f59e0b;")
 
+        self.c_sales_combo = QComboBox()
+        self.c_sales_combo.currentIndexChanged.connect(self.handle_cust_sales_selection)
+
         self.c_date = QDateEdit()
         self.c_date.setCalendarPopup(True)
         self.c_date.setDate(QDate.currentDate())
@@ -80,6 +83,7 @@ class PaymentsView(QWidget):
 
         form_layout.addRow("Select Customer *:", self.c_customer_combo)
         form_layout.addRow("", self.c_outstanding_lbl)
+        form_layout.addRow("Collect Against Invoice:", self.c_sales_combo)
         form_layout.addRow("Payment Date:", self.c_date)
         form_layout.addRow("Amount Received (₹) *:", self.c_amount)
         form_layout.addRow("Payment Mode:", self.c_mode)
@@ -136,6 +140,9 @@ class PaymentsView(QWidget):
         self.s_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
         self.s_outstanding_lbl.setStyleSheet("font-weight: bold; color: #ef4444;")
 
+        self.s_purchase_combo = QComboBox()
+        self.s_purchase_combo.currentIndexChanged.connect(self.handle_supp_purchase_selection)
+
         self.s_date = QDateEdit()
         self.s_date.setCalendarPopup(True)
         self.s_date.setDate(QDate.currentDate())
@@ -156,6 +163,7 @@ class PaymentsView(QWidget):
 
         form_layout.addRow("Select Supplier *:", self.s_supplier_combo)
         form_layout.addRow("", self.s_outstanding_lbl)
+        form_layout.addRow("Pay Against Bill:", self.s_purchase_combo)
         form_layout.addRow("Payment Date:", self.s_date)
         form_layout.addRow("Amount Paid (₹) *:", self.s_amount)
         form_layout.addRow("Payment Mode:", self.s_mode)
@@ -282,7 +290,27 @@ class PaymentsView(QWidget):
                 self.history_table.setItem(i, 4, val_item)
                 
                 self.history_table.setItem(i, 5, QTableWidgetItem(p.payment_mode))
-                self.history_table.setItem(i, 6, QTableWidgetItem(p.remarks or ""))
+                
+                remarks_text = p.remarks or ""
+                if p.party_type == 'supplier' and p.purchase_id:
+                    from models import PurchaseMaster
+                    pur = session.query(PurchaseMaster).get(p.purchase_id)
+                    if pur:
+                        invoice_suffix = f" [Against Bill: {pur.invoice_number}]"
+                        if remarks_text:
+                            remarks_text = f"{remarks_text} {invoice_suffix}"
+                        else:
+                            remarks_text = invoice_suffix.strip()
+                elif p.party_type == 'customer' and p.sales_id:
+                    from models import SalesMaster
+                    sal = session.query(SalesMaster).get(p.sales_id)
+                    if sal:
+                        invoice_suffix = f" [Against Invoice: {sal.invoice_number}]"
+                        if remarks_text:
+                            remarks_text = f"{remarks_text} {invoice_suffix}"
+                        else:
+                            remarks_text = invoice_suffix.strip()
+                self.history_table.setItem(i, 6, QTableWidgetItem(remarks_text))
                 
                 # Action Buttons
                 actions_widget = QWidget()
@@ -320,6 +348,44 @@ class PaymentsView(QWidget):
             session.close()
         else:
             self.c_outstanding_lbl.setText("Current Outstanding: ₹0.00")
+        self.populate_cust_sales()
+
+    def populate_cust_sales(self):
+        cust_id = self.c_customer_combo.currentData()
+        self.c_sales_combo.blockSignals(True)
+        self.c_sales_combo.clear()
+        self.c_sales_combo.addItem("-- Receive Against General Outstanding --", None)
+        if cust_id:
+            session = Session()
+            try:
+                from models import SalesMaster
+                invoices = session.query(SalesMaster).filter(
+                    SalesMaster.customer_id == cust_id,
+                    SalesMaster.balance_receivable > 0
+                ).order_by(SalesMaster.date.desc()).all()
+                for inv in invoices:
+                    self.c_sales_combo.addItem(f"{inv.invoice_number} (Bal: ₹{inv.balance_receivable:,.2f})", inv.id)
+            except Exception as e:
+                print(f"Error loading customer invoices: {e}")
+            finally:
+                session.close()
+        self.c_sales_combo.blockSignals(False)
+
+    def handle_cust_sales_selection(self):
+        sales_id = self.c_sales_combo.currentData()
+        if sales_id:
+            session = Session()
+            try:
+                from models import SalesMaster
+                s = session.query(SalesMaster).get(sales_id)
+                if s:
+                    self.c_amount.setValue(s.balance_receivable)
+            except Exception as e:
+                print(f"Error reading sales invoice details: {e}")
+            finally:
+                session.close()
+        else:
+            self.c_amount.setValue(0.0)
 
     def update_supp_outstanding_lbl(self):
         supp_id = self.s_supplier_combo.currentData()
@@ -331,6 +397,44 @@ class PaymentsView(QWidget):
             session.close()
         else:
             self.s_outstanding_lbl.setText("Current Outstanding: ₹0.00")
+        self.populate_supp_purchases()
+
+    def populate_supp_purchases(self):
+        supp_id = self.s_supplier_combo.currentData()
+        self.s_purchase_combo.blockSignals(True)
+        self.s_purchase_combo.clear()
+        self.s_purchase_combo.addItem("-- Pay Against General Outstanding --", None)
+        if supp_id:
+            session = Session()
+            try:
+                from models import PurchaseMaster
+                purchases = session.query(PurchaseMaster).filter(
+                    PurchaseMaster.supplier_id == supp_id,
+                    PurchaseMaster.balance_payable > 0
+                ).order_by(PurchaseMaster.date.desc()).all()
+                for p in purchases:
+                    self.s_purchase_combo.addItem(f"{p.invoice_number} (Bal: ₹{p.balance_payable:,.2f})", p.id)
+            except Exception as e:
+                print(f"Error loading supplier purchases: {e}")
+            finally:
+                session.close()
+        self.s_purchase_combo.blockSignals(False)
+
+    def handle_supp_purchase_selection(self):
+        purchase_id = self.s_purchase_combo.currentData()
+        if purchase_id:
+            session = Session()
+            try:
+                from models import PurchaseMaster
+                p = session.query(PurchaseMaster).get(purchase_id)
+                if p:
+                    self.s_amount.setValue(p.balance_payable)
+            except Exception as e:
+                print(f"Error reading purchase details: {e}")
+            finally:
+                session.close()
+        else:
+            self.s_amount.setValue(0.0)
 
     def save_customer_collection(self):
         cust_id = self.c_customer_combo.currentData()
@@ -338,6 +442,7 @@ class PaymentsView(QWidget):
         mode = self.c_mode.currentText()
         bank_id = self.c_bank.currentData() if mode == "Bank" else None
         remarks = self.c_remarks.text().strip() or None
+        sales_id = self.c_sales_combo.currentData()
 
         if not cust_id:
             QMessageBox.warning(self, "Validation Error", "Please select a Customer.")
@@ -348,6 +453,18 @@ class PaymentsView(QWidget):
 
         session = Session()
         try:
+            from models import SalesMaster
+            s = None
+            if sales_id:
+                s = session.query(SalesMaster).get(sales_id)
+                if s:
+                    if amount > s.balance_receivable + 0.01:
+                        QMessageBox.warning(self, "Validation Error", f"Collection amount (₹{amount:,.2f}) cannot exceed the invoice's pending balance (₹{s.balance_receivable:,.2f}).")
+                        session.close()
+                        return
+                    s.balance_receivable -= amount
+                    s.paid_amount += amount
+
             # 1. Update Customer outstanding
             cust = session.query(Customer).get(cust_id)
             cust.outstanding_balance -= amount
@@ -355,13 +472,18 @@ class PaymentsView(QWidget):
             # 2. Add Payment record
             payment = Payment(
                 date=tx_date, party_type='customer', party_id=cust_id,
-                amount=amount, payment_mode=mode, bank_id=bank_id, remarks=remarks
+                amount=amount, payment_mode=mode, bank_id=bank_id,
+                sales_id=sales_id, remarks=remarks
             )
             session.add(payment)
             session.flush() # Generate payment.id
 
             # 3. Log Cash/Bank Ledger
-            desc = f"Collection from customer {cust.name}. Details: {remarks or '-'}"
+            if s:
+                desc = f"Collection from customer {cust.name} against invoice {s.invoice_number}. Details: {remarks or '-'}"
+            else:
+                desc = f"Collection from customer {cust.name}. Details: {remarks or '-'}"
+
             if mode == 'Cash':
                 tx = CashTransaction(
                     date=tx_date, transaction_type='in', amount=amount,
@@ -380,7 +502,10 @@ class PaymentsView(QWidget):
                 bank.balance += amount
 
             session.commit()
-            QMessageBox.information(self, "Success", f"Received ₹{amount:.2f} from customer {cust.name}.")
+            if s:
+                QMessageBox.information(self, "Success", f"Received ₹{amount:.2f} from customer {cust.name} against invoice {s.invoice_number}.")
+            else:
+                QMessageBox.information(self, "Success", f"Received ₹{amount:.2f} from customer {cust.name}.")
             
             # Reset values
             self.c_amount.setValue(0.0)
@@ -398,6 +523,7 @@ class PaymentsView(QWidget):
         mode = self.s_mode.currentText()
         bank_id = self.s_bank.currentData() if mode == "Bank" else None
         remarks = self.s_remarks.text().strip() or None
+        purchase_id = self.s_purchase_combo.currentData()
 
         if not supp_id:
             QMessageBox.warning(self, "Validation Error", "Please select a Supplier.")
@@ -416,6 +542,18 @@ class PaymentsView(QWidget):
                     session.close()
                     return
 
+            from models import PurchaseMaster
+            p = None
+            if purchase_id:
+                p = session.query(PurchaseMaster).get(purchase_id)
+                if p:
+                    if amount > p.balance_payable + 0.01:
+                        QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{amount:,.2f}) cannot exceed the bill's pending balance (₹{p.balance_payable:,.2f}).")
+                        session.close()
+                        return
+                    p.balance_payable -= amount
+                    p.paid_amount += amount
+
             # 1. Update Supplier outstanding
             supp = session.query(Supplier).get(supp_id)
             supp.outstanding_balance -= amount
@@ -423,13 +561,18 @@ class PaymentsView(QWidget):
             # 2. Add Payment record
             payment = Payment(
                 date=tx_date, party_type='supplier', party_id=supp_id,
-                amount=amount, payment_mode=mode, bank_id=bank_id, remarks=remarks
+                amount=amount, payment_mode=mode, bank_id=bank_id,
+                purchase_id=purchase_id, remarks=remarks
             )
             session.add(payment)
             session.flush() # Generate payment.id
 
             # 3. Log Cash/Bank Ledger
-            desc = f"Payment to supplier {supp.name}. Details: {remarks or '-'}"
+            if p:
+                desc = f"Payment to supplier {supp.name} against bill {p.invoice_number}. Details: {remarks or '-'}"
+            else:
+                desc = f"Payment to supplier {supp.name}. Details: {remarks or '-'}"
+
             if mode == 'Cash':
                 tx = CashTransaction(
                     date=tx_date, transaction_type='out', amount=amount,
@@ -448,7 +591,10 @@ class PaymentsView(QWidget):
                 bank.balance -= amount
 
             session.commit()
-            QMessageBox.information(self, "Success", f"Paid ₹{amount:.2f} to supplier {supp.name}.")
+            if p:
+                QMessageBox.information(self, "Success", f"Paid ₹{amount:.2f} to supplier {supp.name} against bill {p.invoice_number}.")
+            else:
+                QMessageBox.information(self, "Success", f"Paid ₹{amount:.2f} to supplier {supp.name}.")
             
             # Reset values
             self.s_amount.setValue(0.0)
@@ -614,10 +760,22 @@ class PaymentsView(QWidget):
                 cust = session.query(Customer).get(payment.party_id)
                 if cust:
                     cust.outstanding_balance += payment.amount  # add back outstanding since payment is deleted
+                if payment.sales_id:
+                    from models import SalesMaster
+                    s = session.query(SalesMaster).get(payment.sales_id)
+                    if s:
+                        s.balance_receivable += payment.amount
+                        s.paid_amount -= payment.amount
             else:
                 supp = session.query(Supplier).get(payment.party_id)
                 if supp:
                     supp.outstanding_balance += payment.amount  # add back outstanding since payment is deleted
+                if payment.purchase_id:
+                    from models import PurchaseMaster
+                    p = session.query(PurchaseMaster).get(payment.purchase_id)
+                    if p:
+                        p.balance_payable += payment.amount
+                        p.paid_amount -= payment.amount
                     
             # 2. Revert/delete ledger entries (CashTransaction/BankTransaction)
             # Find by source_id first

@@ -450,9 +450,19 @@ class ReportsView(QWidget):
         
         right_layout.addWidget(self.customer_breakup_table)
 
+        bottom_layout = QHBoxLayout()
         self.customer_total_outstanding_lbl = QLabel("Net Outstanding: ₹0.00")
         self.customer_total_outstanding_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
-        right_layout.addWidget(self.customer_total_outstanding_lbl)
+        bottom_layout.addWidget(self.customer_total_outstanding_lbl)
+        
+        bottom_layout.addStretch()
+        
+        self.c_view_statement_btn = QPushButton("View/Print Statement")
+        self.c_view_statement_btn.setEnabled(False)
+        self.c_view_statement_btn.clicked.connect(self.view_customer_statement)
+        bottom_layout.addWidget(self.c_view_statement_btn)
+        
+        right_layout.addLayout(bottom_layout)
 
         main_layout.addWidget(right_frame)
 
@@ -513,9 +523,19 @@ class ReportsView(QWidget):
         
         right_layout.addWidget(self.supplier_breakup_table)
 
+        bottom_layout = QHBoxLayout()
         self.supplier_total_payable_lbl = QLabel("Net Payable: ₹0.00")
         self.supplier_total_payable_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
-        right_layout.addWidget(self.supplier_total_payable_lbl)
+        bottom_layout.addWidget(self.supplier_total_payable_lbl)
+        
+        bottom_layout.addStretch()
+        
+        self.s_view_statement_btn = QPushButton("View/Print Statement")
+        self.s_view_statement_btn.setEnabled(False)
+        self.s_view_statement_btn.clicked.connect(self.view_supplier_statement)
+        bottom_layout.addWidget(self.s_view_statement_btn)
+        
+        right_layout.addLayout(bottom_layout)
 
         main_layout.addWidget(right_frame)
 
@@ -525,6 +545,7 @@ class ReportsView(QWidget):
             self.customer_breakup_lbl.setText("<b>Select a customer to view ledger breakup</b>")
             self.customer_breakup_table.setRowCount(0)
             self.customer_total_outstanding_lbl.setText("Net Outstanding: ₹0.00")
+            self.c_view_statement_btn.setEnabled(False)
             return
 
         row = selected[0].row()
@@ -622,6 +643,7 @@ class ReportsView(QWidget):
                 self.customer_breakup_table.setItem(i, 5, bal_item)
 
             self.customer_total_outstanding_lbl.setText(f"Net Outstanding: ₹{running_balance:,.2f}")
+            self.c_view_statement_btn.setEnabled(True)
 
         except Exception as e:
             print(f"Error loading customer breakup: {e}")
@@ -634,6 +656,7 @@ class ReportsView(QWidget):
             self.supplier_breakup_lbl.setText("<b>Select a supplier to view ledger breakup</b>")
             self.supplier_breakup_table.setRowCount(0)
             self.supplier_total_payable_lbl.setText("Net Payable: ₹0.00")
+            self.s_view_statement_btn.setEnabled(False)
             return
 
         row = selected[0].row()
@@ -719,6 +742,7 @@ class ReportsView(QWidget):
                 self.supplier_breakup_table.setItem(i, 5, bal_item)
 
             self.supplier_total_payable_lbl.setText(f"Net Payable: ₹{running_balance:,.2f}")
+            self.s_view_statement_btn.setEnabled(True)
 
         except Exception as e:
             print(f"Error loading supplier breakup: {e}")
@@ -761,6 +785,30 @@ class ReportsView(QWidget):
             print(f"Error opening reference details: {e}")
         finally:
             session.close()
+
+    def view_customer_statement(self):
+        selected = self.receivables_table.selectedItems()
+        if not selected:
+            return
+        row = selected[0].row()
+        cust_id = self.receivables_table.item(row, 0).data(Qt.UserRole)
+        cust_name = self.receivables_table.item(row, 0).text()
+        
+        from ui.masters.ledger_dialog import LedgerBreakupDialog
+        dlg = LedgerBreakupDialog(party_type='customer', party_id=cust_id, party_name=cust_name, parent=self)
+        dlg.exec()
+
+    def view_supplier_statement(self):
+        selected = self.payables_table.selectedItems()
+        if not selected:
+            return
+        row = selected[0].row()
+        supp_id = self.payables_table.item(row, 0).data(Qt.UserRole)
+        supp_name = self.payables_table.item(row, 0).text()
+        
+        from ui.masters.ledger_dialog import LedgerBreakupDialog
+        dlg = LedgerBreakupDialog(party_type='supplier', party_id=supp_id, party_name=supp_name, parent=self)
+        dlg.exec()
 
 # Helper function
 def func_sum(column):

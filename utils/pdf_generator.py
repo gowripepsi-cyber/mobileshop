@@ -747,4 +747,212 @@ def generate_payment_pdf(payment_data, file_path):
     doc.build(story)
 
 
+def generate_ledger_pdf(ledger_data, file_path):
+    """
+    Generates a professional PDF ledger breakup report.
+    ledger_data keys:
+      - shop_name, shop_contact, shop_address, shop_gst
+      - date  (Statement Date / Date Generated)
+      - party_type ('customer' or 'supplier')
+      - party_name, party_mobile, party_address
+      - transactions: list of dicts {"date", "ref", "desc", "debit", "credit", "balance"}
+      - net_balance, balance_label
+    """
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom Styles
+    style_shop_name = ParagraphStyle(
+        'ShopNameLedger',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#6366f1')
+    )
+    
+    style_title = ParagraphStyle(
+        'LedgerTitle',
+        fontName='Helvetica-Bold',
+        fontSize=24,
+        leading=28,
+        textColor=colors.HexColor('#1e293b'),
+        alignment=2 # Right aligned
+    )
+
+    style_sub = ParagraphStyle(
+        'SubtextLedger',
+        fontName='Helvetica',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#475569')
+    )
+    
+    style_bold = ParagraphStyle(
+        'BoldTextLedger',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#1e293b')
+    )
+    
+    style_red = ParagraphStyle(
+        'RedTextLedger',
+        parent=style_sub,
+        textColor=colors.HexColor('#ef4444')
+    )
+    
+    style_green = ParagraphStyle(
+        'GreenTextLedger',
+        parent=style_sub,
+        textColor=colors.HexColor('#10b981')
+    )
+
+    story = []
+
+    # 1. Header Grid (Shop Details Left, Title & Statement Date Right)
+    left_info = [
+        Paragraph(ledger_data['shop_name'], style_shop_name),
+        Paragraph(ledger_data['shop_address'], style_sub),
+        Paragraph(f"Contact: {ledger_data['shop_contact']}", style_sub),
+        Paragraph(f"GSTIN: {ledger_data['shop_gst']}", style_sub)
+    ]
+    
+    right_info = [
+        Paragraph("LEDGER STATEMENT", style_title),
+        Spacer(1, 10),
+        Paragraph(f"Generated Date: {ledger_data['date']}", style_sub)
+    ]
+    
+    header_table_data = [
+        [left_info, right_info]
+    ]
+    
+    header_table = Table(header_table_data, colWidths=[300, 240])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+    
+    story.append(header_table)
+    story.append(Spacer(1, 20))
+
+    # 2. Party details
+    party_hdr = "CUSTOMER DETAILS" if ledger_data['party_type'] == 'customer' else "SUPPLIER DETAILS"
+    party_data = [
+        [
+            Paragraph(f"<b>{party_hdr}:</b>", style_bold), 
+            Paragraph("", style_sub)
+        ],
+        [
+            Paragraph(ledger_data['party_name'], style_bold),
+            Paragraph(f"Mobile: {ledger_data['party_mobile']}", style_sub)
+        ],
+        [
+            Paragraph(ledger_data['party_address'] or "N/A", style_sub),
+            Paragraph("", style_sub)
+        ]
+    ]
+    party_table = Table(party_data, colWidths=[270, 270])
+    party_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LINEBELOW', (0,-1), (-1,-1), 1, colors.HexColor('#cbd5e1')),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    
+    story.append(party_table)
+    story.append(Spacer(1, 20))
+
+    # 3. Transactions Table
+    # Table Widths: Date (70), Ref / Invoice (90), Description (160), Debit (75), Credit (75), Balance (70) = 540
+    item_header_style = ParagraphStyle(
+        'ItemHeaderLedger',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        textColor=colors.white
+    )
+    
+    headers = [
+        Paragraph("Date", item_header_style),
+        Paragraph("Ref / Invoice", item_header_style),
+        Paragraph("Description", item_header_style),
+        Paragraph("Debit (+)" if ledger_data['party_type'] == 'customer' else "Debit (-)", item_header_style),
+        Paragraph("Credit (-)" if ledger_data['party_type'] == 'customer' else "Credit (+)", item_header_style),
+        Paragraph("Balance", item_header_style)
+    ]
+
+    table_data = [headers]
+
+    for tx in ledger_data['transactions']:
+        # debit formatting
+        if tx['debit'] > 0:
+            debit_val = f"{tx['debit']:,.2f}"
+            debit_p = Paragraph(debit_val, style_red if ledger_data['party_type'] == 'customer' else style_green)
+        else:
+            debit_p = Paragraph("-", style_sub)
+            
+        # credit formatting
+        if tx['credit'] > 0:
+            credit_val = f"{tx['credit']:,.2f}"
+            credit_p = Paragraph(credit_val, style_green if ledger_data['party_type'] == 'customer' else style_red)
+        else:
+            credit_p = Paragraph("-", style_sub)
+            
+        # balance formatting
+        bal_val = f"{tx['balance']:,.2f}"
+        
+        table_data.append([
+            Paragraph(tx['date'], style_sub),
+            Paragraph(tx['ref'], style_sub),
+            Paragraph(tx['desc'], style_sub),
+            debit_p,
+            credit_p,
+            Paragraph(bal_val, style_bold)
+        ])
+
+    tx_table = Table(table_data, colWidths=[70, 90, 160, 75, 75, 70])
+    tx_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e1b4b')),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+    ]))
+    story.append(tx_table)
+    story.append(Spacer(1, 15))
+
+    # 4. Summary / Outstanding
+    summary_data = [
+        [Paragraph("", style_sub), Paragraph(f"{ledger_data['balance_label']}:", style_bold), Paragraph(f"Rs. {ledger_data['net_balance']:,.2f}", style_bold)]
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[300, 140, 100])
+    summary_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('LINEBELOW', (1,-1), (-1,-1), 1.5, colors.HexColor('#6366f1')),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 40))
+
+    # 5. Footer & Sign-off
+    story.append(Paragraph("<font size=10 color='#6366f1'><b>Thank you!</b></font>", ParagraphStyle('CenterTextLedger', parent=style_sub, alignment=1)))
+
+    doc.build(story)
+
+
+
 
