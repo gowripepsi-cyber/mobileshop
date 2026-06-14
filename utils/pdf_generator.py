@@ -953,6 +953,185 @@ def generate_ledger_pdf(ledger_data, file_path):
 
     doc.build(story)
 
+def generate_money_transfer_pdf(transfer_data, file_path):
+    """
+    Generates a professional PDF money transfer receipt / voucher.
+    transfer_data keys:
+      - shop_name, shop_contact, shop_address, shop_gst
+      - transaction_number, date
+      - customer_name, beneficiary_name
+      - transfer_type ('UPI' or 'Bank Transfer')
+      - upi_id (if UPI)
+      - bank_account_number, ifsc_code (if Bank Transfer)
+      - amount, service_charge, total_amount
+      - deadline_date, status, remarks
+    """
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    style_shop_name = ParagraphStyle(
+        'ShopNameMT',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#6366f1')
+    )
+    
+    style_title = ParagraphStyle(
+        'InvoiceTitleMT',
+        fontName='Helvetica-Bold',
+        fontSize=22,
+        leading=26,
+        textColor=colors.HexColor('#1e293b'),
+        alignment=2 # Right aligned
+    )
+
+    style_sub = ParagraphStyle(
+        'SubtextMT',
+        fontName='Helvetica',
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#475569')
+    )
+    
+    style_bold = ParagraphStyle(
+        'BoldTextMT',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    story = []
+
+    # 1. Header Grid (Shop Details Left, Title & Info Right)
+    left_info = [
+        Paragraph(transfer_data['shop_name'], style_shop_name),
+        Paragraph(transfer_data['shop_address'], style_sub),
+        Paragraph(f"Contact: {transfer_data['shop_contact']}", style_sub),
+        Paragraph(f"GSTIN: {transfer_data['shop_gst']}", style_sub)
+    ]
+    
+    right_info = [
+        Paragraph("MONEY TRANSFER RECEIPT", style_title),
+        Spacer(1, 10),
+        Paragraph(f"Transaction No: <b>{transfer_data['transaction_number']}</b>", style_bold),
+        Paragraph(f"Date: {transfer_data['date']}", style_sub)
+    ]
+    
+    header_table_data = [
+        [left_info, right_info]
+    ]
+    
+    header_table = Table(header_table_data, colWidths=[300, 240])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+    
+    story.append(header_table)
+    story.append(Spacer(1, 25))
+
+    # 2. Receipt Details Card
+    details = [
+        [
+            Paragraph("<b>SENDER (CUSTOMER):</b>", style_bold),
+            Paragraph(transfer_data['customer_name'], style_sub)
+        ],
+        [
+            Paragraph("<b>BENEFICIARY NAME:</b>", style_bold),
+            Paragraph(transfer_data['beneficiary_name'], style_sub)
+        ],
+        [
+            Paragraph("<b>TRANSFER TYPE:</b>", style_bold),
+            Paragraph(transfer_data['transfer_type'], style_sub)
+        ]
+    ]
+
+    if transfer_data['transfer_type'] == 'UPI':
+        details.append([
+            Paragraph("<b>UPI ID / MOBILE:</b>", style_bold),
+            Paragraph(transfer_data['upi_id'] or "-", style_sub)
+        ])
+    else:
+        details.append([
+            Paragraph("<b>BANK ACCOUNT NO:</b>", style_bold),
+            Paragraph(transfer_data['bank_account_number'] or "-", style_sub)
+        ])
+        details.append([
+            Paragraph("<b>IFSC CODE:</b>", style_bold),
+            Paragraph(transfer_data['ifsc_code'] or "-", style_sub)
+        ])
+
+    details.extend([
+        [
+            Paragraph("<b>TRANSFER AMOUNT:</b>", style_bold),
+            Paragraph(f"Rs. {transfer_data['amount']:,.2f}", style_bold)
+        ],
+        [
+            Paragraph("<b>SERVICE CHARGE:</b>", style_bold),
+            Paragraph(f"Rs. {transfer_data['service_charge']:,.2f}", style_sub)
+        ],
+        [
+            Paragraph("<b>TOTAL PAYABLE:</b>", style_bold),
+            Paragraph(f"Rs. {transfer_data['total_amount']:,.2f}", style_bold)
+        ],
+        [
+            Paragraph("<b>DEADLINE DATE:</b>", style_bold),
+            Paragraph(transfer_data['deadline_date'], style_sub)
+        ],
+        [
+            Paragraph("<b>STATUS:</b>", style_bold),
+            Paragraph(transfer_data['status'], style_bold)
+        ],
+        [
+            Paragraph("<b>REMARKS / NOTES:</b>", style_bold),
+            Paragraph(transfer_data['remarks'] or "-", style_sub)
+        ]
+    ])
+    
+    details_table = Table(details, colWidths=[150, 390])
+    details_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LINEBELOW', (0,0), (-1,-2), 0.5, colors.HexColor('#cbd5e1')),
+        ('LINEBELOW', (0,-1), (-1,-1), 1.5, colors.HexColor('#6366f1')),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+    ]))
+    
+    story.append(details_table)
+    story.append(Spacer(1, 40))
+
+    # 3. Signatures
+    sig_data = [
+        [
+            Paragraph("Customer Signature", style_sub),
+            Paragraph("Authorized Signatory", style_sub)
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[270, 270])
+    sig_table.setStyle(TableStyle([
+        ('ALIGN', (0,0), (0,0), 'LEFT'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ('LINEABOVE', (0,0), (-1,-1), 1, colors.HexColor('#475569')),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+    ]))
+    
+    story.append(sig_table)
+    doc.build(story)
+
+
 
 
 

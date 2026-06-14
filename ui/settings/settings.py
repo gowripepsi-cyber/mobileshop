@@ -294,7 +294,7 @@ class SettingsView(QWidget):
         
         lic_frame = QFrame()
         lic_frame.setProperty("class", "CardFrame")
-        lic_frame.setMaximumWidth(500)
+        lic_frame.setMaximumWidth(1000)
         lic_layout = QVBoxLayout(lic_frame)
         lic_layout.setContentsMargins(20, 20, 20, 20)
         lic_layout.setSpacing(15)

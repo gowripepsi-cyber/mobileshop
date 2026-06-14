@@ -109,7 +109,7 @@ class DashboardView(QWidget):
         
         self.check_now_btn = QPushButton("🔔 Check Now")
         self.check_now_btn.setFixedWidth(110)
-        self.check_now_btn.setFixedHeight(26)
+        self.check_now_btn.setFixedHeight(44)
         self.check_now_btn.setStyleSheet("font-size: 11px; background-color: #3b82f6; color: white; border-radius: 4px; margin-bottom: 10px; padding: 0px 10px;")
         self.check_now_btn.clicked.connect(self.trigger_manual_low_stock_check)
         title_btn_layout.addWidget(self.check_now_btn)

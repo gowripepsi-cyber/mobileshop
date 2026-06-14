@@ -5,7 +5,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                              QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
-from models import Payment, Customer, Supplier, BankAccount, CashTransaction, BankTransaction
+from sqlalchemy import func
+from models import Payment, Customer, Supplier, BankAccount, CashTransaction, BankTransaction, FundTransfer, DirectTransaction
 from utils.pdf_generator import generate_payment_pdf
 
 class PaymentsView(QWidget):
@@ -35,6 +36,16 @@ class PaymentsView(QWidget):
         self.history_tab = QWidget()
         self.setup_history_tab()
         self.tabs.addTab(self.history_tab, "Payment Ledgers History")
+
+        # 4. Fund Transfer Tab
+        self.transfer_tab = QWidget()
+        self.setup_transfer_tab()
+        self.tabs.addTab(self.transfer_tab, "Fund Transfer")
+
+        # 5. Direct Transactions Tab
+        self.direct_tab = QWidget()
+        self.setup_direct_tab()
+        self.tabs.addTab(self.direct_tab, "Direct Transactions")
 
         layout.addWidget(self.tabs)
 
@@ -231,6 +242,485 @@ class PaymentsView(QWidget):
     def toggle_s_bank(self, mode):
         self.s_bank.setEnabled(mode == "Bank")
 
+    def setup_transfer_tab(self):
+        layout = QHBoxLayout(self.transfer_tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(20)
+
+        # Form Card
+        form_frame = QFrame()
+        form_frame.setProperty("class", "CardFrame")
+        form_frame.setFixedWidth(380)
+        form_layout = QFormLayout(form_frame)
+        form_layout.setContentsMargins(15, 15, 15, 15)
+        form_layout.setSpacing(12)
+
+        lbl = QLabel("New Fund Transfer")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        form_layout.addRow(lbl)
+
+        self.t_date = QDateEdit()
+        self.t_date.setCalendarPopup(True)
+        self.t_date.setDate(QDate.currentDate())
+
+        self.t_from = QComboBox()
+        self.t_to = QComboBox()
+        
+        self.t_from.currentIndexChanged.connect(self.handle_transfer_source_change)
+
+        self.t_amount = QDoubleSpinBox()
+        self.t_amount.setRange(0.01, 9999999.0)
+        self.t_amount.setDecimals(2)
+
+        self.t_remarks = QLineEdit()
+        self.t_remarks.setPlaceholderText("Transfer remarks (optional)")
+
+        form_layout.addRow("Transfer Date:", self.t_date)
+        form_layout.addRow("Transfer From *:", self.t_from)
+        form_layout.addRow("Transfer To *:", self.t_to)
+        form_layout.addRow("Amount (₹) *:", self.t_amount)
+        form_layout.addRow("Remarks:", self.t_remarks)
+
+        self.t_save_btn = QPushButton("Execute Transfer")
+        self.t_save_btn.setProperty("class", "btn-success")
+        self.t_save_btn.clicked.connect(self.save_fund_transfer)
+        form_layout.addRow("", self.t_save_btn)
+
+        layout.addWidget(form_frame)
+
+        # Right Card: Transfer History Table
+        history_frame = QFrame()
+        history_frame.setProperty("class", "CardFrame")
+        history_layout = QVBoxLayout(history_frame)
+        history_layout.setContentsMargins(15, 15, 15, 15)
+        
+        history_title = QLabel("Transfer Log")
+        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        history_layout.addWidget(history_title)
+
+        self.transfer_table = QTableWidget()
+        self.transfer_table.setColumnCount(6)
+        self.transfer_table.setHorizontalHeaderLabels([
+            "ID", "Date", "From", "To", "Amount (₹)", "Actions"
+        ])
+        self.transfer_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.transfer_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.transfer_table.verticalHeader().setVisible(False)
+        self.transfer_table.verticalHeader().setDefaultSectionSize(40)
+        history_layout.addWidget(self.transfer_table)
+
+        layout.addWidget(history_frame)
+
+    def handle_transfer_source_change(self):
+        self.populate_transfer_destinations()
+
+    def populate_transfer_destinations(self):
+        self.t_to.blockSignals(True)
+        self.t_to.clear()
+        
+        source_data = self.t_from.currentData()
+        if not source_data:
+            self.t_to.blockSignals(False)
+            return
+
+        if source_data[0] != 'cash':
+            self.t_to.addItem("Cash Ledger", ('cash', None))
+            
+        if hasattr(self, 'banks_list'):
+            for b_name, b_id in self.banks_list:
+                if source_data[0] == 'bank' and source_data[1] == b_id:
+                    continue
+                self.t_to.addItem(b_name, ('bank', b_id))
+            
+        self.t_to.blockSignals(False)
+
+    def save_fund_transfer(self):
+        from_data = self.t_from.currentData()
+        to_data = self.t_to.currentData()
+        amount = self.t_amount.value()
+        remarks = self.t_remarks.text().strip() or None
+        date_q = self.t_date.date()
+        tx_date = datetime.date(date_q.year(), date_q.month(), date_q.day())
+
+        if not from_data or not to_data:
+            QMessageBox.warning(self, "Validation Error", "Please select valid Source and Destination accounts.")
+            return
+
+        if amount <= 0:
+            QMessageBox.warning(self, "Validation Error", "Transfer amount must be greater than zero.")
+            return
+
+        session = Session()
+        try:
+            from_name = ""
+            to_name = ""
+            
+            if from_data[0] == 'bank':
+                bank_from = session.query(BankAccount).get(from_data[1])
+                if not bank_from:
+                    QMessageBox.warning(self, "Error", "Source bank account not found.")
+                    session.close()
+                    return
+                from_name = f"{bank_from.bank_name} ({bank_from.account_name})"
+                if bank_from.balance < amount:
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {from_name}.\nAvailable: ₹{bank_from.balance:,.2f}")
+                    session.close()
+                    return
+            else:
+                from_name = "Cash Ledger"
+                cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
+                cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
+                cash_balance = cash_in - cash_out
+                if cash_balance < amount:
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in hand.\nAvailable: ₹{cash_balance:,.2f}")
+                    session.close()
+                    return
+
+            if to_data[0] == 'bank':
+                bank_to = session.query(BankAccount).get(to_data[1])
+                if not bank_to:
+                    QMessageBox.warning(self, "Error", "Destination bank account not found.")
+                    session.close()
+                    return
+                to_name = f"{bank_to.bank_name} ({bank_to.account_name})"
+            else:
+                to_name = "Cash Ledger"
+
+            transfer = FundTransfer(
+                date=tx_date,
+                from_type=from_data[0],
+                from_account_id=from_data[1] if from_data[0] == 'bank' else None,
+                to_type=to_data[0],
+                to_account_id=to_data[1] if to_data[0] == 'bank' else None,
+                amount=amount,
+                remarks=remarks
+            )
+            session.add(transfer)
+            session.flush()
+
+            desc_out = f"Fund Transfer to {to_name}. Remarks: {remarks or '-'}"
+            desc_in = f"Fund Transfer from {from_name}. Remarks: {remarks or '-'}"
+
+            if from_data[0] == 'bank':
+                tx_out = BankTransaction(
+                    date=tx_date, transaction_type='withdrawal', account_id=from_data[1],
+                    amount=amount, source_type='transfer', source_id=transfer.id, description=desc_out
+                )
+                session.add(tx_out)
+                bank_from.balance -= amount
+            else:
+                tx_out = CashTransaction(
+                    date=tx_date, transaction_type='out', amount=amount,
+                    source_type='transfer', source_id=transfer.id, description=desc_out
+                )
+                session.add(tx_out)
+
+            if to_data[0] == 'bank':
+                tx_in = BankTransaction(
+                    date=tx_date, transaction_type='deposit', account_id=to_data[1],
+                    amount=amount, source_type='transfer', source_id=transfer.id, description=desc_in
+                )
+                session.add(tx_in)
+                bank_to.balance += amount
+            else:
+                tx_in = CashTransaction(
+                    date=tx_date, transaction_type='in', amount=amount,
+                    source_type='transfer', source_id=transfer.id, description=desc_in
+                )
+                session.add(tx_in)
+
+            session.commit()
+            QMessageBox.information(self, "Success", f"Successfully transferred ₹{amount:,.2f} from {from_name} to {to_name}.")
+            self.t_amount.setValue(0.0)
+            self.t_remarks.clear()
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to execute transfer: {e}")
+        finally:
+            session.close()
+
+    def delete_fund_transfer_record(self, transfer_id):
+        confirm = QMessageBox.question(
+            self, "Confirm Delete",
+            "Are you sure you want to delete/revert this transfer record?\nThe source and destination balances will be reverted.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        session = Session()
+        try:
+            transfer = session.query(FundTransfer).get(transfer_id)
+            if not transfer:
+                QMessageBox.warning(self, "Error", "Transfer record not found.")
+                session.close()
+                return
+
+            if transfer.to_type == 'bank':
+                bank_to = session.query(BankAccount).get(transfer.to_account_id)
+                if bank_to:
+                    if bank_to.balance < transfer.amount:
+                        QMessageBox.warning(self, "Validation Error", f"Cannot delete transfer. Destination bank account {bank_to.bank_name} has insufficient funds to revert this transfer.")
+                        session.close()
+                        return
+                    bank_to.balance -= transfer.amount
+            else:
+                cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
+                cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
+                cash_balance = cash_in - cash_out
+                if cash_balance < transfer.amount:
+                    QMessageBox.warning(self, "Validation Error", f"Cannot delete transfer. Cash Ledger has insufficient funds to revert this transfer.")
+                    session.close()
+                    return
+
+            # Delete the FundTransfer record
+            session.delete(transfer)
+            session.commit()
+            
+            QMessageBox.information(self, "Success", "Transfer reverted and deleted successfully.")
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to revert transfer: {e}")
+        finally:
+            session.close()
+
+    def setup_direct_tab(self):
+        layout = QHBoxLayout(self.direct_tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(20)
+
+        # Form Card
+        form_frame = QFrame()
+        form_frame.setProperty("class", "CardFrame")
+        form_frame.setFixedWidth(380)
+        form_layout = QFormLayout(form_frame)
+        form_layout.setContentsMargins(15, 15, 15, 15)
+        form_layout.setSpacing(12)
+
+        lbl = QLabel("New Direct Inflow/Outflow")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        form_layout.addRow(lbl)
+
+        self.d_date = QDateEdit()
+        self.d_date.setCalendarPopup(True)
+        self.d_date.setDate(QDate.currentDate())
+
+        self.d_type = QComboBox()
+        self.d_type.addItems(["Deposit (Inflow)", "Withdrawal (Outflow)"])
+
+        self.d_account_type = QComboBox()
+        self.d_account_type.addItems(["Cash Ledger", "Bank Account"])
+        self.d_account_type.currentIndexChanged.connect(self.handle_direct_account_type_change)
+
+        self.d_bank = QComboBox()
+        self.d_bank.setEnabled(False)
+
+        self.d_amount = QDoubleSpinBox()
+        self.d_amount.setRange(0.01, 9999999.0)
+        self.d_amount.setDecimals(2)
+
+        self.d_desc = QLineEdit()
+        self.d_desc.setPlaceholderText("Description (e.g. Capital, rent, interest)")
+
+        form_layout.addRow("Transaction Date:", self.d_date)
+        form_layout.addRow("Transaction Type *:", self.d_type)
+        form_layout.addRow("Account Type *:", self.d_account_type)
+        form_layout.addRow("Select Bank:", self.d_bank)
+        form_layout.addRow("Amount (₹) *:", self.d_amount)
+        form_layout.addRow("Description *:", self.d_desc)
+
+        self.d_save_btn = QPushButton("Save Transaction")
+        self.d_save_btn.setProperty("class", "btn-success")
+        self.d_save_btn.clicked.connect(self.save_direct_transaction)
+        form_layout.addRow("", self.d_save_btn)
+
+        layout.addWidget(form_frame)
+
+        # Right Card: Direct Transactions History Table
+        history_frame = QFrame()
+        history_frame.setProperty("class", "CardFrame")
+        history_layout = QVBoxLayout(history_frame)
+        history_layout.setContentsMargins(15, 15, 15, 15)
+        
+        history_title = QLabel("Direct Transactions Log")
+        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        history_layout.addWidget(history_title)
+
+        self.direct_table = QTableWidget()
+        self.direct_table.setColumnCount(7)
+        self.direct_table.setHorizontalHeaderLabels([
+            "ID", "Date", "Type", "Account", "Amount (₹)", "Description", "Actions"
+        ])
+        self.direct_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.direct_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.direct_table.verticalHeader().setVisible(False)
+        self.direct_table.verticalHeader().setDefaultSectionSize(40)
+        history_layout.addWidget(self.direct_table)
+
+        layout.addWidget(history_frame)
+
+    def handle_direct_account_type_change(self, index):
+        self.d_bank.setEnabled(index == 1)
+
+    def save_direct_transaction(self):
+        tx_type = "deposit" if "Deposit" in self.d_type.currentText() else "withdrawal"
+        account_type = "cash" if "Cash" in self.d_account_type.currentText() else "bank"
+        bank_id = self.d_bank.currentData() if account_type == "bank" else None
+        amount = self.d_amount.value()
+        desc = self.d_desc.text().strip()
+        date_q = self.d_date.date()
+        tx_date = datetime.date(date_q.year(), date_q.month(), date_q.day())
+
+        if account_type == "bank" and not bank_id:
+            QMessageBox.warning(self, "Validation Error", "Please select a valid Bank Account.")
+            return
+
+        if amount <= 0:
+            QMessageBox.warning(self, "Validation Error", "Amount must be greater than zero.")
+            return
+
+        if not desc:
+            QMessageBox.warning(self, "Validation Error", "Please enter a description.")
+            return
+
+        session = Session()
+        try:
+            target_name = ""
+            if account_type == "bank":
+                bank = session.query(BankAccount).get(bank_id)
+                if not bank:
+                    QMessageBox.warning(self, "Error", "Bank account not found.")
+                    session.close()
+                    return
+                target_name = f"{bank.bank_name} ({bank.account_name})"
+                
+                if tx_type == "withdrawal" and bank.balance < amount:
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient funds in bank account.\nAvailable: ₹{bank.balance:,.2f}")
+                    session.close()
+                    return
+            else:
+                target_name = "Cash Ledger"
+                if tx_type == "withdrawal":
+                    cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
+                    cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
+                    cash_balance = cash_in - cash_out
+                    if cash_balance < amount:
+                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in hand.\nAvailable: ₹{cash_balance:,.2f}")
+                        session.close()
+                        return
+
+            dt = DirectTransaction(
+                date=tx_date,
+                transaction_type=tx_type,
+                account_type=account_type,
+                bank_id=bank_id,
+                amount=amount,
+                description=desc
+            )
+            session.add(dt)
+            session.flush()
+
+            if account_type == "bank":
+                db_tx_type = "deposit" if tx_type == "deposit" else "withdrawal"
+                tx = BankTransaction(
+                    date=tx_date,
+                    transaction_type=db_tx_type,
+                    account_id=bank_id,
+                    amount=amount,
+                    source_type='direct',
+                    source_id=dt.id,
+                    description=f"Direct {tx_type.capitalize()}: {desc}"
+                )
+                session.add(tx)
+                
+                if tx_type == "deposit":
+                    bank.balance += amount
+                else:
+                    bank.balance -= amount
+            else:
+                db_tx_type = "in" if tx_type == "deposit" else "out"
+                tx = CashTransaction(
+                    date=tx_date,
+                    transaction_type=db_tx_type,
+                    amount=amount,
+                    source_type='direct',
+                    source_id=dt.id,
+                    description=f"Direct {tx_type.capitalize()}: {desc}"
+                )
+                session.add(tx)
+
+            session.commit()
+            QMessageBox.information(self, "Success", f"Direct {tx_type.capitalize()} of ₹{amount:,.2f} recorded in {target_name} successfully.")
+            self.d_amount.setValue(0.0)
+            self.d_desc.clear()
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to save direct transaction: {e}")
+        finally:
+            session.close()
+
+    def delete_direct_transaction_record(self, transaction_id):
+        confirm = QMessageBox.question(
+            self, "Confirm Delete",
+            "Are you sure you want to delete/revert this direct transaction?\nThe balances will be reverted.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        session = Session()
+        try:
+            dt = session.query(DirectTransaction).get(transaction_id)
+            if not dt:
+                QMessageBox.warning(self, "Error", "Transaction record not found.")
+                session.close()
+                return
+
+            if dt.transaction_type == 'deposit':
+                if dt.account_type == 'bank':
+                    bank = session.query(BankAccount).get(dt.bank_id)
+                    if bank and bank.balance < dt.amount:
+                        QMessageBox.warning(self, "Validation Error", f"Cannot delete transaction. Bank account {bank.bank_name} has insufficient balance to revert this deposit.")
+                        session.close()
+                        return
+                    if bank:
+                        bank.balance -= dt.amount
+                else:
+                    cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
+                    cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
+                    cash_balance = cash_in - cash_out
+                    if cash_balance < dt.amount:
+                        QMessageBox.warning(self, "Validation Error", f"Cannot delete transaction. Cash Ledger has insufficient balance to revert this deposit.")
+                        session.close()
+                        return
+            else:
+                if dt.account_type == 'bank':
+                    bank = session.query(BankAccount).get(dt.bank_id)
+                    if bank:
+                        bank.balance += dt.amount
+
+            cash_txs = session.query(CashTransaction).filter_by(source_type='direct', source_id=dt.id).all()
+            for tx in cash_txs:
+                session.delete(tx)
+
+            bank_txs = session.query(BankTransaction).filter_by(source_type='direct', source_id=dt.id).all()
+            for tx in bank_txs:
+                session.delete(tx)
+
+            session.delete(dt)
+            session.commit()
+            
+            QMessageBox.information(self, "Success", "Direct transaction deleted and balances reverted successfully.")
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to revert direct transaction: {e}")
+        finally:
+            session.close()
+
     def refresh_data(self):
         session = Session()
         try:
@@ -259,10 +749,42 @@ class PaymentsView(QWidget):
             # 3. Load Banks
             self.c_bank.clear()
             self.s_bank.clear()
+            self.banks_list = []
             banks = session.query(BankAccount).all()
             for b in banks:
                 self.c_bank.addItem(f"{b.bank_name} ({b.account_name})", b.id)
                 self.s_bank.addItem(f"{b.bank_name} ({b.account_name})", b.id)
+                self.banks_list.append((f"{b.bank_name} ({b.account_name})", b.id))
+
+            # Populate transfer "From" dropdown
+            self.t_from.blockSignals(True)
+            current_from_data = self.t_from.currentData()
+            self.t_from.clear()
+            self.t_from.addItem("Cash Ledger", ('cash', None))
+            for b_name, b_id in self.banks_list:
+                self.t_from.addItem(b_name, ('bank', b_id))
+            
+            if current_from_data:
+                for idx in range(self.t_from.count()):
+                    if self.t_from.itemData(idx) == current_from_data:
+                        self.t_from.setCurrentIndex(idx)
+                        break
+            self.t_from.blockSignals(False)
+            
+            self.populate_transfer_destinations()
+
+            # Populate direct "Bank" dropdown
+            self.d_bank.blockSignals(True)
+            current_bank_id = self.d_bank.currentData()
+            self.d_bank.clear()
+            for b_name, b_id in self.banks_list:
+                self.d_bank.addItem(b_name, b_id)
+            if current_bank_id:
+                for idx in range(self.d_bank.count()):
+                    if self.d_bank.itemData(idx) == current_bank_id:
+                        self.d_bank.setCurrentIndex(idx)
+                        break
+            self.d_bank.blockSignals(False)
 
             # 4. Load history
             history = session.query(Payment).order_by(Payment.id.desc()).all()
@@ -330,6 +852,76 @@ class PaymentsView(QWidget):
                 actions_layout.addWidget(del_btn)
                 
                 self.history_table.setCellWidget(i, 7, actions_widget)
+
+            # 5. Load transfers history
+            transfers = session.query(FundTransfer).order_by(FundTransfer.id.desc()).all()
+            self.transfer_table.setRowCount(len(transfers))
+            for i, t in enumerate(transfers):
+                self.transfer_table.setItem(i, 0, QTableWidgetItem(str(t.id)))
+                self.transfer_table.setItem(i, 1, QTableWidgetItem(t.date.strftime("%Y-%m-%d")))
+                
+                if t.from_type == 'bank':
+                    from_lbl = f"{t.from_account.bank_name if t.from_account else 'Unknown Bank'}"
+                else:
+                    from_lbl = "Cash Ledger"
+                self.transfer_table.setItem(i, 2, QTableWidgetItem(from_lbl))
+                
+                if t.to_type == 'bank':
+                    to_lbl = f"{t.to_account.bank_name if t.to_account else 'Unknown Bank'}"
+                else:
+                    to_lbl = "Cash Ledger"
+                self.transfer_table.setItem(i, 3, QTableWidgetItem(to_lbl))
+                
+                self.transfer_table.setItem(i, 4, QTableWidgetItem(f"₹{t.amount:,.2f}"))
+                
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout(actions_widget)
+                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setSpacing(8)
+                actions_layout.setAlignment(Qt.AlignCenter)
+                
+                del_btn = QPushButton("Delete")
+                del_btn.setProperty("class", "btn-action-delete")
+                del_btn.clicked.connect(lambda checked, tid=t.id: self.delete_fund_transfer_record(tid))
+                actions_layout.addWidget(del_btn)
+                
+                self.transfer_table.setCellWidget(i, 5, actions_widget)
+
+            # 6. Load direct transactions history
+            direct_txs = session.query(DirectTransaction).order_by(DirectTransaction.id.desc()).all()
+            self.direct_table.setRowCount(len(direct_txs))
+            for i, t in enumerate(direct_txs):
+                self.direct_table.setItem(i, 0, QTableWidgetItem(str(t.id)))
+                self.direct_table.setItem(i, 1, QTableWidgetItem(t.date.strftime("%Y-%m-%d")))
+                
+                type_item = QTableWidgetItem(t.transaction_type.capitalize())
+                if t.transaction_type == 'deposit':
+                    type_item.setForeground(Qt.green)
+                else:
+                    type_item.setForeground(Qt.red)
+                self.direct_table.setItem(i, 2, type_item)
+                
+                if t.account_type == 'bank':
+                    acc_lbl = f"Bank: {t.bank_account.bank_name if t.bank_account else 'Unknown Bank'}"
+                else:
+                    acc_lbl = "Cash Ledger"
+                self.direct_table.setItem(i, 3, QTableWidgetItem(acc_lbl))
+                
+                self.direct_table.setItem(i, 4, QTableWidgetItem(f"₹{t.amount:,.2f}"))
+                self.direct_table.setItem(i, 5, QTableWidgetItem(t.description or ""))
+                
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout(actions_widget)
+                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setSpacing(8)
+                actions_layout.setAlignment(Qt.AlignCenter)
+                
+                del_btn = QPushButton("Delete")
+                del_btn.setProperty("class", "btn-action-delete")
+                del_btn.clicked.connect(lambda checked, tid=t.id: self.delete_direct_transaction_record(tid))
+                actions_layout.addWidget(del_btn)
+                
+                self.direct_table.setCellWidget(i, 6, actions_widget)
 
         except Exception as e:
             print(f"Error loading payments view data: {e}")

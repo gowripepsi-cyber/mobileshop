@@ -15,8 +15,8 @@ QWidget {
 #sidebar {
     background-color: #151528;
     border-right: 1px solid #20203e;
-    min-width: 220px;
-    max-width: 220px;
+    min-width: 250px;
+    max-width: 250px;
 }
 
 #sidebar QLabel {

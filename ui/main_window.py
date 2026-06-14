@@ -13,6 +13,7 @@ from ui.services.jobs import ServicesView
 from ui.payments.payments import PaymentsView
 from ui.reports.reports import ReportsView
 from ui.settings.settings import SettingsView
+from ui.money_transfer import MoneyTransferView
 
 class MainWindow(QMainWindow):
     def __init__(self, user_data, parent=None):
@@ -58,6 +59,7 @@ class MainWindow(QMainWindow):
             ("Payments", 8),
             ("Reports", 9),
             ("Settings", 10),
+            ("UPI / Money Transfer", 11),
         ]
 
         # Map index to shortcut key
@@ -72,7 +74,8 @@ class MainWindow(QMainWindow):
             7: "Ctrl+8",
             8: "Ctrl+9",
             9: "Ctrl+0",
-            10: "Ctrl+,"
+            10: "Ctrl+,",
+            11: "Ctrl+Shift+M"
         }
 
         for text, index in nav_items:
@@ -159,6 +162,7 @@ class MainWindow(QMainWindow):
         self.payments_view = PaymentsView(self)
         self.reports_view = ReportsView(self)
         self.settings_view = SettingsView(self)
+        self.money_transfer_view = MoneyTransferView(self)
 
         # Add Views to Stacked Widget in order
         self.stacked_widget.addWidget(self.dashboard_view)      # 0
@@ -172,6 +176,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.payments_view)       # 8
         self.stacked_widget.addWidget(self.reports_view)        # 9
         self.stacked_widget.addWidget(self.settings_view)       # 10
+        self.stacked_widget.addWidget(self.money_transfer_view)  # 11
 
         content_wrapper_layout.addWidget(self.stacked_widget)
         main_layout.addWidget(content_wrapper)
@@ -210,7 +215,8 @@ class MainWindow(QMainWindow):
             7: "Repair Center Job Cards",
             8: "Payments Ledger",
             9: "Reports & Financial Analysis",
-            10: "System Settings & Database Admin"
+            10: "System Settings & Database Admin",
+            11: "UPI / Money Transfer"
         }
         self.header_title.setText(title_map.get(index, "Mobile Shop"))
 

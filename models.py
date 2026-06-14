@@ -198,3 +198,63 @@ class Category(Base):
     __tablename__ = 'categories'
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
+
+class FundTransfer(Base):
+    __tablename__ = 'fund_transfers'
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, default=datetime.date.today)
+    from_type = Column(String, nullable=False)  # 'cash' or 'bank'
+    from_account_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    to_type = Column(String, nullable=False)    # 'cash' or 'bank'
+    to_account_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    amount = Column(Float, default=0.0)
+    remarks = Column(Text)
+    
+    from_account = relationship("BankAccount", foreign_keys=[from_account_id])
+    to_account = relationship("BankAccount", foreign_keys=[to_account_id])
+
+class DirectTransaction(Base):
+    __tablename__ = 'direct_transactions'
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, default=datetime.date.today)
+    transaction_type = Column(String, nullable=False) # 'deposit' or 'withdrawal'
+    account_type = Column(String, nullable=False)     # 'cash' or 'bank'
+    bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    amount = Column(Float, default=0.0)
+    description = Column(Text)
+    
+    bank_account = relationship("BankAccount")
+
+class MoneyTransfer(Base):
+    __tablename__ = 'money_transfers'
+    id = Column(Integer, primary_key=True)
+    transaction_number = Column(String, unique=True, nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    customer_name = Column(String, nullable=False)
+    beneficiary_name = Column(String, nullable=False)
+    transfer_type = Column(String, nullable=False) # 'UPI' or 'Bank Transfer'
+    
+    # UPI fields
+    upi_id = Column(String, nullable=True)
+    
+    # Bank Transfer fields
+    bank_account_number = Column(String, nullable=True)
+    ifsc_code = Column(String, nullable=True)
+    
+    amount = Column(Float, default=0.0)
+    service_charge = Column(Float, default=0.0)
+    total_amount = Column(Float, default=0.0)
+    deadline_date = Column(Date, nullable=False)
+    remarks = Column(Text, nullable=True)
+    status = Column(String, default='Pending') # 'Pending', 'Completed'
+    
+    payment_mode = Column(String, nullable=False) # 'Cash' or 'Bank'
+    payment_bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    payout_mode = Column(String, nullable=False) # 'Cash' or 'Bank'
+    payout_bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    
+    payment_bank = relationship("BankAccount", foreign_keys=[payment_bank_id])
+    payout_bank = relationship("BankAccount", foreign_keys=[payout_bank_id])
+
+
+

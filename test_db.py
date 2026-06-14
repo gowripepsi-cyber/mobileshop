@@ -2,7 +2,7 @@ import os
 import unittest
 import datetime
 from database import Session, init_db
-from models import Product, Customer, Supplier, BankAccount, PurchaseMaster, PurchaseItem, SalesMaster, SalesItem, Payment, CashTransaction, BankTransaction, ServiceJob, ServicePart
+from models import Product, Customer, Supplier, BankAccount, PurchaseMaster, PurchaseItem, SalesMaster, SalesItem, Payment, CashTransaction, BankTransaction, ServiceJob, ServicePart, MoneyTransfer
 
 class TestMobileShopDB(unittest.TestCase):
     @classmethod
@@ -306,5 +306,252 @@ class TestMobileShopDB(unittest.TestCase):
         self.session.delete(db_bank)
         self.session.commit()
 
+    def test_08_fund_transfer(self):
+        from models import FundTransfer
+        
+        # 1. Setup Test Bank Accounts
+        self.session.query(BankAccount).filter(BankAccount.account_name.in_(["FT Source", "FT Dest"])).delete()
+        self.session.commit()
+
+        src_bank = BankAccount(bank_name="Source Bank", account_name="FT Source", balance=10000.0)
+        dest_bank = BankAccount(bank_name="Dest Bank", account_name="FT Dest", balance=5000.0)
+        self.session.add(src_bank)
+        self.session.add(dest_bank)
+        self.session.commit()
+
+        # 2. Simulate transfer of ₹3000 from FT Source to FT Dest
+        amount = 3000.0
+        transfer = FundTransfer(
+            date=datetime.date.today(),
+            from_type='bank',
+            from_account_id=src_bank.id,
+            to_type='bank',
+            to_account_id=dest_bank.id,
+            amount=amount,
+            remarks="Unit Test Transfer"
+        )
+        self.session.add(transfer)
+        self.session.commit()
+
+        # Update balances
+        src_bank.balance -= amount
+        dest_bank.balance += amount
+
+        # Log transactions
+        tx_out = BankTransaction(
+            date=datetime.date.today(), transaction_type='withdrawal', account_id=src_bank.id,
+            amount=amount, source_type='transfer', source_id=transfer.id, description="Transfer out"
+        )
+        tx_in = BankTransaction(
+            date=datetime.date.today(), transaction_type='deposit', account_id=dest_bank.id,
+            amount=amount, source_type='transfer', source_id=transfer.id, description="Transfer in"
+        )
+        self.session.add(tx_out)
+        self.session.add(tx_in)
+        self.session.commit()
+
+        # Verify balances
+        self.assertEqual(src_bank.balance, 7000.0)
+        self.assertEqual(dest_bank.balance, 8000.0)
+
+        # 3. Simulate reversion (deleting the transfer)
+        # Revert balances
+        src_bank.balance += amount
+        dest_bank.balance -= amount
+
+        # Delete transactions and transfer
+        self.session.query(BankTransaction).filter_by(source_type='transfer', source_id=transfer.id).delete()
+        self.session.delete(transfer)
+        self.session.commit()
+
+        # Verify reverted balances
+        self.assertEqual(src_bank.balance, 10000.0)
+        self.assertEqual(dest_bank.balance, 5000.0)
+
+        # Clean up banks
+        self.session.delete(src_bank)
+        self.session.delete(dest_bank)
+        self.session.commit()
+
+    def test_09_direct_transaction(self):
+        from models import DirectTransaction
+        
+        # 1. Setup Test Bank Account
+        self.session.query(BankAccount).filter_by(account_name="FT Direct").delete()
+        self.session.commit()
+
+        bank = BankAccount(bank_name="Direct Bank", account_name="FT Direct", balance=5000.0)
+        self.session.add(bank)
+        self.session.commit()
+
+        # 2. Deposit 2000
+        dep_amount = 2000.0
+        dt_dep = DirectTransaction(
+            date=datetime.date.today(),
+            transaction_type='deposit',
+            account_type='bank',
+            bank_id=bank.id,
+            amount=dep_amount,
+            description="Test Inflow"
+        )
+        self.session.add(dt_dep)
+        self.session.commit()
+        bank.balance += dep_amount
+
+        # Log deposit transaction
+        tx_dep = BankTransaction(
+            date=datetime.date.today(), transaction_type='deposit', account_id=bank.id,
+            amount=dep_amount, source_type='direct', source_id=dt_dep.id, description="Direct deposit"
+        )
+        self.session.add(tx_dep)
+        self.session.commit()
+
+        self.assertEqual(bank.balance, 7000.0)
+
+        # 3. Withdraw 1000
+        wdr_amount = 1000.0
+        dt_wdr = DirectTransaction(
+            date=datetime.date.today(),
+            transaction_type='withdrawal',
+            account_type='bank',
+            bank_id=bank.id,
+            amount=wdr_amount,
+            description="Test Outflow"
+        )
+        self.session.add(dt_wdr)
+        self.session.commit()
+        bank.balance -= wdr_amount
+
+        # Log withdrawal transaction
+        tx_wdr = BankTransaction(
+            date=datetime.date.today(), transaction_type='withdrawal', account_id=bank.id,
+            amount=wdr_amount, source_type='direct', source_id=dt_wdr.id, description="Direct withdrawal"
+        )
+        self.session.add(tx_wdr)
+        self.session.commit()
+
+        self.assertEqual(bank.balance, 6000.0)
+
+        # 4. Revert withdrawal
+        bank.balance += wdr_amount
+        self.session.query(BankTransaction).filter_by(source_type='direct', source_id=dt_wdr.id).delete()
+        self.session.delete(dt_wdr)
+        self.session.commit()
+
+        # Revert deposit
+        bank.balance -= dep_amount
+        self.session.query(BankTransaction).filter_by(source_type='direct', source_id=dt_dep.id).delete()
+        self.session.delete(dt_dep)
+        self.session.commit()
+
+        # Verify reverted balance
+        self.assertEqual(bank.balance, 5000.0)
+
+        # Clean up
+        self.session.delete(bank)
+        self.session.commit()
+
+    def test_10_money_transfer(self):
+        # 1. Setup Test Bank Accounts
+        self.session.query(BankAccount).filter(BankAccount.account_name.in_(["MT Pay Bank", "MT Payout Bank"])).delete()
+        self.session.commit()
+
+        pay_bank = BankAccount(bank_name="Test Pay Bank", account_name="MT Pay Bank", balance=10000.0)
+        payout_bank = BankAccount(bank_name="Test Payout Bank", account_name="MT Payout Bank", balance=15000.0)
+        self.session.add(pay_bank)
+        self.session.add(payout_bank)
+        self.session.commit()
+
+        # 2. Setup transaction details
+        last_mt = self.session.query(MoneyTransfer).order_by(MoneyTransfer.id.desc()).first()
+        tx_no = f"MT-{last_mt.id + 10001}" if last_mt else "MT-10001"
+        amount = 5000.0
+        charge = 150.0
+        total_amount = amount + charge
+
+        # 3. Create Money Transfer (using Bank as payment mode, and Bank as payout mode)
+        mt = MoneyTransfer(
+            transaction_number=tx_no,
+            date=datetime.date.today(),
+            customer_name="Test Sender",
+            beneficiary_name="Test Beneficiary",
+            transfer_type="UPI",
+            upi_id="test@upi",
+            amount=amount,
+            service_charge=charge,
+            total_amount=total_amount,
+            deadline_date=datetime.date.today() + datetime.timedelta(days=1),
+            remarks="Unit test transfer",
+            status='Pending',
+            payment_mode='Bank',
+            payment_bank_id=pay_bank.id,
+            payout_mode='Bank',
+            payout_bank_id=payout_bank.id
+        )
+        self.session.add(mt)
+        self.session.flush()
+
+        # Log Inflow Ledger
+        desc_in = f"Inflow for Money Transfer {tx_no} from customer Test Sender"
+        tx_in = BankTransaction(
+            date=datetime.date.today(), transaction_type='deposit', account_id=pay_bank.id,
+            amount=total_amount, source_type='direct', source_id=mt.id, description=desc_in
+        )
+        self.session.add(tx_in)
+        pay_bank.balance += total_amount
+
+        # Log Outflow Ledger
+        desc_out = f"Outflow for Money Transfer {tx_no} to beneficiary Test Beneficiary"
+        tx_out = BankTransaction(
+            date=datetime.date.today(), transaction_type='withdrawal', account_id=payout_bank.id,
+            amount=amount, source_type='direct', source_id=mt.id, description=desc_out
+        )
+        self.session.add(tx_out)
+        payout_bank.balance -= amount
+        
+        self.session.commit()
+
+        # 4. Verify balances updated
+        self.assertEqual(pay_bank.balance, 10000.0 + total_amount)
+        self.assertEqual(payout_bank.balance, 15000.0 - amount)
+
+        # Verify transaction entries
+        db_in_tx = self.session.query(BankTransaction).filter_by(source_type='direct', source_id=mt.id, transaction_type='deposit').first()
+        self.assertIsNotNone(db_in_tx)
+        self.assertEqual(db_in_tx.amount, total_amount)
+
+        db_out_tx = self.session.query(BankTransaction).filter_by(source_type='direct', source_id=mt.id, transaction_type='withdrawal').first()
+        self.assertIsNotNone(db_out_tx)
+        self.assertEqual(db_out_tx.amount, amount)
+
+        # 5. Toggle status and verify
+        self.assertEqual(mt.status, 'Pending')
+        mt.status = 'Completed'
+        self.session.commit()
+        self.assertEqual(mt.status, 'Completed')
+
+        # 6. Reversion and delete (mimic delete_transfer in ui/money_transfer.py)
+        # Revert payment inflow
+        pay_bank.balance -= mt.total_amount
+        # Revert payout outflow
+        payout_bank.balance += mt.amount
+
+        # Delete related transactions
+        self.session.query(BankTransaction).filter_by(source_type='direct', source_id=mt.id).delete()
+        # Delete transfer record
+        self.session.delete(mt)
+        self.session.commit()
+
+        # Verify reverted balances
+        self.assertEqual(pay_bank.balance, 10000.0)
+        self.assertEqual(payout_bank.balance, 15000.0)
+
+        # Clean up bank accounts
+        self.session.delete(pay_bank)
+        self.session.delete(payout_bank)
+        self.session.commit()
+
 if __name__ == '__main__':
     unittest.main()
+
+

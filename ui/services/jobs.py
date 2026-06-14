@@ -776,6 +776,11 @@ class ServicesView(QWidget):
         self.search_input.textChanged.connect(self.refresh_data)
         top_bar.addWidget(self.search_input, 4)
 
+        self.status_filter = QComboBox()
+        self.status_filter.addItems(["All Statuses", "Received", "Under Repair", "Ready", "Delivered"])
+        self.status_filter.currentIndexChanged.connect(self.refresh_data)
+        top_bar.addWidget(self.status_filter, 1.2)
+
         self.add_btn = QPushButton("New Job Card")
         self.add_btn.clicked.connect(self.add_job)
         top_bar.addWidget(self.add_btn, 1)
@@ -813,6 +818,7 @@ class ServicesView(QWidget):
 
     def refresh_data(self):
         search_txt = self.search_input.text().strip()
+        selected_status = self.status_filter.currentText() if hasattr(self, 'status_filter') else "All Statuses"
         session = Session()
         try:
             query = session.query(ServiceJob)
@@ -824,6 +830,8 @@ class ServicesView(QWidget):
                     ServiceJob.device_model.like(f"%{search_txt}%") |
                     ServiceJob.status.like(f"%{search_txt}%")
                 )
+            if selected_status != "All Statuses":
+                query = query.filter(ServiceJob.status == selected_status)
             jobs = query.order_by(ServiceJob.created_at.desc()).all()
 
             self.table.setRowCount(len(jobs))
