@@ -6,6 +6,20 @@ from sqlalchemy import func
 from database import Session
 from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction, PurchaseMaster
 
+class ClickableCard(QFrame):
+    def __init__(self, title, border_color, parent_view, parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.parent_view = parent_view
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.parent_view.handle_card_click(self.title)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
 class DashboardView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,8 +62,14 @@ class DashboardView(QWidget):
         ]
 
         for title, default_val, row, col, border_color in metric_configs:
-            card = QFrame()
-            card.setProperty("class", "MetricCard")
+            is_clickable = title in ["Customer Outstanding", "Supplier Outstanding"]
+            if is_clickable:
+                card = ClickableCard(title, border_color, self)
+                card.setProperty("class", "ClickableMetricCard")
+            else:
+                card = QFrame()
+                card.setProperty("class", "MetricCard")
+            
             card.setStyleSheet(f"border-left: 4px solid {border_color};")
             
             card_layout = QVBoxLayout(card)
@@ -155,7 +175,7 @@ class DashboardView(QWidget):
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
-        self.results_table.setColumnWidth(3, 100)
+        self.results_table.setColumnWidth(3, 120)
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.verticalHeader().setDefaultSectionSize(45)
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -374,6 +394,19 @@ class DashboardView(QWidget):
             if hasattr(main_window, 'suppliers_view'):
                 main_window.switch_view(3)
                 main_window.suppliers_view.search_input.setText(res_ref)
+
+    def handle_card_click(self, title):
+        main_win = self.window()
+        if title == "Customer Outstanding":
+            if hasattr(main_win, 'switch_view'):
+                main_win.switch_view(9)  # Reports View index
+                if hasattr(main_win, 'reports_view'):
+                    main_win.reports_view.tabs.setCurrentIndex(3)  # Customer Receivables tab
+        elif title == "Supplier Outstanding":
+            if hasattr(main_win, 'switch_view'):
+                main_win.switch_view(9)  # Reports View index
+                if hasattr(main_win, 'reports_view'):
+                    main_win.reports_view.tabs.setCurrentIndex(4)  # Supplier Payables tab
 
     def trigger_manual_low_stock_check(self):
         main_win = self.window()

@@ -816,7 +816,27 @@ class ServicesView(QWidget):
         self.table.doubleClicked.connect(self.edit_job)
         layout.addWidget(self.table)
 
-    def refresh_data(self):
+        # Lazy loading state
+        self.jobs_offset = 0
+        self.has_more_jobs = True
+        self.table.verticalScrollBar().valueChanged.connect(self.handle_jobs_scroll)
+
+    def handle_jobs_scroll(self, value):
+        scrollbar = self.table.verticalScrollBar()
+        if value == scrollbar.maximum() and scrollbar.maximum() > 0:
+            if self.has_more_jobs:
+                self.jobs_offset += 25
+                self.refresh_data(reset=False)
+
+    def refresh_data(self, reset=True):
+        if not isinstance(reset, bool):
+            reset = True
+
+        if reset:
+            self.jobs_offset = 0
+            self.has_more_jobs = True
+            self.table.setRowCount(0)
+
         search_txt = self.search_input.text().strip()
         selected_status = self.status_filter.currentText() if hasattr(self, 'status_filter') else "All Statuses"
         session = Session()
@@ -832,10 +852,16 @@ class ServicesView(QWidget):
                 )
             if selected_status != "All Statuses":
                 query = query.filter(ServiceJob.status == selected_status)
-            jobs = query.order_by(ServiceJob.created_at.desc()).all()
+            
+            jobs = query.order_by(ServiceJob.created_at.desc()).offset(self.jobs_offset).limit(25).all()
 
-            self.table.setRowCount(len(jobs))
-            for i, j in enumerate(jobs):
+            if len(jobs) < 25:
+                self.has_more_jobs = False
+
+            start_row = self.table.rowCount()
+            self.table.setRowCount(start_row + len(jobs))
+            for offset_idx, j in enumerate(jobs):
+                i = start_row + offset_idx
                 self.table.setItem(i, 0, QTableWidgetItem(j.job_number))
                 self.table.setItem(i, 1, QTableWidgetItem(j.customer_name))
                 self.table.setItem(i, 2, QTableWidgetItem(j.mobile))

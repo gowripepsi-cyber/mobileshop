@@ -120,6 +120,18 @@ QWidget {
     padding: 15px;
 }
 
+.ClickableMetricCard {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e1e38, stop:1 #15152a);
+    border: 1px solid #2c2c54;
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.ClickableMetricCard:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #252547, stop:1 #1b1b36);
+    border: 1px solid #434380;
+}
+
 .MetricTitle {
     color: #94a3b8;
     font-size: 12px;

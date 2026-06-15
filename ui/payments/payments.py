@@ -236,6 +236,11 @@ class PaymentsView(QWidget):
         self.history_table.verticalHeader().setDefaultSectionSize(54)
         layout.addWidget(self.history_table)
 
+        # Lazy loading state
+        self.history_offset = 0
+        self.has_more_history = True
+        self.history_table.verticalScrollBar().valueChanged.connect(self.handle_history_scroll)
+
     def toggle_c_bank(self, mode):
         self.c_bank.setEnabled(mode == "Bank")
 
@@ -305,9 +310,16 @@ class PaymentsView(QWidget):
         ])
         self.transfer_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.transfer_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.transfer_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
+        self.transfer_table.setColumnWidth(5, 120)
         self.transfer_table.verticalHeader().setVisible(False)
-        self.transfer_table.verticalHeader().setDefaultSectionSize(40)
+        self.transfer_table.verticalHeader().setDefaultSectionSize(48)
         history_layout.addWidget(self.transfer_table)
+
+        # Lazy loading state
+        self.transfer_offset = 0
+        self.has_more_transfers = True
+        self.transfer_table.verticalScrollBar().valueChanged.connect(self.handle_transfer_scroll)
 
         layout.addWidget(history_frame)
 
@@ -555,9 +567,16 @@ class PaymentsView(QWidget):
         ])
         self.direct_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.direct_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.direct_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.direct_table.setColumnWidth(6, 120)
         self.direct_table.verticalHeader().setVisible(False)
-        self.direct_table.verticalHeader().setDefaultSectionSize(40)
+        self.direct_table.verticalHeader().setDefaultSectionSize(48)
         history_layout.addWidget(self.direct_table)
+
+        # Lazy loading state
+        self.direct_offset = 0
+        self.has_more_direct = True
+        self.direct_table.verticalScrollBar().valueChanged.connect(self.handle_direct_scroll)
 
         layout.addWidget(history_frame)
 
@@ -786,10 +805,56 @@ class PaymentsView(QWidget):
                         break
             self.d_bank.blockSignals(False)
 
-            # 4. Load history
-            history = session.query(Payment).order_by(Payment.id.desc()).all()
-            self.history_table.setRowCount(len(history))
-            for i, p in enumerate(history):
+            # 4. Load histories
+            self.load_payments_history(reset=True)
+            self.load_transfers_history(reset=True)
+            self.load_direct_history(reset=True)
+
+        except Exception as e:
+            print(f"Error loading payments view data: {e}")
+        finally:
+            session.close()
+
+    def handle_history_scroll(self, value):
+        scrollbar = self.history_table.verticalScrollBar()
+        if value == scrollbar.maximum() and scrollbar.maximum() > 0:
+            if self.has_more_history:
+                self.history_offset += 25
+                self.load_payments_history(reset=False)
+
+    def handle_transfer_scroll(self, value):
+        scrollbar = self.transfer_table.verticalScrollBar()
+        if value == scrollbar.maximum() and scrollbar.maximum() > 0:
+            if self.has_more_transfers:
+                self.transfer_offset += 25
+                self.load_transfers_history(reset=False)
+
+    def handle_direct_scroll(self, value):
+        scrollbar = self.direct_table.verticalScrollBar()
+        if value == scrollbar.maximum() and scrollbar.maximum() > 0:
+            if self.has_more_direct:
+                self.direct_offset += 25
+                self.load_direct_history(reset=False)
+
+    def load_payments_history(self, reset=True):
+        if not isinstance(reset, bool):
+            reset = True
+
+        if reset:
+            self.history_offset = 0
+            self.has_more_history = True
+            self.history_table.setRowCount(0)
+
+        session = Session()
+        try:
+            history = session.query(Payment).order_by(Payment.id.desc()).offset(self.history_offset).limit(25).all()
+            if len(history) < 25:
+                self.has_more_history = False
+
+            start_row = self.history_table.rowCount()
+            self.history_table.setRowCount(start_row + len(history))
+            for offset_idx, p in enumerate(history):
+                i = start_row + offset_idx
                 self.history_table.setItem(i, 0, QTableWidgetItem(str(p.id)))
                 self.history_table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
                 self.history_table.setItem(i, 2, QTableWidgetItem(p.party_type.capitalize()))
@@ -837,7 +902,7 @@ class PaymentsView(QWidget):
                 # Action Buttons
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setContentsMargins(6, 2, 6, 2)
                 actions_layout.setSpacing(8)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
@@ -852,11 +917,30 @@ class PaymentsView(QWidget):
                 actions_layout.addWidget(del_btn)
                 
                 self.history_table.setCellWidget(i, 7, actions_widget)
+        except Exception as e:
+            print(f"Error loading payments history: {e}")
+        finally:
+            session.close()
 
-            # 5. Load transfers history
-            transfers = session.query(FundTransfer).order_by(FundTransfer.id.desc()).all()
-            self.transfer_table.setRowCount(len(transfers))
-            for i, t in enumerate(transfers):
+    def load_transfers_history(self, reset=True):
+        if not isinstance(reset, bool):
+            reset = True
+
+        if reset:
+            self.transfer_offset = 0
+            self.has_more_transfers = True
+            self.transfer_table.setRowCount(0)
+
+        session = Session()
+        try:
+            transfers = session.query(FundTransfer).order_by(FundTransfer.id.desc()).offset(self.transfer_offset).limit(25).all()
+            if len(transfers) < 25:
+                self.has_more_transfers = False
+
+            start_row = self.transfer_table.rowCount()
+            self.transfer_table.setRowCount(start_row + len(transfers))
+            for offset_idx, t in enumerate(transfers):
+                i = start_row + offset_idx
                 self.transfer_table.setItem(i, 0, QTableWidgetItem(str(t.id)))
                 self.transfer_table.setItem(i, 1, QTableWidgetItem(t.date.strftime("%Y-%m-%d")))
                 
@@ -876,7 +960,7 @@ class PaymentsView(QWidget):
                 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setContentsMargins(6, 2, 6, 2)
                 actions_layout.setSpacing(8)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
@@ -886,11 +970,30 @@ class PaymentsView(QWidget):
                 actions_layout.addWidget(del_btn)
                 
                 self.transfer_table.setCellWidget(i, 5, actions_widget)
+        except Exception as e:
+            print(f"Error loading transfers history: {e}")
+        finally:
+            session.close()
 
-            # 6. Load direct transactions history
-            direct_txs = session.query(DirectTransaction).order_by(DirectTransaction.id.desc()).all()
-            self.direct_table.setRowCount(len(direct_txs))
-            for i, t in enumerate(direct_txs):
+    def load_direct_history(self, reset=True):
+        if not isinstance(reset, bool):
+            reset = True
+
+        if reset:
+            self.direct_offset = 0
+            self.has_more_direct = True
+            self.direct_table.setRowCount(0)
+
+        session = Session()
+        try:
+            direct_txs = session.query(DirectTransaction).order_by(DirectTransaction.id.desc()).offset(self.direct_offset).limit(25).all()
+            if len(direct_txs) < 25:
+                self.has_more_direct = False
+
+            start_row = self.direct_table.rowCount()
+            self.direct_table.setRowCount(start_row + len(direct_txs))
+            for offset_idx, t in enumerate(direct_txs):
+                i = start_row + offset_idx
                 self.direct_table.setItem(i, 0, QTableWidgetItem(str(t.id)))
                 self.direct_table.setItem(i, 1, QTableWidgetItem(t.date.strftime("%Y-%m-%d")))
                 
@@ -912,7 +1015,7 @@ class PaymentsView(QWidget):
                 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 4, 6, 4)
+                actions_layout.setContentsMargins(6, 2, 6, 2)
                 actions_layout.setSpacing(8)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
@@ -922,9 +1025,8 @@ class PaymentsView(QWidget):
                 actions_layout.addWidget(del_btn)
                 
                 self.direct_table.setCellWidget(i, 6, actions_widget)
-
         except Exception as e:
-            print(f"Error loading payments view data: {e}")
+            print(f"Error loading direct history: {e}")
         finally:
             session.close()
 

@@ -81,7 +81,7 @@ class SalesView(QWidget):
 
         form_layout.addRow("Invoice Number *:", self.invoice_input)
         form_layout.addRow("Invoice Date:", self.date_input)
-        form_layout.addRow("Customer *:", self.customer_combo)
+        form_layout.addRow("Customer:", self.customer_combo)
         form_layout.addRow("Payment Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
         form_layout.addRow("Paid Amount (₹):", self.paid_input)
@@ -245,6 +245,11 @@ class SalesView(QWidget):
         self.history_table.verticalHeader().setDefaultSectionSize(54)
         layout.addWidget(self.history_table)
 
+        # Lazy loading state
+        self.history_offset = 0
+        self.has_more_history = True
+        self.history_table.verticalScrollBar().valueChanged.connect(self.handle_history_scroll)
+
     def filter_products_by_category(self):
         self.product_combo.blockSignals(True)
         self.product_combo.clear()
@@ -276,6 +281,7 @@ class SalesView(QWidget):
 
             # Load Customers
             self.customer_combo.clear()
+            self.customer_combo.addItem("-- Select Customer / Cash --", None)
             customers = session.query(Customer).all()
             for c in customers:
                 self.customer_combo.addItem(c.name, c.id)
@@ -439,9 +445,6 @@ class SalesView(QWidget):
         if not invoice_no:
             QMessageBox.warning(self, "Validation Error", "Please enter Invoice Number.")
             return
-        if not cust_id:
-            QMessageBox.warning(self, "Validation Error", "Please select a Customer.")
-            return
         if not self.invoice_items:
             QMessageBox.warning(self, "Validation Error", "Please add at least one product to the invoice.")
             return
@@ -462,6 +465,15 @@ class SalesView(QWidget):
 
         session = Session()
         try:
+            if not cust_id:
+                # Find or create default customer "Mr/Mss customer"
+                default_cust = session.query(Customer).filter_by(name="Mr/Mss customer").first()
+                if not default_cust:
+                    default_cust = Customer(name="Mr/Mss customer", mobile="N/A", address="N/A")
+                    session.add(default_cust)
+                    session.flush()
+                cust_id = default_cust.id
+
             if self.editing_sales_id:
                 # 1. Fetch existing invoice
                 sale = session.query(SalesMaster).get(self.editing_sales_id)
@@ -671,7 +683,22 @@ class SalesView(QWidget):
         self.history_to_date.setDate(QDate.currentDate())
         self.load_history()
 
-    def load_history(self):
+    def handle_history_scroll(self, value):
+        scrollbar = self.history_table.verticalScrollBar()
+        if value == scrollbar.maximum() and scrollbar.maximum() > 0:
+            if self.has_more_history:
+                self.history_offset += 25
+                self.load_history(reset=False)
+
+    def load_history(self, reset=True):
+        if not isinstance(reset, bool):
+            reset = True
+            
+        if reset:
+            self.history_offset = 0
+            self.has_more_history = True
+            self.history_table.setRowCount(0)
+
         session = Session()
         try:
             query = session.query(SalesMaster)
@@ -692,10 +719,15 @@ class SalesView(QWidget):
                     (Customer.name.ilike(f"%{search_text}%"))
                 )
                 
-            invoices = query.order_by(SalesMaster.date.desc(), SalesMaster.id.desc()).all()
+            invoices = query.order_by(SalesMaster.date.desc(), SalesMaster.id.desc()).offset(self.history_offset).limit(25).all()
             
-            self.history_table.setRowCount(len(invoices))
-            for i, p in enumerate(invoices):
+            if len(invoices) < 25:
+                self.has_more_history = False
+                
+            start_row = self.history_table.rowCount()
+            self.history_table.setRowCount(start_row + len(invoices))
+            for offset_idx, p in enumerate(invoices):
+                i = start_row + offset_idx
                 self.history_table.setItem(i, 0, QTableWidgetItem(p.invoice_number))
                 self.history_table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
                 self.history_table.setItem(i, 2, QTableWidgetItem(p.customer.name))

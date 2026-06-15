@@ -80,7 +80,7 @@ class PurchaseView(QWidget):
 
         form_layout.addRow("Invoice Number *:", self.invoice_input)
         form_layout.addRow("Invoice Date:", self.date_input)
-        form_layout.addRow("Supplier *:", self.supplier_combo)
+        form_layout.addRow("Supplier:", self.supplier_combo)
         form_layout.addRow("Payment Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
         form_layout.addRow("Paid Amount (₹):", self.paid_input)
@@ -237,6 +237,11 @@ class PurchaseView(QWidget):
         self.history_table.verticalHeader().setDefaultSectionSize(54)
         layout.addWidget(self.history_table)
 
+        # Lazy loading state
+        self.history_offset = 0
+        self.has_more_history = True
+        self.history_table.verticalScrollBar().valueChanged.connect(self.handle_history_scroll)
+
 
     def filter_products_by_category(self):
         self.product_combo.blockSignals(True)
@@ -269,6 +274,7 @@ class PurchaseView(QWidget):
 
             # Load Suppliers
             self.supplier_combo.clear()
+            self.supplier_combo.addItem("-- Select Supplier / Cash --", None)
             suppliers = session.query(Supplier).all()
             for s in suppliers:
                 self.supplier_combo.addItem(s.name, s.id)
@@ -315,7 +321,22 @@ class PurchaseView(QWidget):
         self.history_to_date.setDate(QDate.currentDate())
         self.load_history()
 
-    def load_history(self):
+    def handle_history_scroll(self, value):
+        scrollbar = self.history_table.verticalScrollBar()
+        if value == scrollbar.maximum() and scrollbar.maximum() > 0:
+            if self.has_more_history:
+                self.history_offset += 25
+                self.load_history(reset=False)
+
+    def load_history(self, reset=True):
+        if not isinstance(reset, bool):
+            reset = True
+
+        if reset:
+            self.history_offset = 0
+            self.has_more_history = True
+            self.history_table.setRowCount(0)
+
         session = Session()
         try:
             query = session.query(PurchaseMaster)
@@ -336,10 +357,15 @@ class PurchaseView(QWidget):
                     (Supplier.name.ilike(f"%{search_text}%"))
                 )
                 
-            purchases = query.order_by(PurchaseMaster.date.desc(), PurchaseMaster.id.desc()).all()
+            purchases = query.order_by(PurchaseMaster.date.desc(), PurchaseMaster.id.desc()).offset(self.history_offset).limit(25).all()
             
-            self.history_table.setRowCount(len(purchases))
-            for i, p in enumerate(purchases):
+            if len(purchases) < 25:
+                self.has_more_history = False
+                
+            start_row = self.history_table.rowCount()
+            self.history_table.setRowCount(start_row + len(purchases))
+            for offset_idx, p in enumerate(purchases):
+                i = start_row + offset_idx
                 self.history_table.setItem(i, 0, QTableWidgetItem(p.invoice_number))
                 self.history_table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
                 self.history_table.setItem(i, 2, QTableWidgetItem(p.supplier.name))
@@ -462,9 +488,6 @@ class PurchaseView(QWidget):
         if not invoice_no:
             QMessageBox.warning(self, "Validation Error", "Please enter Invoice Number.")
             return
-        if not supp_id:
-            QMessageBox.warning(self, "Validation Error", "Please select a Supplier.")
-            return
         if not self.bill_items:
             QMessageBox.warning(self, "Validation Error", "Please add at least one item to the bill.")
             return
@@ -483,6 +506,15 @@ class PurchaseView(QWidget):
 
         session = Session()
         try:
+            if not supp_id:
+                # Find or create default supplier "Mr/Mss supplier"
+                default_supp = session.query(Supplier).filter_by(name="Mr/Mss supplier").first()
+                if not default_supp:
+                    default_supp = Supplier(name="Mr/Mss supplier", mobile="N/A", address="N/A")
+                    session.add(default_supp)
+                    session.flush()
+                supp_id = default_supp.id
+
             if self.editing_purchase_id:
                 # 1. Fetch existing purchase
                 purchase = session.query(PurchaseMaster).get(self.editing_purchase_id)
