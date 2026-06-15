@@ -83,8 +83,8 @@ def init_db():
         # 2. Seed bank accounts and opening transactions if empty
         bank_count = session.query(BankAccount).count()
         if bank_count == 0:
-            icici = BankAccount(bank_name="ICICI Bank", account_name="ICICI Current A/c", balance=150000.0)
-            sbi = BankAccount(bank_name="SBI Bank", account_name="SBI Savings A/c", balance=50000.0)
+            icici = BankAccount(bank_name="ICICI Bank", account_name="ICICI Current A/c", balance=0.0)
+            sbi = BankAccount(bank_name="SBI Bank", account_name="SBI Savings A/c", balance=0.0)
             session.add(icici)
             session.add(sbi)
             session.commit() # commit to generate ids
@@ -93,14 +93,14 @@ def init_db():
             tx_icici = BankTransaction(
                 transaction_type='deposit',
                 account_id=icici.id,
-                amount=150000.0,
+                amount=0.0,
                 source_type='direct',
                 description="Opening Balance"
             )
             tx_sbi = BankTransaction(
                 transaction_type='deposit',
                 account_id=sbi.id,
-                amount=50000.0,
+                amount=0.0,
                 source_type='direct',
                 description="Opening Balance"
             )
@@ -112,7 +112,7 @@ def init_db():
         if cash_tx_count == 0:
             opening_cash = CashTransaction(
                 transaction_type='in',
-                amount=25000.0,
+                amount=0.0,
                 source_type='direct',
                 description="Opening Balance"
             )
