@@ -182,7 +182,25 @@ class ProductDialog(QDialog):
         super().__init__(parent)
         self.product = product
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        self.setFixedSize(400, 420)
+        
+        # Check settings for IMEI visibility
+        from database import Setting
+        session = Session()
+        self.show_imei = True
+        try:
+            val = session.query(Setting).filter_by(key='enable_imei_tracking').first()
+            if val and val.value == 'false':
+                self.show_imei = False
+        except Exception:
+            pass
+        finally:
+            session.close()
+
+        if self.show_imei:
+            self.setFixedSize(400, 420)
+        else:
+            self.setFixedSize(400, 390)
+            
         self.init_ui()
 
     def load_categories(self):
@@ -222,7 +240,8 @@ class ProductDialog(QDialog):
         form_layout.addRow("Category *:", self.category_combo)
         form_layout.addRow("Brand *:", self.brand_input)
         form_layout.addRow("Model *:", self.model_input)
-        form_layout.addRow("IMEI Number:", self.imei_input)
+        if self.show_imei:
+            form_layout.addRow("IMEI Number:", self.imei_input)
         form_layout.addRow("Purchase Price (₹) *:", self.purchase_price_input)
         form_layout.addRow("Selling Price (₹) *:", self.selling_price_input)
         form_layout.addRow("Initial Stock Qty *:", self.stock_qty_input)
@@ -378,17 +397,42 @@ class ProductsView(QWidget):
         layout.addWidget(self.table)
 
     def refresh_data(self):
+        from database import Setting
+        session = Session()
+        show_imei = True
+        try:
+            val = session.query(Setting).filter_by(key='enable_imei_tracking').first()
+            if val and val.value == 'false':
+                show_imei = False
+        except Exception:
+            pass
+        finally:
+            session.close()
+
+        self.table.setColumnHidden(5, not show_imei)
+        if show_imei:
+            self.search_input.setPlaceholderText("Search products by name, brand, model or IMEI...")
+        else:
+            self.search_input.setPlaceholderText("Search products by name, brand, or model...")
+
         search_txt = self.search_input.text().strip()
         session = Session()
         try:
             query = session.query(Product)
             if search_txt:
-                query = query.filter(
-                    Product.name.like(f"%{search_txt}%") |
-                    Product.brand.like(f"%{search_txt}%") |
-                    Product.model.like(f"%{search_txt}%") |
-                    Product.imei.like(f"%{search_txt}%")
-                )
+                if show_imei:
+                    query = query.filter(
+                        Product.name.like(f"%{search_txt}%") |
+                        Product.brand.like(f"%{search_txt}%") |
+                        Product.model.like(f"%{search_txt}%") |
+                        Product.imei.like(f"%{search_txt}%")
+                    )
+                else:
+                    query = query.filter(
+                        Product.name.like(f"%{search_txt}%") |
+                        Product.brand.like(f"%{search_txt}%") |
+                        Product.model.like(f"%{search_txt}%")
+                    )
             products = query.all()
             
             self.table.setRowCount(len(products))

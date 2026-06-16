@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-                             QPushButton, QMessageBox, QFrame, QFormLayout, QTabWidget, QFileDialog)
+                             QPushButton, QMessageBox, QFrame, QFormLayout, QTabWidget, QFileDialog,
+                             QCheckBox, QInputDialog)
 from PySide6.QtCore import Qt
-from database import Session, Setting, User, get_hash
+from database import Session, Setting, User, get_hash, engine, init_db
 from utils.db_backup import backup_db, restore_db
 
 class SettingsView(QWidget):
@@ -35,6 +36,11 @@ class SettingsView(QWidget):
         self.license_tab = QWidget()
         self.setup_license_tab()
         self.tabs.addTab(self.license_tab, "Software Activation")
+
+        # Tab 5: Feature Settings
+        self.feature_tab = QWidget()
+        self.setup_feature_tab()
+        self.tabs.addTab(self.feature_tab, "Feature Settings")
 
         layout.addWidget(self.tabs)
 
@@ -162,6 +168,15 @@ class SettingsView(QWidget):
             if s_address: self.shop_address_input.setText(s_address.value)
             if s_gst: self.shop_gst_input.setText(s_gst.value)
 
+            # Feature settings
+            enable_repair = session.query(Setting).filter_by(key='enable_repair_service').first()
+            enable_money = session.query(Setting).filter_by(key='enable_money_transfer').first()
+            enable_imei = session.query(Setting).filter_by(key='enable_imei_tracking').first()
+
+            self.enable_repair_checkbox.setChecked(enable_repair.value == 'true' if enable_repair else True)
+            self.enable_money_checkbox.setChecked(enable_money.value == 'true' if enable_money else True)
+            self.enable_imei_checkbox.setChecked(enable_imei.value == 'true' if enable_imei else True)
+
         except Exception as e:
             print(f"Error loading settings: {e}")
         finally:
@@ -218,9 +233,6 @@ class SettingsView(QWidget):
 
         session = Session()
         try:
-            # We assume active logged-in user is 'admin' for simplicity in this MVP version
-            # If main window parses correct user_data, we can use it.
-            # In main_window.py, MainWindow sets self.user_data
             main_window = self.window()
             username = 'admin'
             if hasattr(main_window, 'user_data') and main_window.user_data:
@@ -401,3 +413,144 @@ class SettingsView(QWidget):
             else:
                 QMessageBox.critical(self, "Error", "Failed to remove the license. Please check file permissions.")
 
+    def setup_feature_tab(self):
+        layout = QVBoxLayout(self.feature_tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(20)
+
+        form_frame = QFrame()
+        form_frame.setProperty("class", "CardFrame")
+        form_frame.setMinimumWidth(800)
+        form_frame.setMaximumWidth(900)
+        form_layout = QFormLayout(form_frame)
+        form_layout.setContentsMargins(20, 20, 20, 20)
+        form_layout.setSpacing(15)
+
+        title = QLabel("Feature Adaptability Settings")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        form_layout.addRow(title)
+
+        self.enable_repair_checkbox = QCheckBox("Enable Repair Service Desk (Shows/hides Service Cards UI)")
+        self.enable_money_checkbox = QCheckBox("Enable Financial Remittance (Shows/hides UPI/Money Transfer UI)")
+        self.enable_imei_checkbox = QCheckBox("Enable Unique Identifier Tracking (Shows/hides IMEI/Serial Number inputs)")
+
+        self.enable_repair_checkbox.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.enable_money_checkbox.setStyleSheet("color: #ffffff; font-size: 13px;")
+        self.enable_imei_checkbox.setStyleSheet("color: #ffffff; font-size: 13px;")
+
+        form_layout.addRow("", self.enable_repair_checkbox)
+        form_layout.addRow("", self.enable_money_checkbox)
+        form_layout.addRow("", self.enable_imei_checkbox)
+
+        self.save_features_btn = QPushButton("Save Feature Settings")
+        self.save_features_btn.setProperty("class", "btn-success")
+        self.save_features_btn.clicked.connect(self.save_feature_settings)
+        form_layout.addRow("", self.save_features_btn)
+
+        layout.addWidget(form_frame, 0, Qt.AlignCenter)
+
+        # Danger Zone / Factory Reset Panel
+        danger_frame = QFrame()
+        danger_frame.setProperty("class", "CardFrame")
+        danger_frame.setStyleSheet("QFrame { border: 1px solid #ef4444; background-color: #1a0b0b; }")
+        danger_frame.setMinimumWidth(800)
+        danger_frame.setMaximumWidth(900)
+        danger_layout = QVBoxLayout(danger_frame)
+        danger_layout.setContentsMargins(20, 20, 20, 20)
+        danger_layout.setSpacing(10)
+
+        danger_title = QLabel("Danger Zone (Factory Reset)")
+        danger_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ef4444; border: none; background: transparent;")
+        danger_layout.addWidget(danger_title)
+
+        danger_desc = QLabel("Wiping all database data will delete all customers, suppliers, products, stock, cash/bank transactions, money transfers, and company settings. This action is permanent and cannot be undone.")
+        danger_desc.setWordWrap(True)
+        danger_desc.setStyleSheet("color: #f87171; font-size: 12px; border: none; background: transparent;")
+        danger_layout.addWidget(danger_desc)
+
+        self.wipe_btn = QPushButton("Wipe All Data / Factory Reset")
+        self.wipe_btn.setStyleSheet("background-color: #ef4444; color: #ffffff; font-weight: bold; padding: 12px 20px; border-radius: 6px;")
+        self.wipe_btn.setMinimumHeight(45)
+        self.wipe_btn.clicked.connect(self.wipe_all_data)
+        danger_layout.addWidget(self.wipe_btn)
+
+        layout.addWidget(danger_frame, 0, Qt.AlignCenter)
+        layout.addStretch()
+
+    def save_feature_settings(self):
+        session = Session()
+        try:
+            r_val = 'true' if self.enable_repair_checkbox.isChecked() else 'false'
+            m_val = 'true' if self.enable_money_checkbox.isChecked() else 'false'
+            i_val = 'true' if self.enable_imei_checkbox.isChecked() else 'false'
+
+            # Update or insert
+            def update_key(k, v):
+                sett = session.query(Setting).filter_by(key=k).first()
+                if sett:
+                    sett.value = v
+                else:
+                    session.add(Setting(key=k, value=v))
+
+            update_key('enable_repair_service', r_val)
+            update_key('enable_money_transfer', m_val)
+            update_key('enable_imei_tracking', i_val)
+
+            session.commit()
+            QMessageBox.information(self, "Success", "Feature adaptability settings updated successfully.")
+            
+            # Update main window navigation dynamically
+            main_window = self.window()
+            if hasattr(main_window, 'apply_feature_settings'):
+                main_window.apply_feature_settings()
+                
+            self.refresh_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to save feature settings: {e}")
+        finally:
+            session.close()
+
+    def wipe_all_data(self):
+        confirm1 = QMessageBox.question(
+            self, "WARNING: Permanent Factory Reset",
+            "Are you sure you want to delete ALL data?\n\n"
+            "This will permanently erase all customers, suppliers, products, stock, cash/bank transactions, money transfers, and company settings.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm1 != QMessageBox.Yes:
+            return
+
+        text, ok = QInputDialog.getText(
+            self, "Confirm Factory Reset",
+            "This action cannot be undone.\n\n"
+            "To confirm deletion, please type 'WIPE' (all caps):"
+        )
+        if not ok or text.strip() != "WIPE":
+            QMessageBox.warning(self, "Cancelled", "Confirmation code incorrect. Data wipe cancelled.")
+            return
+
+        session = Session()
+        try:
+            session.close()
+            
+            # Dispose of engine connections to release locks
+            engine.dispose()
+            
+            from models import Base
+            Base.metadata.drop_all(engine)
+            
+            # Recreate all tables and re-seed defaults
+            init_db()
+            
+            QMessageBox.information(
+                self, "Reset Completed",
+                "All data has been successfully wiped. The application will now close."
+            )
+            # Close the main window
+            main_window = self.window()
+            main_window.close()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to wipe data: {e}")
+        finally:
+            session.close()

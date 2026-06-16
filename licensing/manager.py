@@ -10,7 +10,7 @@ from licensing import crypto_utils
 
 def _run_cmd(cmd: str) -> str:
     try:
-        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL, timeout=3)
         lines = [line.strip() for line in out.decode('utf-8', errors='ignore').split('\n') if line.strip()]
         if len(lines) > 1:
             return lines[1]

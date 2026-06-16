@@ -14,7 +14,25 @@ class JobCardDialog(QDialog):
         super().__init__(parent)
         self.job = job
         self.setWindowTitle("Edit Repair Job" if job else "New Repair Job Card")
-        self.setFixedSize(450, 540)
+        
+        # Check settings for IMEI visibility
+        from database import Setting
+        session = Session()
+        self.show_imei = True
+        try:
+            val = session.query(Setting).filter_by(key='enable_imei_tracking').first()
+            if val and val.value == 'false':
+                self.show_imei = False
+        except Exception:
+            pass
+        finally:
+            session.close()
+
+        if self.show_imei:
+            self.setFixedSize(450, 540)
+        else:
+            self.setFixedSize(450, 510)
+            
         self.init_ui()
 
     def init_ui(self):
@@ -44,7 +62,10 @@ class JobCardDialog(QDialog):
         form_layout.addRow("Customer Mobile *:", self.cust_mobile_input)
         form_layout.addRow("Customer Name *:", self.cust_name_input)
         form_layout.addRow("Device Model *:", self.device_model_input)
-        form_layout.addRow("Device IMEI/Serial *:", self.imei_input)
+        if self.show_imei:
+            form_layout.addRow("Device IMEI/Serial *:", self.imei_input)
+        else:
+            form_layout.addRow("Device Serial (Optional):", self.imei_input)
         form_layout.addRow("Complaint details:", self.complaint_input)
         form_layout.addRow("Assigned Technician:", self.technician_input)
         form_layout.addRow("Job Status:", self.status_combo)
@@ -101,7 +122,8 @@ class JobCardDialog(QDialog):
         tech = self.technician_input.text().strip()
         status = self.status_combo.currentText()
 
-        if not job_num or not mobile or not name or not model or not imei:
+        is_invalid = not job_num or not mobile or not name or not model or (self.show_imei and not imei)
+        if is_invalid:
             QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)")
             return
 

@@ -1248,7 +1248,7 @@ def generate_low_stock_pdf(report_data, file_path):
     story.append(Spacer(1, 30))
 
     # 4. Footer & Sign-off
-    story.append(Paragraph("<font size=10 color='#6366f1'><b>Galaxy Mobiles Stock Management System</b></font>", ParagraphStyle('CenterTextStockFooter', parent=style_sub, alignment=1)))
+    story.append(Paragraph("<font size=10 color='#6366f1'><b>SUN COMPUTERS Stock Management System</b></font>", ParagraphStyle('CenterTextStockFooter', parent=style_sub, alignment=1)))
 
     doc.build(story)
 
@@ -1386,7 +1386,7 @@ def generate_outstanding_pdf(report_data, file_path):
     story.append(Spacer(1, 30))
 
     # 4. Footer & Sign-off
-    story.append(Paragraph("<font size=10 color='#6366f1'><b>Galaxy Mobiles Management System</b></font>", ParagraphStyle('CenterTextFooter', parent=style_sub, alignment=1)))
+    story.append(Paragraph("<font size=10 color='#6366f1'><b>SUN COMPUTERS Management System</b></font>", ParagraphStyle('CenterTextFooter', parent=style_sub, alignment=1)))
 
     doc.build(story)
 

@@ -5,7 +5,7 @@ from database import Session, User, get_hash, Setting
 class LoginWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Login - Mobile Shop Management System")
+        self.setWindowTitle("Login - SUN INVENTORY & SERVICE LITE")
         self.setFixedSize(484, 350)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.user_data = None
@@ -18,18 +18,9 @@ class LoginWindow(QDialog):
         layout.setSpacing(15)
 
         # Title Label
-        session = Session()
-        try:
-            shop_name_setting = session.query(Setting).filter_by(key='shop_name').first()
-            shop_name = shop_name_setting.value.upper() if shop_name_setting else "GALAXY MOBILES"
-        except Exception:
-            shop_name = "GALAXY MOBILES"
-        finally:
-            session.close()
-
-        title_label = QLabel(shop_name)
+        title_label = QLabel("SUN INVENTORY & SERVICE LITE")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #6366f1; letter-spacing: 2px;")
+        title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #6366f1; letter-spacing: 1px;")
         layout.addWidget(title_label)
 
         # Subtitle

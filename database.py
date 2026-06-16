@@ -121,19 +121,28 @@ def init_db():
         # 4. Seed default settings
         shop_name = session.query(Setting).filter_by(key='shop_name').first()
         if not shop_name:
-            session.add(Setting(key='shop_name', value='Galaxy Mobiles & Services'))
+            session.add(Setting(key='shop_name', value='SUN COMPUTERS,'))
         shop_contact = session.query(Setting).filter_by(key='shop_contact').first()
         if not shop_contact:
-            session.add(Setting(key='shop_contact', value='+91 9876543210'))
+            session.add(Setting(key='shop_contact', value='8122913041, 8667729988'))
         shop_address = session.query(Setting).filter_by(key='shop_address').first()
         if not shop_address:
-            session.add(Setting(key='shop_address', value='123 Main Market Street, Tech City'))
+            session.add(Setting(key='shop_address', value='PARIBALAN COMPLEX. MANAMELKUDI. 614620'))
         shop_gst = session.query(Setting).filter_by(key='shop_gst').first()
         if not shop_gst:
             session.add(Setting(key='shop_gst', value='27AAAAA1111A1Z1'))
         low_stock_limit = session.query(Setting).filter_by(key='low_stock_limit').first()
         if not low_stock_limit:
             session.add(Setting(key='low_stock_limit', value='5'))
+        enable_repair = session.query(Setting).filter_by(key='enable_repair_service').first()
+        if not enable_repair:
+            session.add(Setting(key='enable_repair_service', value='true'))
+        enable_money = session.query(Setting).filter_by(key='enable_money_transfer').first()
+        if not enable_money:
+            session.add(Setting(key='enable_money_transfer', value='true'))
+        enable_imei = session.query(Setting).filter_by(key='enable_imei_tracking').first()
+        if not enable_imei:
+            session.add(Setting(key='enable_imei_tracking', value='true'))
 
         # 5. Seed default categories if empty
         cat_count = session.query(Category).count()

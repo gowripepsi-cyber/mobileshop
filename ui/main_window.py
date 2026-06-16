@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.setSpacing(0)
 
         # Shop Logo / Title
-        self.logo_label = QLabel("GALAXY MOBILES")
+        self.logo_label = QLabel("SUN COMPUTERS,")
         self.logo_label.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(self.logo_label)
         self.update_shop_name()
@@ -182,6 +182,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(content_wrapper)
 
         # Set default view
+        self.apply_feature_settings()
         self.switch_view(0)
 
     def update_shop_name(self):
@@ -189,14 +190,18 @@ class MainWindow(QMainWindow):
         session = Session()
         try:
             shop_name_setting = session.query(Setting).filter_by(key='shop_name').first()
-            name = shop_name_setting.value.upper() if shop_name_setting else "GALAXY MOBILES"
+            name = shop_name_setting.value.upper() if shop_name_setting else "SUN COMPUTERS,"
             self.logo_label.setText(name)
         except Exception:
-            self.logo_label.setText("GALAXY MOBILES")
+            self.logo_label.setText("SUN COMPUTERS,")
         finally:
             session.close()
 
     def switch_view(self, index):
+        # Prevent switching to hidden sidebar buttons (via shortcuts)
+        if index in self.nav_buttons and not self.nav_buttons[index].isVisible():
+            return
+
         # Check corresponding nav button
         for idx, btn in self.nav_buttons.items():
             btn.setChecked(idx == index)
@@ -260,3 +265,30 @@ class MainWindow(QMainWindow):
             print(f"Error checking low stock alert: {e}")
         finally:
             session.close()
+
+    def apply_feature_settings(self):
+        from database import Session, Setting
+        session = Session()
+        enable_repair = True
+        enable_money = True
+        try:
+            r_val = session.query(Setting).filter_by(key='enable_repair_service').first()
+            if r_val and r_val.value == 'false':
+                enable_repair = False
+            m_val = session.query(Setting).filter_by(key='enable_money_transfer').first()
+            if m_val and m_val.value == 'false':
+                enable_money = False
+        except Exception as e:
+            print(f"Error applying feature settings: {e}")
+        finally:
+            session.close()
+
+        if 7 in self.nav_buttons:
+            self.nav_buttons[7].setVisible(enable_repair)
+        if 11 in self.nav_buttons:
+            self.nav_buttons[11].setVisible(enable_money)
+
+        # Fallback if the active view is now disabled
+        curr_idx = self.stacked_widget.currentIndex()
+        if (curr_idx == 7 and not enable_repair) or (curr_idx == 11 and not enable_money):
+            self.switch_view(0)

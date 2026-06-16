@@ -51,17 +51,18 @@ class DashboardView(QWidget):
 
         # We will initialize the metric cards
         self.cards = {}
+        self.card_widgets = {}
         metric_configs = [
-            ("Today's Sales", "₹0.00", 0, 0, "#6366f1"),
-            ("Today's Service Income", "₹0.00", 0, 1, "#06b6d4"),
-            ("Cash in Hand", "₹0.00", 0, 2, "#10b981"),
-            ("Bank Balances", "₹0.00", 0, 3, "#3b82f6"),
-            ("Customer Outstanding", "₹0.00", 1, 0, "#f59e0b"),
-            ("Supplier Outstanding", "₹0.00", 1, 1, "#ef4444"),
-            ("Low Stock Items", "0", 1, 2, "#a855f7")
+            ("Today's Sales", "₹0.00", "#6366f1"),
+            ("Today's Service Income", "₹0.00", "#06b6d4"),
+            ("Cash in Hand", "₹0.00", "#10b981"),
+            ("Bank Balances", "₹0.00", "#3b82f6"),
+            ("Customer Outstanding", "₹0.00", "#f59e0b"),
+            ("Supplier Outstanding", "₹0.00", "#ef4444"),
+            ("Low Stock Items", "0", "#a855f7")
         ]
 
-        for title, default_val, row, col, border_color in metric_configs:
+        for title, default_val, border_color in metric_configs:
             is_clickable = title in ["Customer Outstanding", "Supplier Outstanding"]
             if is_clickable:
                 card = ClickableCard(title, border_color, self)
@@ -85,9 +86,23 @@ class DashboardView(QWidget):
             card_layout.addWidget(title_lbl)
             card_layout.addWidget(val_lbl)
             
-            self.metrics_grid.addWidget(card, row, col)
             self.cards[title] = val_lbl
+            self.card_widgets[title] = card
 
+        # Query setting for initial layout
+        from database import Setting
+        session = Session()
+        enable_repair = True
+        try:
+            val = session.query(Setting).filter_by(key='enable_repair_service').first()
+            if val and val.value == 'false':
+                enable_repair = False
+        except Exception:
+            pass
+        finally:
+            session.close()
+
+        self.update_metrics_layout(enable_repair)
         default_layout.addLayout(self.metrics_grid)
 
         # Bottom sections (Bank Account details and Low Stock table)
@@ -183,9 +198,48 @@ class DashboardView(QWidget):
 
         self.main_layout.addWidget(self.search_results_card)
 
+    def update_metrics_layout(self, enable_repair):
+        # Clear layout items (but keep widgets intact)
+        while self.metrics_grid.count() > 0:
+            self.metrics_grid.takeAt(0)
+
+        visible_titles = [
+            "Today's Sales",
+        ]
+        if enable_repair:
+            visible_titles.append("Today's Service Income")
+            
+        visible_titles.extend([
+            "Cash in Hand",
+            "Bank Balances",
+            "Customer Outstanding",
+            "Supplier Outstanding",
+            "Low Stock Items"
+        ])
+        
+        for idx, title in enumerate(visible_titles):
+            card = self.card_widgets[title]
+            card.setVisible(True)
+            row = idx // 4
+            col = idx % 4
+            self.metrics_grid.addWidget(card, row, col)
+            
+        # Hide any card not in visible_titles
+        for title, card in self.card_widgets.items():
+            if title not in visible_titles:
+                card.setVisible(False)
+
     def refresh_data(self):
+        from database import Setting
         session = Session()
         try:
+            enable_repair = True
+            val = session.query(Setting).filter_by(key='enable_repair_service').first()
+            if val and val.value == 'false':
+                enable_repair = False
+
+            self.update_metrics_layout(enable_repair)
+
             today = datetime.date.today()
             
             # Today's Sales
@@ -193,9 +247,9 @@ class DashboardView(QWidget):
             self.cards["Today's Sales"].setText(f"₹{sales_today:,.2f}")
 
             # Today's Service Income (Total amount from repair jobs logged today)
-            # Service jobs might record total amount
-            service_today = session.query(func.sum(ServiceJob.total_amount)).filter(func.date(ServiceJob.created_at) == today).scalar() or 0.0
-            self.cards["Today's Service Income"].setText(f"₹{service_today:,.2f}")
+            if enable_repair:
+                service_today = session.query(func.sum(ServiceJob.total_amount)).filter(func.date(ServiceJob.created_at) == today).scalar() or 0.0
+                self.cards["Today's Service Income"].setText(f"₹{service_today:,.2f}")
 
             # Cash in Hand calculation
             cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
@@ -428,7 +482,7 @@ class DashboardView(QWidget):
             s_address = session.query(Setting).filter_by(key='shop_address').first()
             s_gst = session.query(Setting).filter_by(key='shop_gst').first()
             
-            shop_name = s_name.value if s_name else "Galaxy Mobiles"
+            shop_name = s_name.value if s_name else "SUN COMPUTERS,"
             shop_contact = s_contact.value if s_contact else "N/A"
             shop_address = s_address.value if s_address else "N/A"
             shop_gst = s_gst.value if s_gst else "N/A"
