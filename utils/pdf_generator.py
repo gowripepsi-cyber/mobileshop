@@ -1391,6 +1391,361 @@ def generate_outstanding_pdf(report_data, file_path):
     doc.build(story)
 
 
+def generate_sales_return_pdf(return_data, file_path):
+    """
+    Generates a professional PDF credit note for sales return.
+    return_data keys:
+      - shop_name, shop_contact, shop_address, shop_gst
+      - return_number, date, invoice_number (optional original invoice)
+      - customer_name, customer_mobile, customer_address
+      - items: list of dicts {"name", "qty", "rate", "total"}
+      - total_amount, refund_amount, balance_deducted
+    """
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    style_shop_name = ParagraphStyle(
+        'ShopNameSR',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#6366f1')
+    )
+    
+    style_title = ParagraphStyle(
+        'SRTitle',
+        fontName='Helvetica-Bold',
+        fontSize=22,
+        leading=26,
+        textColor=colors.HexColor('#dc2626'),
+        alignment=2 # Right aligned
+    )
+
+    style_sub = ParagraphStyle(
+        'SubtextSR',
+        fontName='Helvetica',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#475569')
+    )
+    
+    style_bold = ParagraphStyle(
+        'BoldTextSR',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    story = []
+
+    # 1. Header Grid (Shop Details Left, Title & Info Right)
+    left_info = [
+        Paragraph(return_data['shop_name'], style_shop_name),
+        Paragraph(return_data['shop_address'], style_sub),
+        Paragraph(f"Contact: {return_data['shop_contact']}", style_sub),
+        Paragraph(f"GSTIN: {return_data['shop_gst']}", style_sub)
+    ]
+    
+    ref_invoice = return_data.get('invoice_number')
+    ref_invoice_str = f"Ref Invoice: {ref_invoice}" if ref_invoice else ""
+    
+    right_info = [
+        Paragraph("CREDIT NOTE", style_title),
+        Paragraph("(SALES RETURN)", ParagraphStyle('SRSubTitle', parent=style_bold, alignment=2, textColor=colors.HexColor('#64748b'))),
+        Spacer(1, 5),
+        Paragraph(f"Return No: <b>{return_data['return_number']}</b>", style_bold),
+        Paragraph(f"Date: {return_data['date']}", style_sub),
+        Paragraph(ref_invoice_str, style_sub)
+    ]
+    
+    header_table_data = [
+        [left_info, right_info]
+    ]
+    
+    header_table = Table(header_table_data, colWidths=[300, 240])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+    
+    story.append(header_table)
+    story.append(Spacer(1, 20))
+
+    # 2. Customer details (Bill To)
+    bill_to_data = [
+        [
+            Paragraph("<b>CUSTOMER DETAILS:</b>", style_bold), 
+            Paragraph("", style_sub)
+        ],
+        [
+            Paragraph(return_data['customer_name'], style_bold),
+            Paragraph(f"Mobile: {return_data['customer_mobile']}", style_sub)
+        ],
+        [
+            Paragraph(return_data['customer_address'] or "N/A", style_sub),
+            Paragraph("", style_sub)
+        ]
+    ]
+    bill_to_table = Table(bill_to_data, colWidths=[270, 270])
+    bill_to_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LINEBELOW', (0,-1), (-1,-1), 1, colors.HexColor('#cbd5e1')),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    
+    story.append(bill_to_table)
+    story.append(Spacer(1, 20))
+
+    # 3. Items Table
+    item_header_style = ParagraphStyle(
+        'ItemHeaderSR',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        textColor=colors.white
+    )
+    
+    table_data = [
+        [
+            Paragraph("Returned Item Description", item_header_style),
+            Paragraph("Qty", item_header_style),
+            Paragraph("Rate (Rs.)", item_header_style),
+            Paragraph("Total (Rs.)", item_header_style)
+        ]
+    ]
+
+    for item in return_data['items']:
+        table_data.append([
+            Paragraph(item['name'], style_sub),
+            Paragraph(str(item['qty']), style_sub),
+            Paragraph(f"{item['rate']:,.2f}", style_sub),
+            Paragraph(f"{item['total']:,.2f}", style_bold)
+        ])
+
+    items_table = Table(table_data, colWidths=[320, 50, 80, 90])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#7f1d1d')), # Dark red header
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 15))
+
+    # 4. Summary / Totals block
+    summary_data = [
+        [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {return_data['total_amount']:,.2f}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Refund Paid (Cash/Bank):", style_bold), Paragraph(f"Rs. {return_data['refund_amount']:,.2f}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Adjusted:", style_bold), Paragraph(f"Rs. {return_data['balance_deducted']:,.2f}", style_bold)]
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[300, 140, 100])
+    summary_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('LINEBELOW', (1,-1), (-1,-1), 1.5, colors.HexColor('#dc2626')),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 40))
+
+    # 5. Footer & Sign-off
+    story.append(Paragraph("This is a Credit Note issued against a sales return.", style_sub))
+    doc.build(story)
+
+
+def generate_purchase_return_pdf(return_data, file_path):
+    """
+    Generates a professional PDF debit note for purchase return.
+    return_data keys:
+      - shop_name, shop_contact, shop_address, shop_gst
+      - return_number, date, invoice_number (optional original invoice)
+      - supplier_name, supplier_mobile, supplier_address
+      - items: list of dicts {"name", "qty", "rate", "total"}
+      - total_amount, refund_received, balance_deducted
+    """
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    style_shop_name = ParagraphStyle(
+        'ShopNamePR',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#6366f1')
+    )
+    
+    style_title = ParagraphStyle(
+        'PRTitle',
+        fontName='Helvetica-Bold',
+        fontSize=22,
+        leading=26,
+        textColor=colors.HexColor('#dc2626'),
+        alignment=2 # Right aligned
+    )
+
+    style_sub = ParagraphStyle(
+        'SubtextPR',
+        fontName='Helvetica',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#475569')
+    )
+    
+    style_bold = ParagraphStyle(
+        'BoldTextPR',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    story = []
+
+    # 1. Header Grid (Shop Details Left, Title & Info Right)
+    left_info = [
+        Paragraph(return_data['shop_name'], style_shop_name),
+        Paragraph(return_data['shop_address'], style_sub),
+        Paragraph(f"Contact: {return_data['shop_contact']}", style_sub),
+        Paragraph(f"GSTIN: {return_data['shop_gst']}", style_sub)
+    ]
+    
+    ref_invoice = return_data.get('invoice_number')
+    ref_invoice_str = f"Ref Invoice: {ref_invoice}" if ref_invoice else ""
+    
+    right_info = [
+        Paragraph("DEBIT NOTE", style_title),
+        Paragraph("(PURCHASE RETURN)", ParagraphStyle('PRSubTitle', parent=style_bold, alignment=2, textColor=colors.HexColor('#64748b'))),
+        Spacer(1, 5),
+        Paragraph(f"Return No: <b>{return_data['return_number']}</b>", style_bold),
+        Paragraph(f"Date: {return_data['date']}", style_sub),
+        Paragraph(ref_invoice_str, style_sub)
+    ]
+    
+    header_table_data = [
+        [left_info, right_info]
+    ]
+    
+    header_table = Table(header_table_data, colWidths=[300, 240])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+    
+    story.append(header_table)
+    story.append(Spacer(1, 20))
+
+    # 2. Supplier details (Bill To)
+    bill_to_data = [
+        [
+            Paragraph("<b>SUPPLIER DETAILS:</b>", style_bold), 
+            Paragraph("", style_sub)
+        ],
+        [
+            Paragraph(return_data['supplier_name'], style_bold),
+            Paragraph(f"Mobile: {return_data['supplier_mobile']}", style_sub)
+        ],
+        [
+            Paragraph(return_data['supplier_address'] or "N/A", style_sub),
+            Paragraph("", style_sub)
+        ]
+    ]
+    bill_to_table = Table(bill_to_data, colWidths=[270, 270])
+    bill_to_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LINEBELOW', (0,-1), (-1,-1), 1, colors.HexColor('#cbd5e1')),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    
+    story.append(bill_to_table)
+    story.append(Spacer(1, 20))
+
+    # 3. Items Table
+    item_header_style = ParagraphStyle(
+        'ItemHeaderPR',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        textColor=colors.white
+    )
+    
+    table_data = [
+        [
+            Paragraph("Returned Item Description", item_header_style),
+            Paragraph("Qty", item_header_style),
+            Paragraph("Rate (Rs.)", item_header_style),
+            Paragraph("Total (Rs.)", item_header_style)
+        ]
+    ]
+
+    for item in return_data['items']:
+        table_data.append([
+            Paragraph(item['name'], style_sub),
+            Paragraph(str(item['qty']), style_sub),
+            Paragraph(f"{item['rate']:,.2f}", style_sub),
+            Paragraph(f"{item['total']:,.2f}", style_bold)
+        ])
+
+    items_table = Table(table_data, colWidths=[320, 50, 80, 90])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#7f1d1d')),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 15))
+
+    # 4. Summary / Totals block
+    summary_data = [
+        [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {return_data['total_amount']:,.2f}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Refund Received (Cash/Bank):", style_bold), Paragraph(f"Rs. {return_data['refund_received']:,.2f}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Adjusted:", style_bold), Paragraph(f"Rs. {return_data['balance_deducted']:,.2f}", style_bold)]
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[300, 140, 100])
+    summary_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('LINEBELOW', (1,-1), (-1,-1), 1.5, colors.HexColor('#dc2626')),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 40))
+
+    # 5. Footer & Sign-off
+    story.append(Paragraph("This is a Debit Note issued against a purchase return.", style_sub))
+    doc.build(story)
+
+
+
 
 
 

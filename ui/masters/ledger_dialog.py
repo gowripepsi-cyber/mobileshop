@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QFileDialog, QMessageBox)
 from PySide6.QtCore import Qt
 from database import Session, Setting
-from models import Customer, Supplier, SalesMaster, PurchaseMaster, ServiceJob, Payment
+from models import Customer, Supplier, SalesMaster, PurchaseMaster, ServiceJob, Payment, SalesReturnMaster, PurchaseReturnMaster
 from utils.pdf_generator import generate_ledger_pdf
 
 
@@ -135,6 +135,20 @@ class LedgerBreakupDialog(QDialog):
                         "credit": p.amount
                     })
 
+                # 4. Sales Returns
+                returns = session.query(SalesReturnMaster).filter_by(customer_id=self.party_id).all()
+                for r in returns:
+                    desc_text = "Sales Return"
+                    if r.sales_id and r.sales:
+                        desc_text += f" against invoice {r.sales.invoice_number}"
+                    transactions.append({
+                        "date": r.date,
+                        "ref": r.return_number,
+                        "desc": desc_text,
+                        "debit": r.refund_amount,
+                        "credit": r.total_amount
+                    })
+
                 # Sort chronologically by date
                 transactions.sort(key=lambda x: x["date"])
 
@@ -224,6 +238,20 @@ class LedgerBreakupDialog(QDialog):
                         "desc": desc_text,
                         "debit": p.amount,
                         "credit": 0.0
+                    })
+
+                # 3. Purchase Returns
+                returns = session.query(PurchaseReturnMaster).filter_by(supplier_id=self.party_id).all()
+                for r in returns:
+                    desc_text = "Purchase Return"
+                    if r.purchase_id and r.purchase:
+                        desc_text += f" against bill {r.purchase.invoice_number}"
+                    transactions.append({
+                        "date": r.date,
+                        "ref": r.return_number,
+                        "desc": desc_text,
+                        "debit": r.total_amount,
+                        "credit": r.refund_received
                     })
 
                 # Sort chronologically by date

@@ -36,6 +36,13 @@ class SalesView(QWidget):
         self.setup_history_tab()
         self.tabs.addTab(self.history_tab, "Sales Invoice History")
 
+        # Tab 3 & 4: Sales Return Entry & History
+        from ui.sales.sales_return import SalesReturnEntryWidget, SalesReturnHistoryWidget
+        self.return_history_tab = SalesReturnHistoryWidget(self)
+        self.return_entry_tab = SalesReturnEntryWidget(self, self.return_history_tab)
+        self.tabs.addTab(self.return_entry_tab, "New Sales Return")
+        self.tabs.addTab(self.return_history_tab, "Sales Return History")
+
         layout.addWidget(self.tabs)
 
     def setup_entry_tab(self):
@@ -316,6 +323,11 @@ class SalesView(QWidget):
             
             # Load History
             self.load_history()
+
+            if hasattr(self, 'return_entry_tab'):
+                self.return_entry_tab.refresh_data()
+            if hasattr(self, 'return_history_tab'):
+                self.return_history_tab.load_history()
 
         except Exception as e:
             print(f"Error loading sales options: {e}")

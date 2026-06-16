@@ -1,7 +1,7 @@
 import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
 
 DATABASE_URL = "sqlite:///mobileshop.db"
 

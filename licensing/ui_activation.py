@@ -390,12 +390,23 @@ class VendorGeneratorDialog(QDialog):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
 
-        # Close button
+        # Action Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        btn_reset_trial = QPushButton("Reset Trial Period")
+        btn_reset_trial.setFixedHeight(38)
+        btn_reset_trial.setStyleSheet("background-color: #ef4444; color: #ffffff;")
+        btn_reset_trial.clicked.connect(self.handle_reset_trial)
+        btn_layout.addWidget(btn_reset_trial)
+
         btn_close = QPushButton("Close Panel")
         btn_close.setFixedHeight(38)
         btn_close.setStyleSheet("background-color: #334155;")
         btn_close.clicked.connect(self.accept)
-        layout.addWidget(btn_close)
+        btn_layout.addWidget(btn_close)
+        
+        layout.addLayout(btn_layout)
 
         self.load_history()
 
@@ -452,3 +463,16 @@ class VendorGeneratorDialog(QDialog):
             # Align items
             for col in range(3):
                 self.table.item(idx, col).setTextAlignment(Qt.AlignCenter)
+
+    def handle_reset_trial(self):
+        confirm = QMessageBox.question(
+            self, "Confirm Reset",
+            "Are you sure you want to reset the trial period on this machine?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm == QMessageBox.Yes:
+            if manager.reset_trial():
+                QMessageBox.information(self, "Success", "Trial period has been successfully reset to 30 days.\nPlease restart the application to apply changes.")
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Error", "Failed to reset trial period.")

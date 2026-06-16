@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from database import Session
 from sqlalchemy.orm import joinedload
-from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment
+from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
 
 class ReportsView(QWidget):
     def __init__(self, parent=None):
@@ -323,19 +323,27 @@ class ReportsView(QWidget):
                 sales_item_query = session.query(SalesItem).join(SalesMaster)
                 service_part_query = session.query(ServicePart).join(ServiceJob).options(joinedload(ServicePart.product))
 
+                sr_query = session.query(func_sum(SalesReturnMaster.total_amount))
+                sr_items_query = session.query(SalesReturnItem).join(SalesReturnMaster)
+
                 if start_date:
                     sales_query = sales_query.filter(SalesMaster.date >= start_date)
                     service_query = service_query.filter(ServiceJob.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
                     sales_item_query = sales_item_query.filter(SalesMaster.date >= start_date)
                     service_part_query = service_part_query.filter(ServiceJob.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
+                    sr_query = sr_query.filter(SalesReturnMaster.date >= start_date)
+                    sr_items_query = sr_items_query.filter(SalesReturnMaster.date >= start_date)
 
                 if end_date:
                     sales_query = sales_query.filter(SalesMaster.date <= end_date)
                     service_query = service_query.filter(ServiceJob.created_at <= datetime.datetime.combine(end_date, datetime.time.max))
                     sales_item_query = sales_item_query.filter(SalesMaster.date <= end_date)
                     service_part_query = service_part_query.filter(ServiceJob.created_at <= datetime.datetime.combine(end_date, datetime.time.max))
+                    sr_query = sr_query.filter(SalesReturnMaster.date <= end_date)
+                    sr_items_query = sr_items_query.filter(SalesReturnMaster.date <= end_date)
 
-                sales_rev = sales_query.scalar() or 0.0
+                sales_ret = sr_query.scalar() or 0.0
+                sales_rev = (sales_query.scalar() or 0.0) - sales_ret
                 service_rev = service_query.scalar() or 0.0
                 total_rev = sales_rev + service_rev
 
@@ -345,6 +353,13 @@ class ReportsView(QWidget):
                 for si in sales_items:
                     if si.product:
                         cogs += si.qty * si.product.purchase_price
+
+                # Subtract COGS of returned products
+                returned_cogs = 0.0
+                for sri in sr_items_query.all():
+                    if sri.product:
+                        returned_cogs += sri.qty * sri.product.purchase_price
+                cogs = max(0.0, cogs - returned_cogs)
 
                 # Service Spare Parts Expense
                 parts_exp = 0.0
@@ -356,7 +371,8 @@ class ReportsView(QWidget):
                         parts_exp += sp.qty * sp.cost
                 total_exp = cogs + parts_exp
             else:
-                sales_rev = session.query(func_sum(SalesMaster.total_amount)).scalar() or 0.0
+                sales_ret = session.query(func_sum(SalesReturnMaster.total_amount)).scalar() or 0.0
+                sales_rev = (session.query(func_sum(SalesMaster.total_amount)).scalar() or 0.0) - sales_ret
                 service_rev = session.query(func_sum(ServiceJob.total_amount)).scalar() or 0.0
                 total_rev = sales_rev + service_rev
 
@@ -365,6 +381,12 @@ class ReportsView(QWidget):
                 for si in sales_items:
                     if si.product:
                         cogs += si.qty * si.product.purchase_price
+
+                returned_cogs = 0.0
+                for sri in session.query(SalesReturnItem).all():
+                    if sri.product:
+                        returned_cogs += sri.qty * sri.product.purchase_price
+                cogs = max(0.0, cogs - returned_cogs)
 
                 parts_exp = 0.0
                 service_parts = session.query(ServicePart).options(joinedload(ServicePart.product)).all()
@@ -465,6 +487,20 @@ class ReportsView(QWidget):
                     } for s in sales]
                     pd.DataFrame(data).to_excel(writer, sheet_name="Sales Registry", index=False)
 
+                    # Sales Returns
+                    sr_masters = session.query(SalesReturnMaster).all()
+                    sr_data = [{
+                        "Return Number": sr.return_number,
+                        "Date": sr.date.strftime("%Y-%m-%d"),
+                        "Customer Name": sr.customer.name,
+                        "Customer Contact": sr.customer.mobile,
+                        "Total Amount (₹)": sr.total_amount,
+                        "Refund Paid (₹)": sr.refund_amount,
+                        "Balance Adjusted (₹)": sr.balance_deducted,
+                        "Ref Invoice": sr.sales.invoice_number if sr.sales else "N/A"
+                    } for sr in sr_masters]
+                    pd.DataFrame(sr_data).to_excel(writer, sheet_name="Sales Returns", index=False)
+
                 # 3. Purchases
                 if self.chk_purchases.isChecked():
                     purchases = session.query(PurchaseMaster).all()
@@ -478,6 +514,20 @@ class ReportsView(QWidget):
                         "Balance Outstanding (₹)": p.balance_payable
                     } for p in purchases]
                     pd.DataFrame(data).to_excel(writer, sheet_name="Purchase Registry", index=False)
+
+                    # Purchase Returns
+                    pr_masters = session.query(PurchaseReturnMaster).all()
+                    pr_data = [{
+                        "Return Number": pr.return_number,
+                        "Date": pr.date.strftime("%Y-%m-%d"),
+                        "Supplier Name": pr.supplier.name,
+                        "Supplier Contact": pr.supplier.mobile,
+                        "Total Amount (₹)": pr.total_amount,
+                        "Refund Received (₹)": pr.refund_received,
+                        "Balance Adjusted (₹)": pr.balance_deducted,
+                        "Ref Bill": pr.purchase.invoice_number if pr.purchase else "N/A"
+                    } for pr in pr_masters]
+                    pd.DataFrame(pr_data).to_excel(writer, sheet_name="Purchase Returns", index=False)
 
                 # 4. Services
                 if self.chk_services.isChecked():
@@ -760,6 +810,20 @@ class ReportsView(QWidget):
                     "credit": p.amount
                 })
 
+            # 4. Sales Returns
+            returns = session.query(SalesReturnMaster).filter_by(customer_id=cust_id).all()
+            for r in returns:
+                desc_text = "Sales Return"
+                if r.sales_id and r.sales:
+                    desc_text += f" against invoice {r.sales.invoice_number}"
+                transactions.append({
+                    "date": r.date,
+                    "ref": r.return_number,
+                    "desc": desc_text,
+                    "debit": r.refund_amount,
+                    "credit": r.total_amount
+                })
+
             # Sort chronologically by date
             transactions.sort(key=lambda x: x["date"])
 
@@ -859,6 +923,20 @@ class ReportsView(QWidget):
                     "credit": 0.0
                 })
 
+            # 3. Purchase Returns
+            returns = session.query(PurchaseReturnMaster).filter_by(supplier_id=supp_id).all()
+            for r in returns:
+                desc_text = "Purchase Return"
+                if r.purchase_id and r.purchase:
+                    desc_text += f" against bill {r.purchase.invoice_number}"
+                transactions.append({
+                    "date": r.date,
+                    "ref": r.return_number,
+                    "desc": desc_text,
+                    "debit": r.total_amount,
+                    "credit": r.refund_received
+                })
+
             # Sort chronologically by date
             transactions.sort(key=lambda x: x["date"])
 
@@ -930,10 +1008,20 @@ class ReportsView(QWidget):
         session = Session()
         try:
             if is_supplier:
+                if ref_text.startswith("PR-"):
+                    ret = session.query(PurchaseReturnMaster).filter_by(return_number=ref_text).first()
+                    if ret and hasattr(main_window, 'purchase_view') and hasattr(main_window.purchase_view, 'return_history_tab'):
+                        main_window.purchase_view.return_history_tab.view_details(ret.id)
+                        return
                 purchase = session.query(PurchaseMaster).filter_by(invoice_number=ref_text).first()
                 if purchase and hasattr(main_window, 'purchase_view'):
                     main_window.purchase_view.view_purchase_details(purchase.id)
             else:
+                if ref_text.startswith("SR-"):
+                    ret = session.query(SalesReturnMaster).filter_by(return_number=ref_text).first()
+                    if ret and hasattr(main_window, 'sales_view') and hasattr(main_window.sales_view, 'return_history_tab'):
+                        main_window.sales_view.return_history_tab.view_details(ret.id)
+                        return
                 # 1. Check if it's a sales invoice
                 sale = session.query(SalesMaster).filter_by(invoice_number=ref_text).first()
                 if sale and hasattr(main_window, 'sales_view'):

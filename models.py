@@ -257,4 +257,57 @@ class MoneyTransfer(Base):
     payout_bank = relationship("BankAccount", foreign_keys=[payout_bank_id])
 
 
+class SalesReturnMaster(Base):
+    __tablename__ = 'sales_return_master'
+    id = Column(Integer, primary_key=True)
+    return_number = Column(String, unique=True, nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    sales_id = Column(Integer, ForeignKey('sales_master.id'), nullable=True)
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
+    total_amount = Column(Float, default=0.0)
+    refund_amount = Column(Float, default=0.0)
+    balance_deducted = Column(Float, default=0.0)
+    
+    customer = relationship("Customer")
+    sales = relationship("SalesMaster")
+    items = relationship("SalesReturnItem", back_populates="sales_return", cascade="all, delete-orphan")
 
+
+class SalesReturnItem(Base):
+    __tablename__ = 'sales_return_items'
+    id = Column(Integer, primary_key=True)
+    sales_return_id = Column(Integer, ForeignKey('sales_return_master.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    qty = Column(Integer, default=1)
+    rate = Column(Float, default=0.0)
+    
+    sales_return = relationship("SalesReturnMaster", back_populates="items")
+    product = relationship("Product")
+
+
+class PurchaseReturnMaster(Base):
+    __tablename__ = 'purchase_return_master'
+    id = Column(Integer, primary_key=True)
+    return_number = Column(String, unique=True, nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    purchase_id = Column(Integer, ForeignKey('purchase_master.id'), nullable=True)
+    supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=False)
+    total_amount = Column(Float, default=0.0)
+    refund_received = Column(Float, default=0.0)
+    balance_deducted = Column(Float, default=0.0)
+    
+    supplier = relationship("Supplier")
+    purchase = relationship("PurchaseMaster")
+    items = relationship("PurchaseReturnItem", back_populates="purchase_return", cascade="all, delete-orphan")
+
+
+class PurchaseReturnItem(Base):
+    __tablename__ = 'purchase_return_items'
+    id = Column(Integer, primary_key=True)
+    purchase_return_id = Column(Integer, ForeignKey('purchase_return_master.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    qty = Column(Integer, default=1)
+    rate = Column(Float, default=0.0)
+    
+    purchase_return = relationship("PurchaseReturnMaster", back_populates="items")
+    product = relationship("Product")

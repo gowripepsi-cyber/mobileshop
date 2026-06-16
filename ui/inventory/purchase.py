@@ -35,6 +35,13 @@ class PurchaseView(QWidget):
         self.setup_history_tab()
         self.tabs.addTab(self.history_tab, "Purchase Invoice History")
 
+        # Tab 3 & 4: Purchase Return Entry & History
+        from ui.inventory.purchase_return import PurchaseReturnEntryWidget, PurchaseReturnHistoryWidget
+        self.return_history_tab = PurchaseReturnHistoryWidget(self)
+        self.return_entry_tab = PurchaseReturnEntryWidget(self, self.return_history_tab)
+        self.tabs.addTab(self.return_entry_tab, "New Purchase Return")
+        self.tabs.addTab(self.return_history_tab, "Purchase Return History")
+
         layout.addWidget(self.tabs)
 
     def setup_entry_tab(self):
@@ -309,6 +316,11 @@ class PurchaseView(QWidget):
 
             # Load History
             self.load_history()
+
+            if hasattr(self, 'return_entry_tab'):
+                self.return_entry_tab.refresh_data()
+            if hasattr(self, 'return_history_tab'):
+                self.return_history_tab.load_history()
 
         except Exception as e:
             print(f"Error loading purchase options: {e}")

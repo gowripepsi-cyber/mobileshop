@@ -234,3 +234,15 @@ def deactivate_software() -> bool:
         except Exception:
             return False
     return False
+
+def reset_trial() -> bool:
+    """Resets the trial data by deleting the trial file."""
+    path = get_trial_file_path()
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+            return True
+        except Exception:
+            return False
+    return True
+
