@@ -170,7 +170,7 @@ class ReportsView(QWidget):
         form_layout.addRow("Service Center Revenue (+):", self.service_rev_lbl)
         form_layout.addRow("<b>Total Gross Revenue:</b>", self.total_rev_lbl)
         form_layout.addRow(QLabel(""), QLabel("")) # Spacer row
-        form_layout.addRow("Cost of Mobile Inventory Sold (-):", self.cogs_lbl)
+        form_layout.addRow("Cost of Inventory Sold (-):", self.cogs_lbl)
         form_layout.addRow("Cost of Service Spares Used (-):", self.parts_exp_lbl)
         form_layout.addRow("<b>Total Operating Costs:</b>", self.total_exp_lbl)
         form_layout.addRow(QFrame()) # Line divider
@@ -448,7 +448,7 @@ class ReportsView(QWidget):
         # Prompt for file save path
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Save Excel Report Suite", 
-            os.path.abspath("MobileShop_ReportSuite.xlsx"), 
+            os.path.abspath("ReportSuite.xlsx"), 
             "Excel Files (*.xlsx)"
         )
         if not file_path:
