@@ -197,11 +197,25 @@ class ProductDialog(QDialog):
             session.close()
 
         if self.show_imei:
-            self.setFixedSize(400, 420)
+            self.setFixedSize(400, 460)
         else:
-            self.setFixedSize(400, 390)
+            self.setFixedSize(400, 430)
             
         self.init_ui()
+
+    def suggest_product_code(self):
+        if self.product is None:
+            category_name = self.category_combo.currentText().strip()
+            if category_name:
+                session = Session()
+                try:
+                    from database import generate_next_product_code
+                    code = generate_next_product_code(session, category_name)
+                    self.product_code_input.setText(code)
+                except Exception as e:
+                    print(f"Error generating code: {e}")
+                finally:
+                    session.close()
 
     def load_categories(self):
         self.category_combo.clear()
@@ -219,10 +233,32 @@ class ProductDialog(QDialog):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
         
+        self.product_code_input = QLineEdit()
+        self.product_code_input.setPlaceholderText("Auto-generated")
+        
         self.name_input = QLineEdit()
         self.category_combo = QComboBox()
         self.category_combo.setEditable(False)
         self.load_categories()
+        
+        # Check if user is Admin, otherwise set read-only for manual code editing
+        self.is_authorized = True
+        try:
+            curr = self
+            while curr is not None:
+                if hasattr(curr, "user_data"):
+                    self.is_authorized = curr.user_data.get("role") == "Admin"
+                    break
+                curr = curr.parent()
+        except Exception:
+            pass
+            
+        if not self.is_authorized:
+            self.product_code_input.setReadOnly(True)
+            self.product_code_input.setToolTip("Only administrators can edit product codes manually.")
+
+        # Connect category change to suggest next code
+        self.category_combo.currentTextChanged.connect(self.suggest_product_code)
         
         self.brand_input = QLineEdit()
         self.model_input = QLineEdit()
@@ -236,6 +272,7 @@ class ProductDialog(QDialog):
         self.low_stock_limit_input = QLineEdit()
         self.low_stock_limit_input.setText("5")
 
+        form_layout.addRow("Product Code *:", self.product_code_input)
         form_layout.addRow("Product Name *:", self.name_input)
         form_layout.addRow("Category *:", self.category_combo)
         form_layout.addRow("Brand *:", self.brand_input)
@@ -248,6 +285,10 @@ class ProductDialog(QDialog):
         form_layout.addRow("Low Stock Limit *:", self.low_stock_limit_input)
         
         layout.addLayout(form_layout)
+
+        # Trigger initial code suggestion
+        if self.product is None:
+            self.suggest_product_code()
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -263,6 +304,7 @@ class ProductDialog(QDialog):
 
         # Populate if editing
         if self.product:
+            self.product_code_input.setText(self.product.product_code or "")
             self.name_input.setText(self.product.name)
             
             cat = self.product.category or "Phones"
@@ -287,7 +329,16 @@ class ProductDialog(QDialog):
         brand = self.brand_input.text().strip()
         model = self.model_input.text().strip()
         imei = self.imei_input.text().strip() or None
+        product_code = self.product_code_input.text().strip()
         
+        if not product_code:
+            QMessageBox.warning(self, "Validation Error", "Product Code is required.")
+            return
+            
+        if len(product_code) != 4 or not product_code.isdigit():
+            QMessageBox.warning(self, "Validation Error", "Product Code must be exactly 4 numeric digits.")
+            return
+
         if not name or not brand or not model:
             QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)")
             return
@@ -305,6 +356,20 @@ class ProductDialog(QDialog):
 
         session = Session()
         try:
+            from database import get_category_code
+            cat_code = get_category_code(session, category)
+            if not product_code.startswith(cat_code):
+                QMessageBox.warning(self, "Validation Error", f"Product Code for category '{category}' must start with category code '{cat_code}'.")
+                session.close()
+                return
+
+            # Check product_code uniqueness
+            existing_code = session.query(Product).filter_by(product_code=product_code).first()
+            if existing_code and (not self.product or existing_code.id != self.product.id):
+                QMessageBox.warning(self, "Validation Error", f"Product Code '{product_code}' is already assigned to another product.")
+                session.close()
+                return
+
             # Check IMEI uniqueness if provided
             if imei:
                 existing = session.query(Product).filter_by(imei=imei).first()
@@ -316,6 +381,7 @@ class ProductDialog(QDialog):
             if self.product:
                 # Update
                 prod = session.query(Product).get(self.product.id)
+                prod.product_code = product_code
                 prod.name = name
                 prod.category = category
                 prod.brand = brand
@@ -328,6 +394,7 @@ class ProductDialog(QDialog):
             else:
                 # Add
                 new_prod = Product(
+                    product_code=product_code,
                     name=name, category=category, brand=brand, model=model, imei=imei,
                     purchase_price=purchase_price, selling_price=selling_price, stock_qty=stock_qty,
                     low_stock_limit=low_stock_limit
@@ -383,9 +450,9 @@ class ProductsView(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Product Name", "Category", "Brand", "Model", "IMEI Number", 
+            "ID", "Product Code", "Product Name", "Category", "Brand", "Model", "IMEI Number", 
             "Purchase Price", "Selling Price", "Stock Qty", "Low Limit"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -409,11 +476,11 @@ class ProductsView(QWidget):
         finally:
             session.close()
 
-        self.table.setColumnHidden(5, not show_imei)
+        self.table.setColumnHidden(6, not show_imei)
         if show_imei:
-            self.search_input.setPlaceholderText("Search products by name, brand, model or IMEI...")
+            self.search_input.setPlaceholderText("Search products by code, name, brand, model or IMEI...")
         else:
-            self.search_input.setPlaceholderText("Search products by name, brand, or model...")
+            self.search_input.setPlaceholderText("Search products by code, name, brand, or model...")
 
         search_txt = self.search_input.text().strip()
         session = Session()
@@ -422,6 +489,7 @@ class ProductsView(QWidget):
             if search_txt:
                 if show_imei:
                     query = query.filter(
+                        Product.product_code.like(f"%{search_txt}%") |
                         Product.name.like(f"%{search_txt}%") |
                         Product.brand.like(f"%{search_txt}%") |
                         Product.model.like(f"%{search_txt}%") |
@@ -429,6 +497,7 @@ class ProductsView(QWidget):
                     )
                 else:
                     query = query.filter(
+                        Product.product_code.like(f"%{search_txt}%") |
                         Product.name.like(f"%{search_txt}%") |
                         Product.brand.like(f"%{search_txt}%") |
                         Product.model.like(f"%{search_txt}%")
@@ -438,22 +507,23 @@ class ProductsView(QWidget):
             self.table.setRowCount(len(products))
             for i, p in enumerate(products):
                 self.table.setItem(i, 0, QTableWidgetItem(str(p.id)))
-                self.table.setItem(i, 1, QTableWidgetItem(p.name))
-                self.table.setItem(i, 2, QTableWidgetItem(p.category or "Phones"))
-                self.table.setItem(i, 3, QTableWidgetItem(p.brand))
-                self.table.setItem(i, 4, QTableWidgetItem(p.model))
-                self.table.setItem(i, 5, QTableWidgetItem(p.imei or "-"))
-                self.table.setItem(i, 6, QTableWidgetItem(f"₹{p.purchase_price:,.2f}"))
-                self.table.setItem(i, 7, QTableWidgetItem(f"₹{p.selling_price:,.2f}"))
+                self.table.setItem(i, 1, QTableWidgetItem(p.product_code or "-"))
+                self.table.setItem(i, 2, QTableWidgetItem(p.name))
+                self.table.setItem(i, 3, QTableWidgetItem(p.category or "Phones"))
+                self.table.setItem(i, 4, QTableWidgetItem(p.brand))
+                self.table.setItem(i, 5, QTableWidgetItem(p.model))
+                self.table.setItem(i, 6, QTableWidgetItem(p.imei or "-"))
+                self.table.setItem(i, 7, QTableWidgetItem(f"₹{p.purchase_price:,.2f}"))
+                self.table.setItem(i, 8, QTableWidgetItem(f"₹{p.selling_price:,.2f}"))
                 
                 stock_item = QTableWidgetItem(str(p.stock_qty))
                 if p.stock_qty <= 0:
                     stock_item.setForeground(Qt.red)
                 elif p.stock_qty <= p.low_stock_limit:
                     stock_item.setForeground(Qt.yellow)
-                self.table.setItem(i, 8, stock_item)
+                self.table.setItem(i, 9, stock_item)
                 
-                self.table.setItem(i, 9, QTableWidgetItem(str(p.low_stock_limit)))
+                self.table.setItem(i, 10, QTableWidgetItem(str(p.low_stock_limit)))
                 
         except Exception as e:
             print(f"Error loading products: {e}")

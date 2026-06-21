@@ -4,12 +4,13 @@ import pandas as pd
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QPushButton, QCheckBox, 
                              QMessageBox, QFileDialog, QTabWidget, QFrame, QFormLayout,
-                             QComboBox, QDateEdit)
+                             QComboBox, QDateEdit, QDoubleSpinBox, QDialog, QGridLayout,
+                             QDialogButtonBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from database import Session
 from sqlalchemy.orm import joinedload
-from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
+from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, PurchaseItem, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
 
 class ReportsView(QWidget):
     def __init__(self, parent=None):
@@ -28,10 +29,10 @@ class ReportsView(QWidget):
         self.setup_ledgers_tab()
         self.tabs.addTab(self.ledgers_tab, "Cash & Bank Ledgers")
 
-        # Tab 2: Profit & Loss
+        # Tab 2: Inventory Profitability Report
         self.pl_tab = QWidget()
-        self.setup_pl_tab()
-        self.tabs.addTab(self.pl_tab, "Profit & Loss Statement")
+        self.setup_inventory_profit_tab()
+        self.tabs.addTab(self.pl_tab, "Inventory Profitability")
 
         # Tab 3: Exports
         self.exports_tab = QWidget()
@@ -93,91 +94,252 @@ class ReportsView(QWidget):
 
         layout.addWidget(bank_frame)
 
-    def setup_pl_tab(self):
+    def setup_inventory_profit_tab(self):
+        from PySide6.QtWidgets import QGridLayout
         layout = QVBoxLayout(self.pl_tab)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
 
-        # Date filter controls frame/panel
+        # 1. Filters panel
         filter_frame = QFrame()
         filter_frame.setProperty("class", "CardFrame")
-        filter_frame.setMaximumWidth(600)
-        filter_layout = QHBoxLayout(filter_frame)
-        filter_layout.setContentsMargins(15, 10, 15, 10)
+        filter_layout = QVBoxLayout(filter_frame)
+        filter_layout.setContentsMargins(15, 15, 15, 15)
         filter_layout.setSpacing(10)
 
-        filter_layout.addWidget(QLabel("Date Filter:"))
+        filter_title = QLabel("<b>Report Search Filters</b>")
+        filter_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #6366f1;")
+        filter_layout.addWidget(filter_title)
+
+        filters_grid = QHBoxLayout()
+        filters_grid.setSpacing(10)
+
+        # Date filter combo
         self.pl_date_filter_combo = QComboBox()
         self.pl_date_filter_combo.addItems(["All Time", "This Month", "This Year", "Custom Range"])
         self.pl_date_filter_combo.currentIndexChanged.connect(self.on_pl_date_filter_changed)
-        filter_layout.addWidget(self.pl_date_filter_combo, 2)
-
-        self.pl_start_label = QLabel("Start Date:")
+        
+        # Custom dates
         self.pl_start_date = QDateEdit()
         self.pl_start_date.setCalendarPopup(True)
         self.pl_start_date.setDisplayFormat("yyyy-MM-dd")
-        self.pl_start_date.setDate(datetime.date.today())
+        self.pl_start_date.setDate(datetime.date.today().replace(day=1))
         self.pl_start_date.dateChanged.connect(self.on_pl_custom_date_changed)
-        filter_layout.addWidget(self.pl_start_label)
-        filter_layout.addWidget(self.pl_start_date, 1.5)
-
-        self.pl_end_label = QLabel("End Date:")
+        
         self.pl_end_date = QDateEdit()
         self.pl_end_date.setCalendarPopup(True)
         self.pl_end_date.setDisplayFormat("yyyy-MM-dd")
         self.pl_end_date.setDate(datetime.date.today())
         self.pl_end_date.dateChanged.connect(self.on_pl_custom_date_changed)
-        filter_layout.addWidget(self.pl_end_label)
-        filter_layout.addWidget(self.pl_end_date, 1.5)
 
-        # Hide start/end date pickers by default
+        self.pl_start_label = QLabel("Start:")
+        self.pl_end_label = QLabel("End:")
+        
+        # Hide custom date pickers initially
         self.pl_start_label.hide()
         self.pl_start_date.hide()
         self.pl_end_label.hide()
         self.pl_end_date.hide()
 
-        layout.addWidget(filter_frame, 0, Qt.AlignCenter)
+        # Category
+        self.filter_category = QComboBox()
+        self.filter_category.currentIndexChanged.connect(self.refresh_data)
 
-        pl_frame = QFrame()
-        pl_frame.setProperty("class", "CardFrame")
-        pl_frame.setMaximumWidth(600)
+        # Product
+        self.filter_product = QComboBox()
+        self.filter_product.currentIndexChanged.connect(self.refresh_data)
+
+        # Supplier
+        self.filter_supplier = QComboBox()
+        self.filter_supplier.currentIndexChanged.connect(self.refresh_data)
+
+        # Brand
+        self.filter_brand = QComboBox()
+        self.filter_brand.currentIndexChanged.connect(self.refresh_data)
+
+        # Stock Status
+        self.filter_stock_status = QComboBox()
+        self.filter_stock_status.addItems(["All Items", "Sold Items Only", "Unsold Items Only"])
+        self.filter_stock_status.currentIndexChanged.connect(self.refresh_data)
+
+        # Interest Rate QDoubleSpinBox
+        self.filter_interest_rate = QDoubleSpinBox()
+        self.filter_interest_rate.setRange(0.0, 100.0)
+        self.filter_interest_rate.setValue(18.0)
+        self.filter_interest_rate.setSuffix(" %")
+        self.filter_interest_rate.setDecimals(2)
+        self.filter_interest_rate.valueChanged.connect(self.refresh_data)
+
+        # Layout filters
+        col1 = QVBoxLayout()
+        col1.addWidget(QLabel("Date Range:"))
+        col1.addWidget(self.pl_date_filter_combo)
+        filters_grid.addLayout(col1, 2)
+
+        self.custom_dates_layout = QHBoxLayout()
+        self.custom_dates_layout.setSpacing(5)
         
-        form_layout = QFormLayout(pl_frame)
-        form_layout.setContentsMargins(20, 20, 20, 20)
-        form_layout.setSpacing(15)
+        col_start = QVBoxLayout()
+        col_start.addWidget(self.pl_start_label)
+        col_start.addWidget(self.pl_start_date)
+        
+        col_end = QVBoxLayout()
+        col_end.addWidget(self.pl_end_label)
+        col_end.addWidget(self.pl_end_date)
+        
+        self.custom_dates_layout.addLayout(col_start)
+        self.custom_dates_layout.addLayout(col_end)
+        filters_grid.addLayout(self.custom_dates_layout, 2)
 
-        self.pl_title_lbl = QLabel("Income & Expense Statement (P&L)")
-        self.pl_title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 15px;")
-        form_layout.addRow(self.pl_title_lbl)
+        col2 = QVBoxLayout()
+        col2.addWidget(QLabel("Category:"))
+        col2.addWidget(self.filter_category)
+        filters_grid.addLayout(col2, 2)
 
-        # Revenue rows
-        self.sales_rev_lbl = QLabel("₹0.00")
-        self.service_rev_lbl = QLabel("₹0.00")
-        self.total_rev_lbl = QLabel("₹0.00")
-        self.total_rev_lbl.setStyleSheet("font-weight: bold; color: #6366f1;")
+        col3 = QVBoxLayout()
+        col3.addWidget(QLabel("Product:"))
+        col3.addWidget(self.filter_product)
+        filters_grid.addLayout(col3, 2)
 
-        # Expenses rows
-        self.cogs_lbl = QLabel("₹0.00")  # Cost of Goods Sold
-        self.parts_exp_lbl = QLabel("₹0.00")  # Spare parts expense
-        self.total_exp_lbl = QLabel("₹0.00")
-        self.total_exp_lbl.setStyleSheet("font-weight: bold; color: #ef4444;")
+        col4 = QVBoxLayout()
+        col4.addWidget(QLabel("Brand:"))
+        col4.addWidget(self.filter_brand)
+        filters_grid.addLayout(col4, 2)
 
-        # Net Profit
-        self.net_profit_lbl = QLabel("₹0.00")
-        self.net_profit_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #10b981;")
+        col5 = QVBoxLayout()
+        col5.addWidget(QLabel("Supplier:"))
+        col5.addWidget(self.filter_supplier)
+        filters_grid.addLayout(col5, 2)
 
-        form_layout.addRow("Sales Invoice Revenue (+):", self.sales_rev_lbl)
-        form_layout.addRow("Service Center Revenue (+):", self.service_rev_lbl)
-        form_layout.addRow("<b>Total Gross Revenue:</b>", self.total_rev_lbl)
-        form_layout.addRow(QLabel(""), QLabel("")) # Spacer row
-        form_layout.addRow("Cost of Inventory Sold (-):", self.cogs_lbl)
-        form_layout.addRow("Cost of Service Spares Used (-):", self.parts_exp_lbl)
-        form_layout.addRow("<b>Total Operating Costs:</b>", self.total_exp_lbl)
-        form_layout.addRow(QFrame()) # Line divider
-        form_layout.addRow("<b>NET PROFIT ESTIMATE (₹):</b>", self.net_profit_lbl)
+        col6 = QVBoxLayout()
+        col6.addWidget(QLabel("Stock Status:"))
+        col6.addWidget(self.filter_stock_status)
+        filters_grid.addLayout(col6, 2)
 
-        layout.addWidget(pl_frame, 0, Qt.AlignCenter)
-        layout.addStretch()
+        col7 = QVBoxLayout()
+        col7.addWidget(QLabel("Interest Rate (p.a.):"))
+        col7.addWidget(self.filter_interest_rate)
+        filters_grid.addLayout(col7, 1.5)
+
+        filter_layout.addLayout(filters_grid)
+        layout.addWidget(filter_frame)
+
+        # 2. Summary Dashboard & KPI Cards Panel
+        summary_panel = QHBoxLayout()
+        summary_panel.setSpacing(15)
+
+        # KPI grid frame
+        kpis_frame = QFrame()
+        kpis_frame.setProperty("class", "CardFrame")
+        kpis_grid = QGridLayout(kpis_frame)
+        kpis_grid.setContentsMargins(15, 15, 15, 15)
+        kpis_grid.setSpacing(12)
+
+        def make_kpi_widget(title_text, val_lbl, color_str="#ffffff"):
+            widget = QFrame()
+            widget.setStyleSheet(f"background-color: #1e1e38; border: 1px solid #2c2c54; border-radius: 8px; padding: 10px;")
+            w_layout = QVBoxLayout(widget)
+            w_layout.setContentsMargins(8, 8, 8, 8)
+            w_layout.setSpacing(4)
+            t_lbl = QLabel(title_text)
+            t_lbl.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: bold; text-transform: uppercase;")
+            val_lbl.setStyleSheet(f"color: {color_str}; font-size: 16px; font-weight: bold;")
+            w_layout.addWidget(t_lbl)
+            w_layout.addWidget(val_lbl)
+            return widget
+
+        self.kpi_purchase_val = QLabel("₹0.00")
+        self.kpi_sales_val = QLabel("₹0.00")
+        self.kpi_gross_profit = QLabel("₹0.00")
+        self.kpi_interest_cost = QLabel("₹0.00")
+        self.kpi_net_profit = QLabel("₹0.00")
+        self.kpi_avg_days = QLabel("0 Days")
+
+        kpis_grid.addWidget(make_kpi_widget("Total Purchase Value", self.kpi_purchase_val, "#ffffff"), 0, 0)
+        kpis_grid.addWidget(make_kpi_widget("Total Sales Value", self.kpi_sales_val, "#ffffff"), 0, 1)
+        kpis_grid.addWidget(make_kpi_widget("Total Gross Profit", self.kpi_gross_profit, "#10b981"), 0, 2)
+        kpis_grid.addWidget(make_kpi_widget("Total Interest Cost", self.kpi_interest_cost, "#ef4444"), 1, 0)
+        kpis_grid.addWidget(make_kpi_widget("Total Net Profit", self.kpi_net_profit, "#6366f1"), 1, 1)
+        kpis_grid.addWidget(make_kpi_widget("Average Days in Stock", self.kpi_avg_days, "#3b82f6"), 1, 2)
+
+        summary_panel.addWidget(kpis_frame, 2)
+
+        # Fast/Slow Moving Panel
+        moving_frame = QFrame()
+        moving_frame.setProperty("class", "CardFrame")
+        moving_layout = QHBoxLayout(moving_frame)
+        moving_layout.setContentsMargins(15, 15, 15, 15)
+        moving_layout.setSpacing(15)
+
+        fast_col = QVBoxLayout()
+        fast_title = QLabel("<b>Fast Moving (Top 3)</b>")
+        fast_title.setStyleSheet("color: #10b981; font-weight: bold; font-size: 11px;")
+        self.fast_moving_list = QLabel("No sales records.")
+        self.fast_moving_list.setStyleSheet("color: #e2e8f0; font-size: 11px; line-height: 1.4;")
+        self.fast_moving_list.setWordWrap(True)
+        fast_col.addWidget(fast_title)
+        fast_col.addWidget(self.fast_moving_list)
+        fast_col.addStretch()
+
+        slow_col = QVBoxLayout()
+        slow_title = QLabel("<b>Slow Moving (Top 3)</b>")
+        slow_title.setStyleSheet("color: #ef4444; font-weight: bold; font-size: 11px;")
+        self.slow_moving_list = QLabel("No stock records.")
+        self.slow_moving_list.setStyleSheet("color: #e2e8f0; font-size: 11px; line-height: 1.4;")
+        self.slow_moving_list.setWordWrap(True)
+        slow_col.addWidget(slow_title)
+        slow_col.addWidget(self.slow_moving_list)
+        slow_col.addStretch()
+
+        moving_layout.addLayout(fast_col, 1)
+        moving_layout.addLayout(slow_col, 1)
+
+        summary_panel.addWidget(moving_frame, 1)
+        layout.addLayout(summary_panel)
+
+        # 3. Detailed Data Table (PDF Style statement layout)
+        table_title = QLabel("<b>Detailed Inventory Holding & Profit Statement</b>")
+        table_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; margin-top: 5px;")
+        layout.addWidget(table_title)
+
+        self.profit_table = QTableWidget()
+        self.profit_table.setColumnCount(11)
+        self.profit_table.setHorizontalHeaderLabels([
+            "Product Code", "Product Name", "Purchase Date", "Sale Date", 
+            "Days in Stock", "Qty", "Pur. Price (₹)", "Sale Price (₹)", 
+            "Gross Profit (₹)", "Interest Cost (₹)", "Net Profit (₹)"
+        ])
+        self.profit_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.profit_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.profit_table.verticalHeader().setVisible(False)
+        self.profit_table.cellDoubleClicked.connect(self.on_table_cell_double_clicked)
+        layout.addWidget(self.profit_table)
+
+        # 4. Action bar for exporting
+        action_bar = QHBoxLayout()
+        action_bar.setSpacing(15)
+
+        self.btn_export_pdf = QPushButton("Export to PDF Report")
+        self.btn_export_pdf.setProperty("class", "btn-action-view")
+        self.btn_export_pdf.setStyleSheet("font-size: 13px; padding: 8px 16px;")
+        self.btn_export_pdf.clicked.connect(self.export_profitability_pdf)
+
+        self.btn_export_excel = QPushButton("Export to Excel Sheet")
+        self.btn_export_excel.setProperty("class", "btn-success")
+        self.btn_export_excel.setStyleSheet("font-size: 13px; padding: 8px 16px;")
+        self.btn_export_excel.clicked.connect(self.export_profitability_excel)
+
+        self.btn_print_preview = QPushButton("Print Preview Report")
+        self.btn_print_preview.setProperty("class", "btn-action-print")
+        self.btn_print_preview.setStyleSheet("font-size: 13px; padding: 8px 16px;")
+        self.btn_print_preview.clicked.connect(self.export_profitability_pdf)
+
+        action_bar.addWidget(self.btn_export_pdf)
+        action_bar.addWidget(self.btn_export_excel)
+        action_bar.addWidget(self.btn_print_preview)
+        action_bar.addStretch()
+
+        layout.addLayout(action_bar)
 
     def on_pl_date_filter_changed(self, index):
         filter_text = self.pl_date_filter_combo.currentText()
@@ -196,6 +358,173 @@ class ReportsView(QWidget):
 
     def on_pl_custom_date_changed(self, qdate):
         self.refresh_data()
+
+    def on_table_cell_double_clicked(self, row, column):
+        item = self.profit_table.item(row, 0)
+        if item:
+            product_id = item.data(Qt.UserRole)
+            if product_id:
+                rate = self.filter_interest_rate.value()
+                dlg = ProductDrillDownDialog(product_id, rate, self)
+                dlg.exec()
+
+    def populate_filter_dropdowns(self):
+        session = Session()
+        try:
+            # Save current selections
+            curr_cat = self.filter_category.currentText()
+            curr_prod = self.filter_product.currentText()
+            curr_supp = self.filter_supplier.currentText()
+            curr_brand = self.filter_brand.currentText()
+            
+            # Block signals
+            self.filter_category.blockSignals(True)
+            self.filter_product.blockSignals(True)
+            self.filter_supplier.blockSignals(True)
+            self.filter_brand.blockSignals(True)
+            
+            # Populate Categories
+            self.filter_category.clear()
+            self.filter_category.addItem("-- All Categories --")
+            from models import Category
+            for c in session.query(Category).all():
+                self.filter_category.addItem(c.name)
+                
+            # Populate Products
+            self.filter_product.clear()
+            self.filter_product.addItem("-- All Products --")
+            for p in session.query(Product).order_by(Product.name.asc()).all():
+                self.filter_product.addItem(p.name)
+                
+            # Populate Suppliers
+            self.filter_supplier.clear()
+            self.filter_supplier.addItem("-- All Suppliers --")
+            for s in session.query(Supplier).order_by(Supplier.name.asc()).all():
+                self.filter_supplier.addItem(s.name)
+                
+            # Populate Brands
+            self.filter_brand.clear()
+            self.filter_brand.addItem("-- All Brands --")
+            brands = session.query(Product.brand).distinct().all()
+            for b in brands:
+                if b[0]:
+                    self.filter_brand.addItem(b[0])
+                    
+            # Restore selections if valid
+            idx = self.filter_category.findText(curr_cat)
+            if idx >= 0: self.filter_category.setCurrentIndex(idx)
+            
+            idx = self.filter_product.findText(curr_prod)
+            if idx >= 0: self.filter_product.setCurrentIndex(idx)
+            
+            idx = self.filter_supplier.findText(curr_supp)
+            if idx >= 0: self.filter_supplier.setCurrentIndex(idx)
+            
+            idx = self.filter_brand.findText(curr_brand)
+            if idx >= 0: self.filter_brand.setCurrentIndex(idx)
+            
+        except Exception as e:
+            print(f"Error populating filters: {e}")
+        finally:
+            self.filter_category.blockSignals(False)
+            self.filter_product.blockSignals(False)
+            self.filter_supplier.blockSignals(False)
+            self.filter_brand.blockSignals(False)
+            session.close()
+
+    def export_profitability_pdf(self):
+        if not hasattr(self, 'profit_rows') or not self.profit_rows:
+            QMessageBox.warning(self, "No Data", "There is no data to export.")
+            return
+            
+        session = Session()
+        try:
+            from database import Setting
+            s_name = session.query(Setting).filter_by(key='shop_name').first()
+            s_contact = session.query(Setting).filter_by(key='shop_contact').first()
+            s_address = session.query(Setting).filter_by(key='shop_address').first()
+            s_gst = session.query(Setting).filter_by(key='shop_gst').first()
+            
+            shop_name = s_name.value if s_name else "SUN COMPUTERS,"
+            shop_contact = s_contact.value if s_contact else "N/A"
+            shop_address = s_address.value if s_address else "N/A"
+            shop_gst = s_gst.value if s_gst else "N/A"
+            
+            report_data = {
+                "shop_name": shop_name,
+                "shop_contact": shop_contact,
+                "shop_address": shop_address,
+                "shop_gst": shop_gst,
+                "date": datetime.date.today().strftime("%Y-%m-%d"),
+                "date_range": self.pl_date_range_str,
+                "total_purchase_value": self.tot_purchase_val,
+                "total_sales_value": self.tot_sales_val,
+                "total_gross_profit": self.tot_gross_profit,
+                "total_interest_cost": self.tot_interest_cost,
+                "total_net_profit": self.tot_net_profit,
+                "avg_days": self.avg_days,
+                "items": self.profit_rows
+            }
+            
+            os.makedirs("statements", exist_ok=True)
+            path = os.path.abspath("statements/inventory_profit_report.pdf")
+            from utils.pdf_generator import generate_inventory_profit_pdf
+            generate_inventory_profit_pdf(report_data, path)
+            
+            QMessageBox.information(self, "Success", f"Inventory Profitability Report PDF generated successfully at:\n{path}")
+            try:
+                os.startfile(path)
+            except Exception as e:
+                print(f"Could not open PDF: {e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate PDF: {e}")
+        finally:
+            session.close()
+
+    def export_profitability_excel(self):
+        if not hasattr(self, 'profit_rows') or not self.profit_rows:
+            QMessageBox.warning(self, "No Data", "There is no data to export.")
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Excel Report", "", "Excel Files (*.xlsx)")
+        if file_path:
+            try:
+                data = []
+                for row in self.profit_rows:
+                    pdate = row["purchase_date"].strftime("%Y-%m-%d") if isinstance(row["purchase_date"], datetime.date) else str(row["purchase_date"])
+                    sdate = row["sale_date"].strftime("%Y-%m-%d") if isinstance(row["sale_date"], datetime.date) else str(row["sale_date"])
+                    data.append({
+                        "Product Code": row["product_code"] or "N/A",
+                        "Product Name": row["product_name"],
+                        "Purchase Date": pdate,
+                        "Sale Date": sdate,
+                        "Days in Stock": row["days"],
+                        "Qty": row["qty"],
+                        "Purchase Price (INR)": row["purchase_price"],
+                        "Sale Price (INR)": row["sale_price"],
+                        "Gross Profit (INR)": row["gross_profit"],
+                        "Interest Cost (INR)": row["interest_cost"],
+                        "Net Profit (INR)": row["net_profit"]
+                    })
+                
+                summary_data = {
+                    "Metric": [
+                        "Total Purchase Value", "Total Sales Value", "Total Gross Profit", 
+                        "Total Interest Cost", "Total Net Profit", "Average Days in Stock"
+                    ],
+                    "Value": [
+                        self.tot_purchase_val, self.tot_sales_val, self.tot_gross_profit, 
+                        self.tot_interest_cost, self.tot_net_profit, self.avg_days
+                    ]
+                }
+                
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    pd.DataFrame(data).to_excel(writer, sheet_name="Detailed Profit Analysis", index=False)
+                    pd.DataFrame(summary_data).to_excel(writer, sheet_name="Summary Stats", index=False)
+                
+                QMessageBox.information(self, "Success", "Excel report exported successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export Excel: {e}")
 
     def setup_exports_tab(self):
         layout = QVBoxLayout(self.exports_tab)
@@ -281,12 +610,23 @@ class ReportsView(QWidget):
             total_bank_balance = sum(b.balance for b in banks)
             self.bank_balance_lbl.setText(f"Total Bank Balances: ₹{total_bank_balance:,.2f}")
 
-            # 3. Populate P&L Statement
+            # 3. Populate Profitability Report
             if hasattr(self, 'pl_date_filter_combo'):
-                # Determine date range for P&L Statement
+                # 3.1 Populate filter dropdowns if they are empty
+                if self.filter_category.count() <= 1:
+                    self.populate_filter_dropdowns()
+                
+                # Determine filters
+                category_filter = self.filter_category.currentText()
+                product_filter = self.filter_product.currentText()
+                supplier_filter = self.filter_supplier.currentText()
+                brand_filter = self.filter_brand.currentText()
+                stock_status_filter = self.filter_stock_status.currentText()
+                interest_rate = self.filter_interest_rate.value()
+
+                # Determine date range
                 start_date = None
                 end_date = None
-                
                 filter_text = self.pl_date_filter_combo.currentText()
                 today = datetime.date.today()
                 
@@ -304,114 +644,298 @@ class ReportsView(QWidget):
                     qend = self.pl_end_date.date()
                     end_date = datetime.date(qend.year(), qend.month(), qend.day())
 
-                # Update card title dynamically
-                title_text = "Income & Expense Statement (P&L)"
+                # Set date range text for report
                 if filter_text == "All Time":
-                    title_text += " - All Time"
-                elif filter_text == "This Month":
-                    title_text += f" - {start_date.strftime('%B %Y')}"
-                elif filter_text == "This Year":
-                    title_text += f" - Year {today.year}"
+                    self.pl_date_range_str = "All Time"
                 elif filter_text == "Custom Range":
-                    title_text += f" ({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})"
-                
-                self.pl_title_lbl.setText(title_text)
+                    self.pl_date_range_str = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+                else:
+                    self.pl_date_range_str = filter_text
 
-                # Query database with date filters
-                sales_query = session.query(func_sum(SalesMaster.total_amount))
-                service_query = session.query(func_sum(ServiceJob.total_amount))
-                sales_item_query = session.query(SalesItem).join(SalesMaster)
-                service_part_query = session.query(ServicePart).join(ServiceJob).options(joinedload(ServicePart.product))
+                # Build products list based on category/product/brand filter
+                prod_query = session.query(Product)
+                if category_filter != "-- All Categories --":
+                    prod_query = prod_query.filter(Product.category == category_filter)
+                if product_filter != "-- All Products --":
+                    prod_query = prod_query.filter(Product.name == product_filter)
+                if brand_filter != "-- All Brands --":
+                    prod_query = prod_query.filter(Product.brand == brand_filter)
+                products = prod_query.all()
 
-                sr_query = session.query(func_sum(SalesReturnMaster.total_amount))
-                sr_items_query = session.query(SalesReturnItem).join(SalesReturnMaster)
+                all_analysis_rows = []
+                for p in products:
+                    # Fetch purchases
+                    purchases = session.query(
+                        PurchaseItem.qty,
+                        PurchaseItem.rate,
+                        PurchaseMaster.date,
+                        Supplier.name,
+                        PurchaseMaster.id.label('purchase_id')
+                    ).select_from(PurchaseItem).join(PurchaseMaster).join(Supplier).filter(PurchaseItem.product_id == p.id).order_by(PurchaseMaster.date.asc(), PurchaseItem.id.asc()).all()
 
-                if start_date:
-                    sales_query = sales_query.filter(SalesMaster.date >= start_date)
-                    service_query = service_query.filter(ServiceJob.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
-                    sales_item_query = sales_item_query.filter(SalesMaster.date >= start_date)
-                    service_part_query = service_part_query.filter(ServiceJob.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
-                    sr_query = sr_query.filter(SalesReturnMaster.date >= start_date)
-                    sr_items_query = sr_items_query.filter(SalesReturnMaster.date >= start_date)
+                    purchase_returns = session.query(
+                        PurchaseReturnItem.qty,
+                        PurchaseReturnMaster.purchase_id
+                    ).join(PurchaseReturnMaster).filter(PurchaseReturnItem.product_id == p.id).all()
 
-                if end_date:
-                    sales_query = sales_query.filter(SalesMaster.date <= end_date)
-                    service_query = service_query.filter(ServiceJob.created_at <= datetime.datetime.combine(end_date, datetime.time.max))
-                    sales_item_query = sales_item_query.filter(SalesMaster.date <= end_date)
-                    service_part_query = service_part_query.filter(ServiceJob.created_at <= datetime.datetime.combine(end_date, datetime.time.max))
-                    sr_query = sr_query.filter(SalesReturnMaster.date <= end_date)
-                    sr_items_query = sr_items_query.filter(SalesReturnMaster.date <= end_date)
+                    pur_ret_map = {}
+                    for pr in purchase_returns:
+                        pur_ret_map[pr.purchase_id] = pur_ret_map.get(pr.purchase_id, 0) + pr.qty
 
-                sales_ret = sr_query.scalar() or 0.0
-                sales_rev = (sales_query.scalar() or 0.0) - sales_ret
-                service_rev = service_query.scalar() or 0.0
-                total_rev = sales_rev + service_rev
+                    pur_lots = []
+                    for pur in purchases:
+                        ret_qty = pur_ret_map.get(pur.purchase_id, 0)
+                        available_qty = pur.qty
+                        if ret_qty > 0:
+                            deducted = min(available_qty, ret_qty)
+                            available_qty -= deducted
+                            pur_ret_map[pur.purchase_id] -= deducted
+                        if available_qty > 0:
+                            pur_lots.append({
+                                "qty": available_qty,
+                                "price": pur.rate,
+                                "date": pur.date,
+                                "supplier": pur.name,
+                                "purchase_id": pur.purchase_id
+                            })
 
-                # Calculate Cost of Goods Sold (cogs)
-                cogs = 0.0
-                sales_items = sales_item_query.all()
-                for si in sales_items:
-                    if si.product:
-                        cogs += si.qty * si.product.purchase_price
+                    # Fetch sales
+                    sales = session.query(
+                        SalesItem.qty,
+                        SalesItem.rate,
+                        SalesItem.discount,
+                        SalesMaster.date,
+                        SalesMaster.id.label('sales_id')
+                    ).select_from(SalesItem).join(SalesMaster).filter(SalesItem.product_id == p.id).order_by(SalesMaster.date.asc(), SalesItem.id.asc()).all()
 
-                # Subtract COGS of returned products
-                returned_cogs = 0.0
-                for sri in sr_items_query.all():
-                    if sri.product:
-                        returned_cogs += sri.qty * sri.product.purchase_price
-                cogs = max(0.0, cogs - returned_cogs)
+                    sales_returns = session.query(
+                        SalesReturnItem.qty,
+                        SalesReturnMaster.sales_id
+                    ).join(SalesReturnMaster).filter(SalesReturnItem.product_id == p.id).all()
 
-                # Service Spare Parts Expense
-                parts_exp = 0.0
-                service_parts = service_part_query.all()
-                for sp in service_parts:
-                    if sp.product_id and sp.product:
-                        parts_exp += sp.qty * sp.product.purchase_price
+                    sales_ret_map = {}
+                    for sr in sales_returns:
+                        sales_ret_map[sr.sales_id] = sales_ret_map.get(sr.sales_id, 0) + sr.qty
+
+                    sale_lots = []
+                    for s in sales:
+                        ret_qty = sales_ret_map.get(s.sales_id, 0)
+                        available_qty = s.qty
+                        if ret_qty > 0:
+                            deducted = min(available_qty, ret_qty)
+                            available_qty -= deducted
+                            sales_ret_map[s.sales_id] -= deducted
+                        if available_qty > 0:
+                            net_rate = s.rate - (s.discount / s.qty) if s.qty > 0 else s.rate
+                            sale_lots.append({
+                                "qty": available_qty,
+                                "price": net_rate,
+                                "date": s.date,
+                                "sales_id": s.sales_id
+                            })
+
+                    # FIFO Matching
+                    matched_rows = []
+                    pur_idx = 0
+                    sale_idx = 0
+                    for lot in pur_lots:
+                        lot["remaining"] = lot["qty"]
+                    for slot in sale_lots:
+                        slot["remaining"] = slot["qty"]
+
+                    while sale_idx < len(sale_lots):
+                        slot = sale_lots[sale_idx]
+                        if slot["remaining"] <= 0:
+                            sale_idx += 1
+                            continue
+                        if pur_idx >= len(pur_lots):
+                            qty_to_match = slot["remaining"]
+                            matched_rows.append({
+                                "product_code": p.product_code, "product_name": p.name, "product_id": p.id,
+                                "brand": p.brand, "category": p.category, "purchase_date": slot["date"],
+                                "sale_date": slot["date"], "days": 0, "qty": qty_to_match,
+                                "purchase_price": p.purchase_price, "sale_price": slot["price"],
+                                "supplier": "N/A", "status": "sold"
+                            })
+                            slot["remaining"] = 0
+                            sale_idx += 1
+                            continue
+
+                        lot = pur_lots[pur_idx]
+                        if lot["remaining"] <= 0:
+                            pur_idx += 1
+                            continue
+
+                        qty_to_match = min(lot["remaining"], slot["remaining"])
+                        days = (slot["date"] - lot["date"]).days
+                        matched_rows.append({
+                            "product_code": p.product_code, "product_name": p.name, "product_id": p.id,
+                            "brand": p.brand, "category": p.category, "purchase_date": lot["date"],
+                            "sale_date": slot["date"], "days": max(0, days), "qty": qty_to_match,
+                            "purchase_price": lot["price"], "sale_price": slot["price"],
+                            "supplier": lot["supplier"], "status": "sold"
+                        })
+                        lot["remaining"] -= qty_to_match
+                        slot["remaining"] -= qty_to_match
+
+                    for lot in pur_lots:
+                        if lot["remaining"] > 0:
+                            days = (today - lot["date"]).days
+                            matched_rows.append({
+                                "product_code": p.product_code, "product_name": p.name, "product_id": p.id,
+                                "brand": p.brand, "category": p.category, "purchase_date": lot["date"],
+                                "sale_date": "Unsold Inventory", "days": max(0, days), "qty": lot["remaining"],
+                                "purchase_price": lot["price"], "sale_price": 0.0,
+                                "supplier": lot["supplier"], "status": "unsold"
+                            })
+
+                    # Perform cost/profit calculations
+                    for row in matched_rows:
+                        q = row["qty"]
+                        pur_price = row["purchase_price"]
+                        sale_price = row["sale_price"]
+                        d = row["days"]
+                        
+                        if row["status"] == "sold":
+                            gp = (sale_price - pur_price) * q
+                        else:
+                            gp = 0.0
+                            
+                        interest = (pur_price * interest_rate * d) / 36500.0 * q
+                        net = gp - interest
+                        
+                        row["gross_profit"] = gp
+                        row["interest_cost"] = interest
+                        row["net_profit"] = net
+                        
+                        all_analysis_rows.append(row)
+
+                # Filter the rows based on remaining dropdown and date range filters
+                self.profit_rows = []
+                for row in all_analysis_rows:
+                    if supplier_filter != "-- All Suppliers --" and row["supplier"] != supplier_filter:
+                        continue
+                    if stock_status_filter == "Sold Items Only" and row["status"] != "sold":
+                        continue
+                    if stock_status_filter == "Unsold Items Only" and row["status"] != "unsold":
+                        continue
+
+                    # Date filters
+                    if row["status"] == "sold":
+                        sdate = row["sale_date"]
+                        if start_date and sdate < start_date:
+                            continue
+                        if end_date and sdate > end_date:
+                            continue
+                    else: # unsold
+                        pdate = row["purchase_date"]
+                        if start_date and pdate < start_date:
+                            continue
+                        if end_date and pdate > end_date:
+                            continue
+
+                    self.profit_rows.append(row)
+
+                # Sort by purchase date descending to show latest purchases first
+                self.profit_rows.sort(key=lambda x: x["purchase_date"], reverse=True)
+
+                # Compute Summary KPIs
+                self.tot_purchase_val = 0.0
+                self.tot_sales_val = 0.0
+                self.tot_gross_profit = 0.0
+                self.tot_interest_cost = 0.0
+                self.tot_net_profit = 0.0
+                tot_days = 0
+                tot_qty = 0
+
+                for r in self.profit_rows:
+                    q = r["qty"]
+                    self.tot_purchase_val += r["purchase_price"] * q
+                    self.tot_sales_val += r["sale_price"] * q
+                    self.tot_gross_profit += r["gross_profit"]
+                    self.tot_interest_cost += r["interest_cost"]
+                    self.tot_net_profit += r["net_profit"]
+                    tot_days += r["days"] * q
+                    tot_qty += q
+
+                self.avg_days = tot_days / tot_qty if tot_qty > 0 else 0.0
+
+                # Set KPI labels text
+                self.kpi_purchase_val.setText(f"₹{self.tot_purchase_val:,.2f}")
+                self.kpi_sales_val.setText(f"₹{self.tot_sales_val:,.2f}")
+                self.kpi_gross_profit.setText(f"₹{self.tot_gross_profit:,.2f}")
+                self.kpi_interest_cost.setText(f"₹{self.tot_interest_cost:,.2f}")
+                self.kpi_net_profit.setText(f"₹{self.tot_net_profit:,.2f}")
+                self.kpi_avg_days.setText(f"{self.avg_days:.1f} Days")
+
+                # Compute Fast & Slow Moving top 3
+                prod_stats = {}
+                for r in self.profit_rows:
+                    pid = r["product_id"]
+                    if pid not in prod_stats:
+                        prod_stats[pid] = {
+                            "name": r["product_name"], "code": r["product_code"],
+                            "sold_qty": 0, "sold_days": 0.0, "total_qty": 0, "total_days": 0.0
+                        }
+                    q = r["qty"]
+                    d = r["days"]
+                    prod_stats[pid]["total_qty"] += q
+                    prod_stats[pid]["total_days"] += d * q
+                    if r["status"] == "sold":
+                        prod_stats[pid]["sold_qty"] += q
+                        prod_stats[pid]["sold_days"] += d * q
+
+                fast_list = []
+                slow_list = []
+                for stats in prod_stats.values():
+                    name_desc = f"{stats['name']} [{stats['code']}]"
+                    if stats["sold_qty"] > 0:
+                        avg_sold = stats["sold_days"] / stats["sold_qty"]
+                        fast_list.append((name_desc, avg_sold))
+                    
+                    avg_total = stats["total_days"] / stats["total_qty"] if stats["total_qty"] > 0 else 0.0
+                    slow_list.append((name_desc, avg_total))
+
+                fast_list.sort(key=lambda x: x[1]) # shortest first
+                slow_list.sort(key=lambda x: x[1], reverse=True) # longest first
+
+                fast_text = "\n".join([f"• {x[0]} ({x[1]:.1f} d)" for x in fast_list[:3]]) if fast_list else "No sales records."
+                slow_text = "\n".join([f"• {x[0]} ({x[1]:.1f} d)" for x in slow_list[:3]]) if slow_list else "No stock records."
+
+                self.fast_moving_list.setText(fast_text)
+                self.slow_moving_list.setText(slow_text)
+
+                # Populate main Detailed Table
+                self.profit_table.setRowCount(len(self.profit_rows))
+                for i, r in enumerate(self.profit_rows):
+                    pdate_str = r["purchase_date"].strftime("%Y-%m-%d") if isinstance(r["purchase_date"], datetime.date) else str(r["purchase_date"])
+                    sdate_str = r["sale_date"].strftime("%Y-%m-%d") if isinstance(r["sale_date"], datetime.date) else str(r["sale_date"])
+                    
+                    code_item = QTableWidgetItem(r["product_code"] or "N/A")
+                    code_item.setData(Qt.UserRole, r["product_id"])
+                    
+                    self.profit_table.setItem(i, 0, code_item)
+                    self.profit_table.setItem(i, 1, QTableWidgetItem(r["product_name"]))
+                    self.profit_table.setItem(i, 2, QTableWidgetItem(pdate_str))
+                    
+                    sdate_item = QTableWidgetItem(sdate_str)
+                    if r["status"] == "unsold":
+                        sdate_item.setForeground(QColor("#ef4444"))
+                    self.profit_table.setItem(i, 3, sdate_item)
+                    
+                    self.profit_table.setItem(i, 4, QTableWidgetItem(str(r["days"])))
+                    self.profit_table.setItem(i, 5, QTableWidgetItem(str(r["qty"])))
+                    self.profit_table.setItem(i, 6, QTableWidgetItem(f"{r['purchase_price']:.2f}"))
+                    self.profit_table.setItem(i, 7, QTableWidgetItem(f"{r['sale_price']:.2f}"))
+                    self.profit_table.setItem(i, 8, QTableWidgetItem(f"{r['gross_profit']:.2f}"))
+                    self.profit_table.setItem(i, 9, QTableWidgetItem(f"{r['interest_cost']:.2f}"))
+                    
+                    net_item = QTableWidgetItem(f"{r['net_profit']:.2f}")
+                    if r["net_profit"] < 0:
+                        net_item.setForeground(QColor("#ef4444"))
                     else:
-                        parts_exp += sp.qty * sp.cost
-                total_exp = cogs + parts_exp
-            else:
-                sales_ret = session.query(func_sum(SalesReturnMaster.total_amount)).scalar() or 0.0
-                sales_rev = (session.query(func_sum(SalesMaster.total_amount)).scalar() or 0.0) - sales_ret
-                service_rev = session.query(func_sum(ServiceJob.total_amount)).scalar() or 0.0
-                total_rev = sales_rev + service_rev
-
-                cogs = 0.0
-                sales_items = session.query(SalesItem).all()
-                for si in sales_items:
-                    if si.product:
-                        cogs += si.qty * si.product.purchase_price
-
-                returned_cogs = 0.0
-                for sri in session.query(SalesReturnItem).all():
-                    if sri.product:
-                        returned_cogs += sri.qty * sri.product.purchase_price
-                cogs = max(0.0, cogs - returned_cogs)
-
-                parts_exp = 0.0
-                service_parts = session.query(ServicePart).options(joinedload(ServicePart.product)).all()
-                for sp in service_parts:
-                    if sp.product_id and sp.product:
-                        parts_exp += sp.qty * sp.product.purchase_price
-                    else:
-                        parts_exp += sp.qty * sp.cost
-                total_exp = cogs + parts_exp
-
-            net_profit = total_rev - total_exp
-
-            self.sales_rev_lbl.setText(f"₹{sales_rev:,.2f}")
-            self.service_rev_lbl.setText(f"₹{service_rev:,.2f}")
-            self.total_rev_lbl.setText(f"₹{total_rev:,.2f}")
-            
-            self.cogs_lbl.setText(f"₹{cogs:,.2f}")
-            self.parts_exp_lbl.setText(f"₹{parts_exp:,.2f}")
-            self.total_exp_lbl.setText(f"₹{total_exp:,.2f}")
-            
-            self.net_profit_lbl.setText(f"₹{net_profit:,.2f}")
-            if net_profit >= 0:
-                self.net_profit_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #10b981;")
-            else:
-                self.net_profit_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #ef4444;")
+                        net_item.setForeground(QColor("#10b981"))
+                    self.profit_table.setItem(i, 10, net_item)
 
             # 4. Populate Customer Receivables List
             customers = session.query(Customer).filter(Customer.outstanding_balance != 0).all()
@@ -462,6 +986,7 @@ class ReportsView(QWidget):
                     prods = session.query(Product).all()
                     data = [{
                         "Product ID": p.id,
+                        "Product Code": p.product_code or "N/A",
                         "Product Name": p.name,
                         "Brand": p.brand,
                         "Model": p.model,
@@ -1168,3 +1693,341 @@ class ReportsView(QWidget):
 def func_sum(column):
     from sqlalchemy import func
     return func.sum(column)
+
+
+class ProductDrillDownDialog(QDialog):
+    def __init__(self, product_id, interest_rate, parent=None):
+        super().__init__(parent)
+        self.product_id = product_id
+        self.interest_rate = interest_rate
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Product Profitability & Investment Drill-Down")
+        self.resize(950, 650)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #12121e;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #ffffff;
+            }
+            QTableWidget {
+                background-color: #1e1e2f;
+                gridline-color: #2b2b40;
+                color: #ffffff;
+                border: 1px solid #2b2b40;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QHeaderView::section {
+                background-color: #2b2b40;
+                color: #ffffff;
+                padding: 6px;
+                border: 1px solid #1e1e2f;
+                font-weight: bold;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        # Title Label
+        self.title_label = QLabel("<b>Product Performance Details</b>")
+        self.title_label.setStyleSheet("font-size: 16px; color: #6366f1; font-weight: bold;")
+        layout.addWidget(self.title_label)
+
+        # 1. KPI cards layout
+        kpi_layout = QGridLayout()
+        kpi_layout.setSpacing(12)
+
+        def make_kpi_card(title, value_lbl, text_color="#ffffff"):
+            card = QFrame()
+            card.setStyleSheet("background-color: #1e1e35; border: 1px solid #2c2c50; border-radius: 8px; padding: 10px;")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(8, 8, 8, 8)
+            card_layout.setSpacing(4)
+            lbl_title = QLabel(title)
+            lbl_title.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: bold; text-transform: uppercase;")
+            value_lbl.setStyleSheet(f"color: {text_color}; font-size: 16px; font-weight: bold;")
+            card_layout.addWidget(lbl_title)
+            card_layout.addWidget(value_lbl)
+            return card
+
+        self.kpi_stock = QLabel("0")
+        self.kpi_avg_days = QLabel("0 Days")
+        self.kpi_profit = QLabel("₹0.00")
+        self.kpi_interest = QLabel("₹0.00")
+        self.kpi_net = QLabel("₹0.00")
+
+        kpi_layout.addWidget(make_kpi_card("Current Stock", self.kpi_stock, "#ffffff"), 0, 0)
+        kpi_layout.addWidget(make_kpi_card("Avg Days in Stock", self.kpi_avg_days, "#3b82f6"), 0, 1)
+        kpi_layout.addWidget(make_kpi_card("Total Profit Generated", self.kpi_profit, "#10b981"), 0, 2)
+        kpi_layout.addWidget(make_kpi_card("Total Interest Cost", self.kpi_interest, "#ef4444"), 0, 3)
+        kpi_layout.addWidget(make_kpi_card("Net Contribution", self.kpi_net, "#6366f1"), 0, 4)
+
+        layout.addLayout(kpi_layout)
+
+        # 2. Tabs for histories
+        self.history_tabs = QTabWidget()
+        
+        # Purchases tab
+        self.purchases_tab = QWidget()
+        pur_tab_layout = QVBoxLayout(self.purchases_tab)
+        pur_tab_layout.setContentsMargins(5, 10, 5, 5)
+        self.purchase_table = QTableWidget()
+        self.purchase_table.setColumnCount(6)
+        self.purchase_table.setHorizontalHeaderLabels(["Invoice #", "Date", "Supplier", "Qty", "Rate (₹)", "Total (₹)"])
+        self.purchase_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.purchase_table.verticalHeader().setVisible(False)
+        pur_tab_layout.addWidget(self.purchase_table)
+        self.history_tabs.addTab(self.purchases_tab, "Purchase Lot History")
+
+        # Sales tab
+        self.sales_tab = QWidget()
+        sales_tab_layout = QVBoxLayout(self.sales_tab)
+        sales_tab_layout.setContentsMargins(5, 10, 5, 5)
+        self.sales_table = QTableWidget()
+        self.sales_table.setColumnCount(7)
+        self.sales_table.setHorizontalHeaderLabels(["Invoice #", "Date", "Customer", "Qty", "Rate (₹)", "Discount (₹)", "Total (₹)"])
+        self.sales_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.sales_table.verticalHeader().setVisible(False)
+        sales_tab_layout.addWidget(self.sales_table)
+        self.history_tabs.addTab(self.sales_tab, "Sales History")
+
+        layout.addWidget(self.history_tabs)
+
+        # Close button
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        btn_box.accepted.connect(self.accept)
+        layout.addWidget(btn_box)
+
+        self.load_data()
+
+    def load_data(self):
+        import traceback
+        session = Session()
+        try:
+            product = session.query(Product).get(self.product_id)
+            if not product:
+                self.title_label.setText("Product Not Found")
+                return
+
+            self.title_label.setText(f"<b>{product.name} [{product.product_code or 'N/A'}]</b> - Category: {product.category} | Brand: {product.brand}")
+
+            # 1. FIFO calculations for this product to get summary statistics
+            purchases = session.query(
+                PurchaseItem.qty,
+                PurchaseItem.rate,
+                PurchaseMaster.date,
+                Supplier.name,
+                PurchaseMaster.id.label('purchase_id')
+            ).select_from(PurchaseItem).join(PurchaseMaster).join(Supplier).filter(PurchaseItem.product_id == product.id).order_by(PurchaseMaster.date.asc(), PurchaseItem.id.asc()).all()
+
+            purchase_returns = session.query(
+                PurchaseReturnItem.qty,
+                PurchaseReturnMaster.purchase_id
+            ).join(PurchaseReturnMaster).filter(PurchaseReturnItem.product_id == product.id).all()
+
+            pur_ret_map = {}
+            for pr in purchase_returns:
+                pur_ret_map[pr.purchase_id] = pur_ret_map.get(pr.purchase_id, 0) + pr.qty
+
+            pur_lots = []
+            for pur in purchases:
+                ret_qty = pur_ret_map.get(pur.purchase_id, 0)
+                available_qty = pur.qty
+                if ret_qty > 0:
+                    deducted = min(available_qty, ret_qty)
+                    available_qty -= deducted
+                    pur_ret_map[pur.purchase_id] -= deducted
+                if available_qty > 0:
+                    pur_lots.append({
+                        "qty": available_qty,
+                        "price": pur.rate,
+                        "date": pur.date,
+                        "supplier": pur.name,
+                        "purchase_id": pur.purchase_id
+                    })
+
+            sales = session.query(
+                SalesItem.qty,
+                SalesItem.rate,
+                SalesItem.discount,
+                SalesMaster.date,
+                SalesMaster.id.label('sales_id')
+            ).select_from(SalesItem).join(SalesMaster).filter(SalesItem.product_id == product.id).order_by(SalesMaster.date.asc(), SalesItem.id.asc()).all()
+
+            sales_returns = session.query(
+                SalesReturnItem.qty,
+                SalesReturnMaster.sales_id
+            ).join(SalesReturnMaster).filter(SalesReturnItem.product_id == product.id).all()
+
+            sales_ret_map = {}
+            for sr in sales_returns:
+                sales_ret_map[sr.sales_id] = sales_ret_map.get(sr.sales_id, 0) + sr.qty
+
+            sale_lots = []
+            for s in sales:
+                ret_qty = sales_ret_map.get(s.sales_id, 0)
+                available_qty = s.qty
+                if ret_qty > 0:
+                    deducted = min(available_qty, ret_qty)
+                    available_qty -= deducted
+                    sales_ret_map[s.sales_id] -= deducted
+                if available_qty > 0:
+                    net_rate = s.rate - (s.discount / s.qty) if s.qty > 0 else s.rate
+                    sale_lots.append({
+                        "qty": available_qty,
+                        "price": net_rate,
+                        "date": s.date,
+                        "sales_id": s.sales_id
+                    })
+
+            matched_rows = []
+            pur_idx = 0
+            sale_idx = 0
+            for lot in pur_lots:
+                lot["remaining"] = lot["qty"]
+            for slot in sale_lots:
+                slot["remaining"] = slot["qty"]
+
+            today = datetime.date.today()
+
+            while sale_idx < len(sale_lots):
+                slot = sale_lots[sale_idx]
+                if slot["remaining"] <= 0:
+                    sale_idx += 1
+                    continue
+                if pur_idx >= len(pur_lots):
+                    qty_to_match = slot["remaining"]
+                    matched_rows.append({
+                        "days": 0, "qty": qty_to_match,
+                        "purchase_price": product.purchase_price, "sale_price": slot["price"],
+                        "status": "sold"
+                    })
+                    slot["remaining"] = 0
+                    sale_idx += 1
+                    continue
+
+                lot = pur_lots[pur_idx]
+                if lot["remaining"] <= 0:
+                    pur_idx += 1
+                    continue
+
+                qty_to_match = min(lot["remaining"], slot["remaining"])
+                days = (slot["date"] - lot["date"]).days
+                matched_rows.append({
+                    "days": max(0, days), "qty": qty_to_match,
+                    "purchase_price": lot["price"], "sale_price": slot["price"],
+                    "status": "sold"
+                })
+                lot["remaining"] -= qty_to_match
+                slot["remaining"] -= qty_to_match
+
+            for lot in pur_lots:
+                if lot["remaining"] > 0:
+                    days = (today - lot["date"]).days
+                    matched_rows.append({
+                        "days": max(0, days), "qty": lot["remaining"],
+                        "purchase_price": lot["price"], "sale_price": 0.0,
+                        "status": "unsold"
+                    })
+
+            tot_purchase_val = 0.0
+            tot_sales_val = 0.0
+            tot_gross_profit = 0.0
+            tot_interest_cost = 0.0
+            tot_net_profit = 0.0
+            tot_days = 0
+            tot_qty = 0
+
+            for r in matched_rows:
+                q = r["qty"]
+                pur_price = r["purchase_price"]
+                sale_price = r["sale_price"]
+                d = r["days"]
+                
+                if r["status"] == "sold":
+                    gp = (sale_price - pur_price) * q
+                else:
+                    gp = 0.0
+                    
+                interest = (pur_price * self.interest_rate * d) / 36500.0 * q
+                net = gp - interest
+                
+                tot_purchase_val += pur_price * q
+                tot_sales_val += sale_price * q
+                tot_gross_profit += gp
+                tot_interest_cost += interest
+                tot_net_profit += net
+                tot_days += d * q
+                tot_qty += q
+
+            avg_days = tot_days / tot_qty if tot_qty > 0 else 0.0
+            current_stock = product.stock_qty
+
+            self.kpi_stock.setText(str(current_stock))
+            self.kpi_avg_days.setText(f"{avg_days:.1f} Days")
+            self.kpi_profit.setText(f"₹{tot_gross_profit:,.2f}")
+            self.kpi_interest.setText(f"₹{tot_interest_cost:,.2f}")
+            self.kpi_net.setText(f"₹{tot_net_profit:,.2f}")
+
+            # 2. Populate Purchase Lot History Table
+            db_purchases = session.query(
+                PurchaseMaster.invoice_number,
+                PurchaseMaster.date,
+                Supplier.name,
+                PurchaseItem.qty,
+                PurchaseItem.rate
+            ).select_from(PurchaseItem).join(PurchaseMaster).join(Supplier).filter(PurchaseItem.product_id == product.id).order_by(PurchaseMaster.date.desc()).all()
+
+            self.purchase_table.setRowCount(len(db_purchases))
+            for i, p_info in enumerate(db_purchases):
+                pdate_str = p_info.date.strftime("%Y-%m-%d") if isinstance(p_info.date, datetime.date) else str(p_info.date)
+                qty_val = p_info.qty
+                rate_val = p_info.rate
+                total_val = qty_val * rate_val
+
+                self.purchase_table.setItem(i, 0, QTableWidgetItem(p_info.invoice_number))
+                self.purchase_table.setItem(i, 1, QTableWidgetItem(pdate_str))
+                self.purchase_table.setItem(i, 2, QTableWidgetItem(p_info.name))
+                self.purchase_table.setItem(i, 3, QTableWidgetItem(str(qty_val)))
+                self.purchase_table.setItem(i, 4, QTableWidgetItem(f"{rate_val:,.2f}"))
+                self.purchase_table.setItem(i, 5, QTableWidgetItem(f"{total_val:,.2f}"))
+
+            # 3. Populate Sales History Table
+            db_sales = session.query(
+                SalesMaster.invoice_number,
+                SalesMaster.date,
+                Customer.name,
+                SalesItem.qty,
+                SalesItem.rate,
+                SalesItem.discount
+            ).select_from(SalesItem).join(SalesMaster).join(Customer).filter(SalesItem.product_id == product.id).order_by(SalesMaster.date.desc()).all()
+
+            self.sales_table.setRowCount(len(db_sales))
+            for i, s_info in enumerate(db_sales):
+                sdate_str = s_info.date.strftime("%Y-%m-%d") if isinstance(s_info.date, datetime.date) else str(s_info.date)
+                qty_val = s_info.qty
+                rate_val = s_info.rate
+                discount_val = s_info.discount
+                total_val = (qty_val * rate_val) - discount_val
+
+                self.sales_table.setItem(i, 0, QTableWidgetItem(s_info.invoice_number))
+                self.sales_table.setItem(i, 1, QTableWidgetItem(sdate_str))
+                self.sales_table.setItem(i, 2, QTableWidgetItem(s_info.name))
+                self.sales_table.setItem(i, 3, QTableWidgetItem(str(qty_val)))
+                self.sales_table.setItem(i, 4, QTableWidgetItem(f"{rate_val:,.2f}"))
+                self.sales_table.setItem(i, 5, QTableWidgetItem(f"{discount_val:,.2f}"))
+                self.sales_table.setItem(i, 6, QTableWidgetItem(f"{total_val:,.2f}"))
+
+        except Exception as e:
+            print(f"Error loading drill-down data: {e}")
+            traceback.print_exc()
+        finally:
+            session.close()
+

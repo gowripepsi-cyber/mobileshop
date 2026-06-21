@@ -39,6 +39,7 @@ class Supplier(Base):
 class Product(Base):
     __tablename__ = 'products'
     id = Column(Integer, primary_key=True)
+    product_code = Column(String, unique=True, nullable=True)
     name = Column(String, nullable=False)
     category = Column(String, nullable=False, default='Phones')
     brand = Column(String, nullable=False)

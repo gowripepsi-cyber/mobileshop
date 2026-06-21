@@ -130,6 +130,13 @@ class SalesView(QWidget):
 
         row1_layout = QHBoxLayout()
         
+        self.product_code_input = QLineEdit()
+        self.product_code_input.setPlaceholderText("Code")
+        self.product_code_input.setFixedWidth(120)
+        self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
+        row1_layout.addWidget(QLabel("Code:"), 0)
+        row1_layout.addWidget(self.product_code_input, 1)
+        
         self.category_combo = QComboBox()
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
         row1_layout.addWidget(QLabel("Category:"), 0)
@@ -173,11 +180,11 @@ class SalesView(QWidget):
 
         # Items Table
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Product Name", "Qty", "Rate (₹)", "Discount (₹)", "Total (₹)", "Action"])
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Qty", "Rate (₹)", "Discount (₹)", "Total (₹)", "Action"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 110)
+        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.table.setColumnWidth(6, 110)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
         right_layout.addWidget(self.table)
@@ -281,6 +288,24 @@ class SalesView(QWidget):
             for p in products:
                 self.products_cache[p.id] = p
 
+            # Update auto-completer
+            codes = [f"{p.product_code} | {p.name}" for p in products if p.product_code]
+            from PySide6.QtWidgets import QCompleter
+            completer = QCompleter(codes, self)
+            completer.setCaseSensitivity(Qt.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchContains)
+            popup = completer.popup()
+            popup.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            fm = popup.fontMetrics()
+            max_width = 350
+            for code_str in codes:
+                w = fm.horizontalAdvance(code_str) + 50
+                if w > max_width:
+                    max_width = w
+            popup.setMinimumWidth(max_width)
+            completer.activated.connect(lambda text: self.handle_product_code_entry())
+            self.product_code_input.setCompleter(completer)
+
             # 2. Block combo box signals during update
             self.customer_combo.blockSignals(True)
             self.category_combo.blockSignals(True)
@@ -339,8 +364,45 @@ class SalesView(QWidget):
         if prod_id and hasattr(self, 'products_cache') and prod_id in self.products_cache:
             prod = self.products_cache[prod_id]
             self.rate_input.setValue(prod.selling_price)
+            # Sync product code input for visual feedback
+            if prod.product_code:
+                self.product_code_input.setText(prod.product_code)
         else:
             self.rate_input.setValue(0.0)
+            self.product_code_input.clear()
+
+    def handle_product_code_entry(self):
+        text = self.product_code_input.text().strip()
+        if not text:
+            return
+        code = text
+        if " | " in text:
+            code = text.split(" | ")[0].strip()
+        elif " - " in text:
+            code = text.split(" - ")[0].strip()
+            
+        found_product = None
+        for p in self.products_cache.values():
+            if p.product_code == code:
+                found_product = p
+                break
+        if found_product:
+            self.product_code_input.setText(found_product.product_code)
+            cat_idx = self.category_combo.findText(found_product.category)
+            if cat_idx >= 0:
+                self.category_combo.blockSignals(True)
+                self.category_combo.setCurrentIndex(cat_idx)
+                self.category_combo.blockSignals(False)
+            self.filter_products_by_category()
+            prod_idx = self.product_combo.findData(found_product.id)
+            if prod_idx >= 0:
+                self.product_combo.setCurrentIndex(prod_idx)
+            self.qty_input.setFocus()
+            self.qty_input.selectAll()
+        else:
+            QMessageBox.warning(self, "Product Code Not Found", f"Product Code '{code}' Not Found.")
+            self.product_code_input.selectAll()
+            self.product_code_input.setFocus()
 
     def toggle_bank_account(self, mode):
         self.bank_combo.setEnabled(mode == "Bank")
@@ -398,6 +460,7 @@ class SalesView(QWidget):
 
         self.invoice_items.append({
             "product_id": prod_id,
+            "product_code": p_cache.product_code if p_cache.product_code else "-",
             "name": p_cache.name,
             "qty": qty,
             "rate": rate,
@@ -413,15 +476,16 @@ class SalesView(QWidget):
     def update_table(self):
         self.table.setRowCount(len(self.invoice_items))
         for i, item in enumerate(self.invoice_items):
-            self.table.setItem(i, 0, QTableWidgetItem(item["name"]))
-            self.table.setItem(i, 1, QTableWidgetItem(str(item["qty"])))
-            self.table.setItem(i, 2, QTableWidgetItem(f"{item['rate']:.2f}"))
-            self.table.setItem(i, 3, QTableWidgetItem(f"{item['discount']:.2f}"))
+            self.table.setItem(i, 0, QTableWidgetItem(item.get("product_code", "-")))
+            self.table.setItem(i, 1, QTableWidgetItem(item["name"]))
+            self.table.setItem(i, 2, QTableWidgetItem(str(item["qty"])))
+            self.table.setItem(i, 3, QTableWidgetItem(f"{item['rate']:.2f}"))
+            self.table.setItem(i, 4, QTableWidgetItem(f"{item['discount']:.2f}"))
             
             subtotal = (item["qty"] * item["rate"]) - item["discount"]
             if subtotal < 0:
                 subtotal = 0.0
-            self.table.setItem(i, 4, QTableWidgetItem(f"{subtotal:.2f}"))
+            self.table.setItem(i, 5, QTableWidgetItem(f"{subtotal:.2f}"))
 
             # Delete button (centered wrapper container)
             btn_container = QWidget()
@@ -434,7 +498,7 @@ class SalesView(QWidget):
             del_btn.setProperty("class", "btn-action-delete")
             del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
             btn_layout.addWidget(del_btn)
-            self.table.setCellWidget(i, 5, btn_container)
+            self.table.setCellWidget(i, 6, btn_container)
 
         self.update_summary()
 
@@ -579,8 +643,9 @@ class SalesView(QWidget):
                 prod = session.query(Product).get(item["product_id"])
                 prod.stock_qty -= item["qty"]
                 
+                p_code = f"[{prod.product_code}] " if prod.product_code else ""
                 pdf_items.append({
-                    "name": f"{prod.name} ({prod.brand} {prod.model})",
+                    "name": f"{p_code}{prod.name} ({prod.brand} {prod.model})",
                     "qty": item["qty"],
                     "rate": item["rate"],
                     "discount": item["discount"],
@@ -804,24 +869,26 @@ class SalesView(QWidget):
             
             # Items table
             items_table = QTableWidget()
-            items_table.setColumnCount(5)
-            items_table.setHorizontalHeaderLabels(["Product Name", "Qty", "Rate (₹)", "Discount (₹)", "Total (₹)"])
+            items_table.setColumnCount(6)
+            items_table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Qty", "Rate (₹)", "Discount (₹)", "Total (₹)"])
             items_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             items_table.verticalHeader().setVisible(False)
             
             items = session.query(SalesItem).filter_by(sales_id=sale_id).all()
             items_table.setRowCount(len(items))
             for i, item in enumerate(items):
+                p_code = item.product.product_code if item.product else "-"
                 if item.product:
                     display_name = f"{item.product.name} ({item.product.brand} {item.product.model})"
                 else:
                     display_name = f"Unknown Product (ID: {item.product_id})"
-                items_table.setItem(i, 0, QTableWidgetItem(display_name))
-                items_table.setItem(i, 1, QTableWidgetItem(str(item.qty)))
-                items_table.setItem(i, 2, QTableWidgetItem(f"{item.rate:.2f}"))
-                items_table.setItem(i, 3, QTableWidgetItem(f"{item.discount:.2f}"))
+                items_table.setItem(i, 0, QTableWidgetItem(p_code))
+                items_table.setItem(i, 1, QTableWidgetItem(display_name))
+                items_table.setItem(i, 2, QTableWidgetItem(str(item.qty)))
+                items_table.setItem(i, 3, QTableWidgetItem(f"{item.rate:.2f}"))
+                items_table.setItem(i, 4, QTableWidgetItem(f"{item.discount:.2f}"))
                 subtotal = (item.qty * item.rate) - item.discount
-                items_table.setItem(i, 4, QTableWidgetItem(f"{subtotal:.2f}"))
+                items_table.setItem(i, 5, QTableWidgetItem(f"{subtotal:.2f}"))
                 
             dlg_layout.addWidget(items_table)
             
@@ -871,8 +938,9 @@ class SalesView(QWidget):
             # Prepare items list
             pdf_items = []
             for item in sale.items:
+                p_code = f"[{item.product.product_code}] " if item.product and item.product.product_code else ""
                 pdf_items.append({
-                    "name": f"{item.product.name} ({item.product.brand} {item.product.model})",
+                    "name": f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})",
                     "qty": item.qty,
                     "rate": item.rate,
                     "discount": item.discount,
@@ -1036,6 +1104,7 @@ class SalesView(QWidget):
             for item in sale.items:
                 self.invoice_items.append({
                     "product_id": item.product_id,
+                    "product_code": item.product.product_code if item.product else "-",
                     "name": item.product.name,
                     "qty": item.qty,
                     "rate": item.rate,

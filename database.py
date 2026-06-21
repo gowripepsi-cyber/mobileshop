@@ -1,7 +1,7 @@
 import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product
 
 DATABASE_URL = "sqlite:///mobileshop.db"
 
@@ -11,6 +11,37 @@ Session = scoped_session(session_factory)
 
 def get_hash(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def get_category_code(session, category_name: str) -> str:
+    category = session.query(Category).filter_by(name=category_name).first()
+    if category:
+        return str(category.id % 10)
+    return "1"
+
+def generate_next_product_code(session, category_name: str) -> str:
+    category = session.query(Category).filter_by(name=category_name).first()
+    category_id = category.id if category else 1
+    cat_code = str(category_id % 10) if category_id else "1"
+    
+    prefix = cat_code
+    products = session.query(Product).filter(
+        Product.product_code.like(f"{prefix}%")
+    ).all()
+    
+    existing_nums = set()
+    for p in products:
+        if p.product_code and len(p.product_code) == 4 and p.product_code.startswith(prefix):
+            try:
+                num = int(p.product_code[1:])
+                existing_nums.add(num)
+            except ValueError:
+                pass
+                
+    next_num = 1
+    while next_num in existing_nums or session.query(Product).filter_by(product_code=f"{prefix}{next_num:03d}").first() is not None:
+        next_num += 1
+        
+    return f"{prefix}{next_num:03d}"
 
 def init_db():
     Base.metadata.create_all(engine)
@@ -34,6 +65,9 @@ def init_db():
     if 'low_stock_limit' not in prod_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE products ADD COLUMN low_stock_limit INTEGER DEFAULT 5"))
+    if 'product_code' not in prod_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products ADD COLUMN product_code TEXT"))
 
     # Schema migration: check and add missing columns to suppliers table
     supp_columns = [c['name'] for c in inspector.get_columns('suppliers')]
@@ -149,6 +183,13 @@ def init_db():
         if cat_count == 0:
             for name in ["Phones", "Accessories", "Spare Parts"]:
                 session.add(Category(name=name))
+            session.commit()
+
+        # 6. Backfill existing products without product_code
+        prods_to_backfill = session.query(Product).filter((Product.product_code == None) | (Product.product_code == "")).all()
+        for p in prods_to_backfill:
+            p.product_code = generate_next_product_code(session, p.category)
+            session.commit()
 
         session.commit()
     except Exception as e:

@@ -190,9 +190,9 @@ class DashboardView(QWidget):
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
-        self.results_table.setColumnWidth(3, 120)
+        self.results_table.setColumnWidth(3, 150)
         self.results_table.verticalHeader().setVisible(False)
-        self.results_table.verticalHeader().setDefaultSectionSize(45)
+        self.results_table.verticalHeader().setDefaultSectionSize(50)
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         results_layout.addWidget(self.results_table)
 
@@ -294,7 +294,8 @@ class DashboardView(QWidget):
             low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
             self.low_stock_table.setRowCount(len(low_stock_products))
             for i, p in enumerate(low_stock_products):
-                self.low_stock_table.setItem(i, 0, QTableWidgetItem(p.name))
+                p_code = f"[{p.product_code}] " if p.product_code else ""
+                self.low_stock_table.setItem(i, 0, QTableWidgetItem(f"{p_code}{p.name}"))
                 self.low_stock_table.setItem(i, 1, QTableWidgetItem(f"{p.brand} / {p.model}"))
                 qty_item = QTableWidgetItem(str(p.stock_qty))
                 if p.stock_qty == 0:
@@ -416,6 +417,8 @@ class DashboardView(QWidget):
 
                 view_btn = QPushButton("View")
                 view_btn.setProperty("class", "btn-action-view")
+                view_btn.setFixedHeight(24)
+                view_btn.setFixedWidth(75)
                 view_btn.clicked.connect(lambda checked, res=r: self.open_search_result(res))
                 btn_layout.addWidget(view_btn)
                 self.results_table.setCellWidget(i, 3, btn_container)
@@ -496,8 +499,9 @@ class DashboardView(QWidget):
             # Prepare data
             items_data = []
             for p in low_stock_products:
+                p_code = f"[{p.product_code}] " if p.product_code else ""
                 items_data.append({
-                    "name": p.name,
+                    "name": f"{p_code}{p.name}",
                     "brand_model": f"{p.brand} / {p.model}",
                     "current_stock": p.stock_qty,
                     "low_limit": p.low_stock_limit

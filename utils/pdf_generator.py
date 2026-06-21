@@ -1745,6 +1745,218 @@ def generate_purchase_return_pdf(return_data, file_path):
     doc.build(story)
 
 
+def generate_inventory_profit_pdf(report_data, file_path):
+    """
+    Generates a professional A4 Landscape PDF report for Inventory holding and profitability.
+    """
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    import datetime
+
+    # A4 Landscape is 841.89 x 595.27 points
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=landscape(A4),
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    style_shop_name = ParagraphStyle(
+        'ShopNamePL',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#6366f1')
+    )
+    
+    style_title = ParagraphStyle(
+        'ReportTitlePL',
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#1e293b'),
+        alignment=2 # Right aligned
+    )
+
+    style_sub = ParagraphStyle(
+        'SubtextPL',
+        fontName='Helvetica',
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#475569')
+    )
+    
+    style_bold = ParagraphStyle(
+        'BoldTextPL',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    style_header = ParagraphStyle(
+        'HeaderStylePL',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.white
+    )
+
+    style_cell = ParagraphStyle(
+        'CellStylePL',
+        fontName='Helvetica',
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    style_cell_bold = ParagraphStyle(
+        'CellBoldStylePL',
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    story = []
+    
+    # 1. Company and Report Header
+    header_data = [
+        [
+            Paragraph(f"<b>{report_data['shop_name']}</b><br/>"
+                      f"<font size=8>{report_data['shop_address']}<br/>"
+                      f"Contact: {report_data['shop_contact']} | GSTIN: {report_data['shop_gst']}</font>", style_sub),
+            Paragraph("<b>INVENTORY PROFITABILITY</b><br/>"
+                      f"<font size=10>Date: {report_data['date']}<br/>"
+                      f"Range: {report_data['date_range']}</font>", style_title)
+        ]
+    ]
+    header_table = Table(header_data, colWidths=[400, 370])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 15),
+        ('LINEBELOW', (0,0), (-1,-1), 1, colors.HexColor('#cbd5e1')),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 15))
+    
+    # 2. KPI Summary Section (6 horizontal boxes)
+    kpi_card_style = TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ])
+    
+    kpi_data = [
+        [
+            Paragraph("<font size=8 color='#64748b'>TOTAL PURCHASE VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{report_data['total_purchase_value']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL SALES VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{report_data['total_sales_value']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL GROSS PROFIT</font><br/><b><font size=11 color='#10b981'>Rs. " + f"{report_data['total_gross_profit']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL INTEREST COST</font><br/><b><font size=11 color='#ef4444'>Rs. " + f"{report_data['total_interest_cost']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL NET PROFIT</font><br/><b><font size=11 color='#6366f1'>Rs. " + f"{report_data['total_net_profit']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>AVG DAYS IN STOCK</font><br/><b><font size=11 color='#3b82f6'>" + f"{report_data['avg_days']:.1f}" + " Days</font></b>", style_sub),
+        ]
+    ]
+    
+    # 770pt width
+    kpi_table = Table(kpi_data, colWidths=[128, 128, 129, 128, 129, 128])
+    kpi_table.setStyle(kpi_card_style)
+    story.append(kpi_table)
+    story.append(Spacer(1, 15))
+    
+    # 3. Detailed Data Table
+    table_headers = [
+        Paragraph("Code", style_header),
+        Paragraph("Product Name", style_header),
+        Paragraph("Pur. Date", style_header),
+        Paragraph("Sale Date", style_header),
+        Paragraph("Days", style_header),
+        Paragraph("Qty", style_header),
+        Paragraph("Pur. Price", style_header),
+        Paragraph("Sale Price", style_header),
+        Paragraph("Gross Prof.", style_header),
+        Paragraph("Int. Cost", style_header),
+        Paragraph("Net Profit", style_header),
+    ]
+    
+    table_data = [table_headers]
+    for row in report_data['items']:
+        pdate = row['purchase_date'].strftime("%Y-%m-%d") if isinstance(row['purchase_date'], datetime.date) else str(row['purchase_date'])
+        sdate = row['sale_date'].strftime("%Y-%m-%d") if isinstance(row['sale_date'], datetime.date) else str(row['sale_date'])
+        
+        net_prof = row['net_profit']
+        net_prof_str = f"{net_prof:,.2f}"
+        if net_prof < 0:
+            net_style = ParagraphStyle('net_red', parent=style_cell, textColor=colors.HexColor('#ef4444'))
+        else:
+            net_style = ParagraphStyle('net_green', parent=style_cell, textColor=colors.HexColor('#10b981'))
+            
+        table_data.append([
+            Paragraph(row['product_code'] or "N/A", style_cell),
+            Paragraph(row['product_name'], style_cell),
+            Paragraph(pdate, style_cell),
+            Paragraph(sdate, style_cell),
+            Paragraph(str(row['days']), style_cell),
+            Paragraph(str(row['qty']), style_cell),
+            Paragraph(f"{row['purchase_price']:,.2f}", style_cell),
+            Paragraph(f"{row['sale_price']:,.2f}", style_cell),
+            Paragraph(f"{row['gross_profit']:,.2f}", style_cell),
+            Paragraph(f"{row['interest_cost']:,.2f}", style_cell),
+            Paragraph(net_prof_str, net_style)
+        ])
+        
+    table_data.append([
+        Paragraph("<b>TOTALS</b>", style_cell_bold),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph(str(sum(r['qty'] for r in report_data['items'])), style_cell_bold),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph(f"{report_data['total_gross_profit']:,.2f}", style_cell_bold),
+        Paragraph(f"{report_data['total_interest_cost']:,.2f}", style_cell_bold),
+        Paragraph(f"{report_data['total_net_profit']:,.2f}", style_cell_bold),
+    ])
+    
+    col_widths = [45, 145, 55, 75, 35, 30, 60, 60, 80, 80, 105]
+    
+    items_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e1e38')),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#f1f5f9')),
+        ('LINEABOVE', (0,-1), (-1,-1), 1.5, colors.HexColor('#cbd5e1')),
+    ]))
+    
+    story.append(items_table)
+    story.append(Spacer(1, 20))
+    
+    def add_page_number(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 8)
+        canvas.setFillColor(colors.HexColor('#64748b'))
+        canvas.drawRightString(806, 20, f"Page {canvas.getPageNumber()}")
+        canvas.drawString(36, 20, "Mobile Shop Management System - Confidential Report")
+        canvas.restoreState()
+        
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+
+
 
 
 
