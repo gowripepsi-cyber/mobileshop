@@ -1951,7 +1951,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
         canvas.setFont('Helvetica', 8)
         canvas.setFillColor(colors.HexColor('#64748b'))
         canvas.drawRightString(806, 20, f"Page {canvas.getPageNumber()}")
-        canvas.drawString(36, 20, "Mobile Shop Management System - Confidential Report")
+        canvas.drawString(36, 20, "Inventory & Accounting Management System - Confidential Report")
         canvas.restoreState()
         
     doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)

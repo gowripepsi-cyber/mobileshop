@@ -1,5 +1,5 @@
 GLOBAL_STYLE = """
-/* Global Stylesheet for Mobile Shop Management System */
+/* Global Stylesheet for Inventory & Accounting Management System */
 
 QMainWindow {
     background-color: #0f0f1b;

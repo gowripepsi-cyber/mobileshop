@@ -12,7 +12,7 @@ from licensing.ui_activation import VendorLoginDialog, VendorGeneratorDialog
 def main():
     app = QApplication(sys.argv)
     
-    # Apply global mobile shop styling to vendor tool
+    # Apply global application styling to vendor tool
     app.setStyleSheet(GLOBAL_STYLE)
     
     # 1. Require vendor login

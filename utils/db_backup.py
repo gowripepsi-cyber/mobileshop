@@ -2,7 +2,7 @@ import shutil
 import os
 import datetime
 
-DB_FILE = "mobileshop.db"
+DB_FILE = "inventory.db"
 
 def backup_db(destination_dir):
     """
@@ -12,7 +12,7 @@ def backup_db(destination_dir):
         return False, "Database file does not exist."
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_filename = f"mobileshop_backup_{timestamp}.db"
+    backup_filename = f"inventory_backup_{timestamp}.db"
     destination_path = os.path.join(destination_dir, backup_filename)
     
     try:

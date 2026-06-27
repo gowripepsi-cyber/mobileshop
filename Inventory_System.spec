@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Mobile shop mangement system',
+    name='Inventory and Accounting Management System',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

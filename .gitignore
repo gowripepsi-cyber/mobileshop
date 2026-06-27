@@ -3,7 +3,7 @@ __pycache__/
 *$py.class
 
 # Database
-mobileshop.db
+inventory.db
 
 # Invoices
 invoices/

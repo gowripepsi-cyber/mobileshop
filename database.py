@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product
 
-DATABASE_URL = "sqlite:///mobileshop.db"
+DATABASE_URL = "sqlite:///inventory.db"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 session_factory = sessionmaker(bind=engine)
@@ -181,7 +181,7 @@ def init_db():
         # 5. Seed default categories if empty
         cat_count = session.query(Category).count()
         if cat_count == 0:
-            for name in ["Phones", "Accessories", "Spare Parts"]:
+            for name in ["General Inventory", "Electronics", "Supplies"]:
                 session.add(Category(name=name))
             session.commit()
 

@@ -66,7 +66,7 @@ def get_storage_dir() -> str:
     appdata = os.environ.get("LOCALAPPDATA")
     if not appdata:
         appdata = os.path.expanduser("~")
-    path = os.path.join(appdata, "MobileShop", "license")
+    path = os.path.join(appdata, "InventorySystem", "license")
     os.makedirs(path, exist_ok=True)
     return path
 

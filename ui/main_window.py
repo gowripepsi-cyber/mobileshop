@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
     def __init__(self, user_data, parent=None):
         super().__init__(parent)
         self.user_data = user_data
-        self.setWindowTitle("Mobile Shop Management System")
+        self.setWindowTitle("Inventory & Accounting Management System")
         self.setMinimumSize(1200, 750)
         self.init_ui()
         QTimer.singleShot(100, self.check_low_stock_alert)
@@ -223,7 +223,7 @@ class MainWindow(QMainWindow):
             10: "System Settings & Database Admin",
             11: "UPI / Money Transfer"
         }
-        self.header_title.setText(title_map.get(index, "Mobile Shop"))
+        self.header_title.setText(title_map.get(index, "Inventory & Accounting"))
 
         # Refresh the view data when selected
         widget = self.stacked_widget.widget(index)

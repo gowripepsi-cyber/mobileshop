@@ -81,6 +81,6 @@ This translates the PyArmor runtime wrapper scripts into C++ and compiles them i
 ## 5. Summary of Built Executable Distribution
 When distributing your app to clients, you only need to send:
 1. `main.exe` (a single standalone executable from Nuitka).
-2. Any external SQLite database files if they are not dynamically generated on start (e.g. `mobileshop.db` will be initialized on first run anyway, so it doesn't need to be distributed).
+2. Any external SQLite database files if they are not dynamically generated on start (e.g. `inventory.db` will be initialized on first run anyway, so it doesn't need to be distributed).
 3. The database backup utility will work out of the box.
 No `.py` files are distributed, and all local license validation, hardware checking, and crypto keys are fully baked into the binary.

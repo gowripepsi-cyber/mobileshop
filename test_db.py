@@ -4,10 +4,10 @@ import datetime
 from database import Session, init_db
 from models import Product, Customer, Supplier, BankAccount, PurchaseMaster, PurchaseItem, SalesMaster, SalesItem, Payment, CashTransaction, BankTransaction, ServiceJob, ServicePart, MoneyTransfer
 
-class TestMobileShopDB(unittest.TestCase):
+class TestInventoryDB(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Initialize DB (uses mobileshop.db)
+        # Initialize DB (uses inventory.db)
         init_db()
 
     def setUp(self):

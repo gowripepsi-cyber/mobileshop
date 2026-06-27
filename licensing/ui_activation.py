@@ -16,7 +16,7 @@ from licensing import crypto_utils
 
 # Sha256 hashes of vendor credentials:
 # Username: vendor
-# Password: admin@mobileshop2026
+# Password: admin@inventory2026
 VENDOR_USER_HASH = "630ba09448af522154f38ef7685ef1f44b0f3e9430f80829a03ce24f400f3754"
 VENDOR_PASS_HASH = "eb81458ed6233107869846cba983748999d33ed7bbaa275d376dd1e87a485d66"
 
@@ -89,7 +89,7 @@ class TrialStatusDialog(BaseLicensedDialog):
     """Dialog displayed during active 30 days trial period on app startup."""
     def __init__(self, days_remaining: int, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Mobile Shop Management - Free Trial")
+        self.setWindowTitle("Inventory & Accounting Management - Free Trial")
         self.setFixedSize(450, 320)
         self.days_remaining = days_remaining
         self.init_ui()
