@@ -270,6 +270,23 @@ QPushButton:pressed {
     background-color: #f59e0b;
 }
 
+/* Quick-Add Plus Button */
+.btn-quick-add {
+    background-color: #6366f1;
+    color: #ffffff;
+    padding: 0px;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    border-radius: 6px;
+    min-width: 40px;
+    max-width: 40px;
+}
+
+.btn-quick-add:hover {
+    background-color: #4f46e5;
+}
+
 .btn-warning:hover {
     background-color: #d97706;
 }

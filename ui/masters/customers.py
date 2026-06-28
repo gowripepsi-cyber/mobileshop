@@ -5,9 +5,10 @@ from database import Session
 from models import Customer
 
 class CustomerDialog(QDialog):
-    def __init__(self, customer=None, parent=None):
+    def __init__(self, customer=None, initial_name="", parent=None):
         super().__init__(parent)
         self.customer = customer
+        self.initial_name = initial_name
         self.setWindowTitle("Edit Customer" if customer else "Add New Customer")
         self.setFixedSize(400, 360)
         self.init_ui()
@@ -22,6 +23,9 @@ class CustomerDialog(QDialog):
         self.gst_input = QLineEdit()
         self.outstanding_input = QLineEdit()
         self.outstanding_input.setText("0.00")
+
+        if not self.customer and self.initial_name:
+            self.name_input.setText(self.initial_name)
 
         form_layout.addRow("Customer Name *:", self.name_input)
         form_layout.addRow("Mobile Number *:", self.mobile_input)
@@ -76,12 +80,17 @@ class CustomerDialog(QDialog):
                 cust.address = address
                 cust.gst = gst
                 cust.outstanding_balance = outstanding
+                self.saved_customer_id = cust.id
+                self.saved_customer_name = cust.name
             else:
                 new_cust = Customer(
                     name=name, mobile=mobile, address=address, gst=gst,
                     outstanding_balance=outstanding
                 )
                 session.add(new_cust)
+                session.flush()
+                self.saved_customer_id = new_cust.id
+                self.saved_customer_name = new_cust.name
 
             session.commit()
             self.accept()

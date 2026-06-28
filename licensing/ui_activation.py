@@ -6,7 +6,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
     QMessageBox, QWidget, QTableWidget, QTableWidgetItem, QHeaderView, 
-    QApplication, QFrame
+    QApplication, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QClipboard
@@ -317,14 +317,14 @@ class VendorGeneratorDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Vendor License Generator")
-        self.setFixedSize(650, 480)
+        self.setFixedSize(680, 680)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(25, 25, 25, 25)
-        layout.setSpacing(15)
+        layout.setContentsMargins(25, 20, 25, 20)
+        layout.setSpacing(12)
 
         title = QLabel("VENDOR ACTIVATION MANAGEMENT")
         title.setAlignment(Qt.AlignCenter)
@@ -335,8 +335,8 @@ class VendorGeneratorDialog(QDialog):
         gen_frame = QFrame()
         gen_frame.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px;")
         gen_layout = QVBoxLayout(gen_frame)
-        gen_layout.setContentsMargins(15, 15, 15, 15)
-        gen_layout.setSpacing(10)
+        gen_layout.setContentsMargins(15, 12, 15, 12)
+        gen_layout.setSpacing(8)
 
         sec_lbl = QLabel("Generate Activation Key")
         sec_lbl.setStyleSheet("font-weight: bold; color: #ffffff; font-size: 12px;")
@@ -377,7 +377,38 @@ class VendorGeneratorDialog(QDialog):
 
         layout.addWidget(gen_frame)
 
-        # Section 2: Activation History Table
+        # Section 2: Feature Adaptability Settings
+        feat_frame = QFrame()
+        feat_frame.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px;")
+        feat_layout = QVBoxLayout(feat_frame)
+        feat_layout.setContentsMargins(15, 12, 15, 12)
+        feat_layout.setSpacing(8)
+
+        feat_lbl = QLabel("Feature Adaptability Settings")
+        feat_lbl.setStyleSheet("font-weight: bold; color: #ffffff; font-size: 12px;")
+        feat_layout.addWidget(feat_lbl)
+
+        self.chk_repair = QCheckBox("Enable Repair Service Desk (Shows/hides Service Cards UI)")
+        self.chk_money = QCheckBox("Enable Financial Remittance (Shows/hides UPI/Money Transfer UI)")
+        self.chk_imei = QCheckBox("Enable Unique Identifier Tracking (Shows/hides IMEI/Serial Number inputs)")
+
+        self.chk_repair.setStyleSheet("color: #ffffff; font-size: 12px;")
+        self.chk_money.setStyleSheet("color: #ffffff; font-size: 12px;")
+        self.chk_imei.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        feat_layout.addWidget(self.chk_repair)
+        feat_layout.addWidget(self.chk_money)
+        feat_layout.addWidget(self.chk_imei)
+
+        btn_save_feat = QPushButton("Save Feature Settings")
+        btn_save_feat.setFixedHeight(32)
+        btn_save_feat.setStyleSheet("background-color: #10b981; color: #ffffff; font-weight: bold;")
+        btn_save_feat.clicked.connect(self.save_feature_settings)
+        feat_layout.addWidget(btn_save_feat)
+
+        layout.addWidget(feat_frame)
+
+        # Section 3: Activation History Table
         hist_lbl = QLabel("Activation Key History")
         hist_lbl.setStyleSheet("font-weight: bold; color: #94a3b8; font-size: 12px;")
         layout.addWidget(hist_lbl)
@@ -409,6 +440,61 @@ class VendorGeneratorDialog(QDialog):
         layout.addLayout(btn_layout)
 
         self.load_history()
+        self.load_feature_settings()
+
+    def load_feature_settings(self):
+        try:
+            from database import Session
+            from models import Setting
+            session = Session()
+            try:
+                r = session.query(Setting).filter_by(key='enable_repair_service').first()
+                m = session.query(Setting).filter_by(key='enable_money_transfer').first()
+                i = session.query(Setting).filter_by(key='enable_imei_tracking').first()
+                
+                self.chk_repair.setChecked(r.value.lower() == 'true' if r else True)
+                self.chk_money.setChecked(m.value.lower() == 'true' if m else True)
+                self.chk_imei.setChecked(i.value.lower() == 'true' if i else True)
+            finally:
+                session.close()
+        except Exception as e:
+            print(f"Error loading feature settings in vendor panel: {e}")
+
+    def save_feature_settings(self):
+        try:
+            from database import Session
+            from models import Setting
+            session = Session()
+            try:
+                r_val = 'true' if self.chk_repair.isChecked() else 'false'
+                m_val = 'true' if self.chk_money.isChecked() else 'false'
+                i_val = 'true' if self.chk_imei.isChecked() else 'false'
+
+                def update_key(k, v):
+                    sett = session.query(Setting).filter_by(key=k).first()
+                    if sett:
+                        sett.value = v
+                    else:
+                        session.add(Setting(key=k, value=v))
+
+                update_key('enable_repair_service', r_val)
+                update_key('enable_money_transfer', m_val)
+                update_key('enable_imei_tracking', i_val)
+
+                session.commit()
+                QMessageBox.information(self, "Success", "Feature adaptability settings updated successfully.")
+
+                # Dynamically update open application main window if running
+                for widget in QApplication.topLevelWidgets():
+                    if hasattr(widget, 'apply_feature_settings'):
+                        widget.apply_feature_settings()
+            except Exception as e:
+                session.rollback()
+                QMessageBox.critical(self, "Error", f"Failed to save feature settings: {e}")
+            finally:
+                session.close()
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"Database error: {e}")
 
     def generate_key(self):
         machine_id = self.mid_input.text().strip().upper()

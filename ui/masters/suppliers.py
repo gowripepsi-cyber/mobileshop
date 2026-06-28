@@ -5,9 +5,10 @@ from database import Session
 from models import Supplier
 
 class SupplierDialog(QDialog):
-    def __init__(self, supplier=None, parent=None):
+    def __init__(self, supplier=None, initial_name="", parent=None):
         super().__init__(parent)
         self.supplier = supplier
+        self.initial_name = initial_name
         self.setWindowTitle("Edit Supplier" if supplier else "Add New Supplier")
         self.setFixedSize(450, 490)
         self.init_ui()
@@ -27,6 +28,9 @@ class SupplierDialog(QDialog):
         
         self.outstanding_input = QLineEdit()
         self.outstanding_input.setText("0.00")
+
+        if not self.supplier and self.initial_name:
+            self.name_input.setText(self.initial_name)
 
         form_layout.addRow("Supplier Name *:", self.name_input)
         form_layout.addRow("Contact Number *:", self.mobile_input)
@@ -93,6 +97,8 @@ class SupplierDialog(QDialog):
                 supp.ifsc_code = ifsc_code
                 supp.upi_id = upi_id
                 supp.outstanding_balance = outstanding
+                self.saved_supplier_id = supp.id
+                self.saved_supplier_name = supp.name
             else:
                 new_supp = Supplier(
                     name=name, mobile=mobile, address=address,
@@ -101,6 +107,9 @@ class SupplierDialog(QDialog):
                     outstanding_balance=outstanding
                 )
                 session.add(new_supp)
+                session.flush()
+                self.saved_supplier_id = new_supp.id
+                self.saved_supplier_name = new_supp.name
 
             session.commit()
             self.accept()

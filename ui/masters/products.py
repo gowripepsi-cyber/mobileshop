@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
-                             QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox)
+                             QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter)
 from PySide6.QtCore import Qt
 from database import Session
 from models import Product, Category
@@ -81,9 +81,9 @@ class CategoryManagerDialog(QDialog):
         cat_name = self.table.item(row, 1).text()
         return cat_id, cat_name
         
-    def add_category(self):
+    def add_category(self, initial_name=""):
         from PySide6.QtWidgets import QInputDialog
-        name, ok = QInputDialog.getText(self, "Add Category", "New Category Name:")
+        name, ok = QInputDialog.getText(self, "Add Category", "New Category Name:", QLineEdit.Normal, initial_name)
         if ok and name.strip():
             name = name.strip()
             session = Session()
@@ -91,16 +91,19 @@ class CategoryManagerDialog(QDialog):
                 existing = session.query(Category).filter_by(name=name).first()
                 if existing:
                     QMessageBox.warning(self, "Error", f"Category '{name}' already exists.")
-                    return
+                    return None
                 new_cat = Category(name=name)
                 session.add(new_cat)
                 session.commit()
                 self.refresh_data()
+                return name
             except Exception as e:
                 session.rollback()
                 QMessageBox.critical(self, "Error", f"Could not save category: {e}")
+                return None
             finally:
                 session.close()
+        return None
                 
     def edit_category(self):
         cat_id, cat_name = self.get_selected_cat_id_name()
@@ -217,7 +220,9 @@ class ProductDialog(QDialog):
                 finally:
                     session.close()
 
-    def load_categories(self):
+    def load_categories(self, select_category=None):
+        current_txt = select_category if select_category else (self.category_combo.currentText() if hasattr(self, 'category_combo') else "")
+        self.category_combo.blockSignals(True)
         self.category_combo.clear()
         session = Session()
         try:
@@ -228,6 +233,41 @@ class ProductDialog(QDialog):
             print(f"Error loading categories in dialog: {e}")
         finally:
             session.close()
+        self.category_combo.blockSignals(False)
+        
+        if current_txt:
+            idx = self.category_combo.findText(current_txt)
+            if idx >= 0:
+                self.category_combo.setCurrentIndex(idx)
+            else:
+                self.category_combo.setEditText(current_txt)
+        if hasattr(self, 'add_category_btn'):
+            self.check_category_match()
+
+    def check_category_match(self):
+        text = self.category_combo.currentText().strip()
+        if not text:
+            self.add_category_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.category_combo.count()):
+            if self.category_combo.itemText(i).strip().lower() == text.lower():
+                matched = True
+                break
+        
+        if not matched:
+            self.add_category_btn.show()
+        else:
+            self.add_category_btn.hide()
+
+    def handle_add_category_click(self):
+        typed_text = self.category_combo.currentText().strip()
+        mgr = CategoryManagerDialog(parent=self)
+        new_cat = mgr.add_category(initial_name=typed_text)
+        if new_cat:
+            self.load_categories(select_category=new_cat)
+            self.suggest_product_code()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -238,7 +278,15 @@ class ProductDialog(QDialog):
         
         self.name_input = QLineEdit()
         self.category_combo = QComboBox()
-        self.category_combo.setEditable(False)
+        self.category_combo.setEditable(True)
+        self.category_combo.setInsertPolicy(QComboBox.NoInsert)
+        
+        # Autocomplete configuration
+        completer = QCompleter(self.category_combo.model(), self.category_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.category_combo.setCompleter(completer)
+        
         self.load_categories()
         
         # Check if user is Admin, otherwise set read-only for manual code editing
@@ -257,8 +305,27 @@ class ProductDialog(QDialog):
             self.product_code_input.setReadOnly(True)
             self.product_code_input.setToolTip("Only administrators can edit product codes manually.")
 
-        # Connect category change to suggest next code
+        # Connect category changes
         self.category_combo.currentTextChanged.connect(self.suggest_product_code)
+        self.category_combo.currentTextChanged.connect(self.check_category_match)
+        if self.category_combo.lineEdit():
+            self.category_combo.lineEdit().textChanged.connect(self.check_category_match)
+
+        # Layout for category combo and Add Category (+) button
+        cat_layout = QHBoxLayout()
+        cat_layout.setContentsMargins(0, 0, 0, 0)
+        cat_layout.setSpacing(6)
+        cat_layout.addWidget(self.category_combo, 1)
+        
+        self.add_category_btn = QPushButton("+")
+        self.add_category_btn.setToolTip("Add new category")
+        self.add_category_btn.setProperty("class", "btn-quick-add")
+        self.add_category_btn.setFixedWidth(40)
+        self.add_category_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_category_btn.setCursor(Qt.PointingHandCursor)
+        self.add_category_btn.clicked.connect(self.handle_add_category_click)
+        self.add_category_btn.hide()
+        cat_layout.addWidget(self.add_category_btn)
         
         self.brand_input = QLineEdit()
         self.model_input = QLineEdit()
@@ -274,7 +341,7 @@ class ProductDialog(QDialog):
 
         form_layout.addRow("Product Code *:", self.product_code_input)
         form_layout.addRow("Product Name *:", self.name_input)
-        form_layout.addRow("Category *:", self.category_combo)
+        form_layout.addRow("Category *:", cat_layout)
         form_layout.addRow("Brand *:", self.brand_input)
         form_layout.addRow("Model *:", self.model_input)
         if self.show_imei:

@@ -4,7 +4,7 @@ import subprocess
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout, 
-                             QFileDialog, QTabWidget, QDialog, QDialogButtonBox)
+                             QFileDialog, QTabWidget, QDialog, QDialogButtonBox, QCompleter)
 from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category
@@ -72,6 +72,26 @@ class SalesView(QWidget):
         self.date_input.setDate(QDate.currentDate())
         
         self.customer_combo = QComboBox()
+        self.customer_combo.setEditable(True)
+        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.customer_combo.currentTextChanged.connect(self.check_customer_match)
+        if self.customer_combo.lineEdit():
+            self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)
+
+        cust_layout = QHBoxLayout()
+        cust_layout.setContentsMargins(0, 0, 0, 0)
+        cust_layout.setSpacing(6)
+        cust_layout.addWidget(self.customer_combo, 1)
+
+        self.add_customer_btn = QPushButton("+")
+        self.add_customer_btn.setToolTip("Add new customer")
+        self.add_customer_btn.setProperty("class", "btn-quick-add")
+        self.add_customer_btn.setFixedWidth(40)
+        self.add_customer_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_customer_btn.setCursor(Qt.PointingHandCursor)
+        self.add_customer_btn.clicked.connect(self.handle_add_customer_click)
+        self.add_customer_btn.hide()
+        cust_layout.addWidget(self.add_customer_btn)
         
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
@@ -88,7 +108,7 @@ class SalesView(QWidget):
 
         form_layout.addRow("Invoice Number *:", self.invoice_input)
         form_layout.addRow("Invoice Date:", self.date_input)
-        form_layout.addRow("Customer:", self.customer_combo)
+        form_layout.addRow("Customer:", cust_layout)
         form_layout.addRow("Payment Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
         form_layout.addRow("Paid Amount (₹):", self.paid_input)
@@ -279,6 +299,66 @@ class SalesView(QWidget):
         self.product_combo.blockSignals(False)
         self.update_rate_on_product_change()
 
+    def load_customers(self, select_customer_id=None):
+        curr_id = select_customer_id if select_customer_id is not None else self.customer_combo.currentData()
+        self.customer_combo.blockSignals(True)
+        self.customer_combo.clear()
+        self.customer_combo.addItem("-- Select Customer / Cash --", None)
+        session = Session()
+        try:
+            customers = session.query(Customer).all()
+            for c in customers:
+                self.customer_combo.addItem(c.name, c.id)
+        except Exception as e:
+            print(f"Error loading customers: {e}")
+        finally:
+            session.close()
+
+        # Re-attach completer model
+        completer = QCompleter(self.customer_combo.model(), self.customer_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.customer_combo.setCompleter(completer)
+        self.customer_combo.blockSignals(False)
+
+        if curr_id is not None:
+            idx = self.customer_combo.findData(curr_id)
+            if idx >= 0:
+                self.customer_combo.setCurrentIndex(idx)
+        if hasattr(self, 'add_customer_btn'):
+            self.check_customer_match()
+
+    def check_customer_match(self):
+        text = self.customer_combo.currentText().strip()
+        if not text or text == "-- Select Customer / Cash --":
+            self.add_customer_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.customer_combo.count()):
+            item_text = self.customer_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select Customer / Cash --" and item_text.lower() == text.lower():
+                matched = True
+                if self.customer_combo.currentIndex() != i:
+                    self.customer_combo.blockSignals(True)
+                    self.customer_combo.setCurrentIndex(i)
+                    self.customer_combo.blockSignals(False)
+                break
+        
+        if not matched:
+            self.add_customer_btn.show()
+        else:
+            self.add_customer_btn.hide()
+
+    def handle_add_customer_click(self):
+        from ui.masters.customers import CustomerDialog
+        typed_text = self.customer_combo.currentText().strip()
+        if typed_text == "-- Select Customer / Cash --":
+            typed_text = ""
+        dlg = CustomerDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_customer_id'):
+            self.load_customers(select_customer_id=dlg.saved_customer_id)
+
     def refresh_data(self):
         session = Session()
         try:
@@ -312,11 +392,7 @@ class SalesView(QWidget):
             self.bank_combo.blockSignals(True)
 
             # Load Customers
-            self.customer_combo.clear()
-            self.customer_combo.addItem("-- Select Customer / Cash --", None)
-            customers = session.query(Customer).all()
-            for c in customers:
-                self.customer_combo.addItem(c.name, c.id)
+            self.load_customers()
 
             # Load Categories
             self.category_combo.clear()

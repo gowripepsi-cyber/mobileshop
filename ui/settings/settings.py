@@ -32,15 +32,10 @@ class SettingsView(QWidget):
         self.setup_db_tab()
         self.tabs.addTab(self.db_tab, "Database Admin (Backup & Restore)")
 
-        # Tab 4: Software Activation
-        self.license_tab = QWidget()
-        self.setup_license_tab()
-        self.tabs.addTab(self.license_tab, "Software Activation")
-
-        # Tab 5: Feature Settings
+        # Tab 4: System Maintenance & Factory Reset
         self.feature_tab = QWidget()
         self.setup_feature_tab()
-        self.tabs.addTab(self.feature_tab, "Feature Settings")
+        self.tabs.addTab(self.feature_tab, "System Maintenance")
 
         layout.addWidget(self.tabs)
 
@@ -168,15 +163,6 @@ class SettingsView(QWidget):
             if s_address: self.shop_address_input.setText(s_address.value)
             if s_gst: self.shop_gst_input.setText(s_gst.value)
 
-            # Feature settings
-            enable_repair = session.query(Setting).filter_by(key='enable_repair_service').first()
-            enable_money = session.query(Setting).filter_by(key='enable_money_transfer').first()
-            enable_imei = session.query(Setting).filter_by(key='enable_imei_tracking').first()
-
-            self.enable_repair_checkbox.setChecked(enable_repair.value == 'true' if enable_repair else True)
-            self.enable_money_checkbox.setChecked(enable_money.value == 'true' if enable_money else True)
-            self.enable_imei_checkbox.setChecked(enable_imei.value == 'true' if enable_imei else True)
-
         except Exception as e:
             print(f"Error loading settings: {e}")
         finally:
@@ -297,157 +283,10 @@ class SettingsView(QWidget):
             else:
                 QMessageBox.critical(self, "Restore Failed", msg)
 
-    def setup_license_tab(self):
-        from licensing import manager
-        from PySide6.QtWidgets import QApplication
-        
-        self._lic_connection = None
-        
-        layout = QVBoxLayout(self.license_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
-        
-        lic_frame = QFrame()
-        lic_frame.setProperty("class", "CardFrame")
-        lic_frame.setMinimumWidth(800)
-        lic_frame.setMaximumWidth(1000)
-        lic_layout = QVBoxLayout(lic_frame)
-        lic_layout.setContentsMargins(20, 20, 20, 20)
-        lic_layout.setSpacing(15)
-        
-        title = QLabel("Software Licensing Status")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
-        lic_layout.addWidget(title)
-        
-        status_info = manager.check_license_status()
-        status = status_info["status"]
-        mid = status_info["machine_id"]
-        
-        # Machine ID display
-        mid_layout = QHBoxLayout()
-        mid_lbl = QLabel("Machine ID:")
-        mid_lbl.setStyleSheet("font-weight: bold; color: #94a3b8;")
-        self.lic_mid_edit = QLineEdit(mid)
-        self.lic_mid_edit.setReadOnly(True)
-        self.lic_mid_edit.setFixedHeight(35)
-        self.lic_mid_edit.setStyleSheet("background-color: #141426; border: 1px solid #2c2c54; padding: 5px; font-family: monospace; font-size: 13px; color: #38bdf8;")
-        
-        btn_copy = QPushButton("Copy")
-        btn_copy.setFixedWidth(120)
-        btn_copy.setFixedHeight(35)
-        btn_copy.setStyleSheet("background-color: #334155;")
-        btn_copy.clicked.connect(lambda: [QApplication.clipboard().setText(mid), QMessageBox.information(self, "Success", "Machine ID copied to clipboard.")])
-        
-        mid_layout.addWidget(mid_lbl)
-        mid_layout.addWidget(self.lic_mid_edit)
-        mid_layout.addWidget(btn_copy)
-        lic_layout.addLayout(mid_layout)
-        
-        self.status_lbl = QLabel()
-        self.status_lbl.setStyleSheet("font-size: 13px; font-weight: bold;")
-        lic_layout.addWidget(self.status_lbl)
-        
-        self.action_btn = QPushButton()
-        self.action_btn.setFixedHeight(38)
-        lic_layout.addWidget(self.action_btn)
-        
-        self.update_license_ui_status(status)
-        
-        layout.addWidget(lic_frame, 0, Qt.AlignCenter)
-        layout.addStretch()
-
-    def update_license_ui_status(self, status):
-        from licensing import manager
-        status_info = manager.check_license_status()
-        
-        if status == "active":
-            self.status_lbl.setText("Status: Permanently Activated")
-            self.status_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #10b981;")
-            self.action_btn.setText("Deactivate License on This PC")
-            self.action_btn.setProperty("class", "btn-danger")
-            self.action_btn.setStyleSheet("background-color: #ef4444; color: #ffffff;")
-            if getattr(self, '_lic_connection', None) is not None:
-                try:
-                    self.action_btn.clicked.disconnect(self._lic_connection)
-                except Exception:
-                    pass
-                self._lic_connection = None
-            self._lic_connection = self.action_btn.clicked.connect(self.handle_deactivation)
-        else:
-            days = status_info.get("days_remaining", 0)
-            self.status_lbl.setText(f"Status: Trial Mode ({days} days remaining)")
-            self.status_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #f59e0b;")
-            self.action_btn.setText("Activate License")
-            self.action_btn.setProperty("class", "btn-success")
-            self.action_btn.setStyleSheet("background-color: #10b981; color: #ffffff;")
-            if getattr(self, '_lic_connection', None) is not None:
-                try:
-                    self.action_btn.clicked.disconnect(self._lic_connection)
-                except Exception:
-                    pass
-                self._lic_connection = None
-            self._lic_connection = self.action_btn.clicked.connect(self.handle_activation)
-
-    def handle_activation(self):
-        from licensing.ui_activation import ActivationDialog
-        from PySide6.QtWidgets import QDialog
-        from licensing import manager
-        
-        dlg = ActivationDialog(self)
-        if dlg.exec() == QDialog.Accepted:
-            status_info = manager.check_license_status()
-            self.update_license_ui_status(status_info["status"])
-
-    def handle_deactivation(self):
-        from licensing import manager
-        
-        confirm = QMessageBox.question(
-            self, "Confirm License Deactivation",
-            "Are you sure you want to deactivate this software license?\n\n"
-            "This will delete your local license file and close the application.",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-        )
-        if confirm == QMessageBox.Yes:
-            if manager.deactivate_software():
-                QMessageBox.information(self, "Deactivated", "License removed successfully. The application will now exit.")
-                self.window().close()
-            else:
-                QMessageBox.critical(self, "Error", "Failed to remove the license. Please check file permissions.")
-
     def setup_feature_tab(self):
         layout = QVBoxLayout(self.feature_tab)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(20)
-
-        form_frame = QFrame()
-        form_frame.setProperty("class", "CardFrame")
-        form_frame.setMinimumWidth(800)
-        form_frame.setMaximumWidth(900)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setContentsMargins(20, 20, 20, 20)
-        form_layout.setSpacing(15)
-
-        title = QLabel("Feature Adaptability Settings")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
-        form_layout.addRow(title)
-
-        self.enable_repair_checkbox = QCheckBox("Enable Repair Service Desk (Shows/hides Service Cards UI)")
-        self.enable_money_checkbox = QCheckBox("Enable Financial Remittance (Shows/hides UPI/Money Transfer UI)")
-        self.enable_imei_checkbox = QCheckBox("Enable Unique Identifier Tracking (Shows/hides IMEI/Serial Number inputs)")
-
-        self.enable_repair_checkbox.setStyleSheet("color: #ffffff; font-size: 13px;")
-        self.enable_money_checkbox.setStyleSheet("color: #ffffff; font-size: 13px;")
-        self.enable_imei_checkbox.setStyleSheet("color: #ffffff; font-size: 13px;")
-
-        form_layout.addRow("", self.enable_repair_checkbox)
-        form_layout.addRow("", self.enable_money_checkbox)
-        form_layout.addRow("", self.enable_imei_checkbox)
-
-        self.save_features_btn = QPushButton("Save Feature Settings")
-        self.save_features_btn.setProperty("class", "btn-success")
-        self.save_features_btn.clicked.connect(self.save_feature_settings)
-        form_layout.addRow("", self.save_features_btn)
-
-        layout.addWidget(form_frame, 0, Qt.AlignCenter)
 
         # Danger Zone / Factory Reset Panel
         danger_frame = QFrame()
@@ -476,40 +315,6 @@ class SettingsView(QWidget):
 
         layout.addWidget(danger_frame, 0, Qt.AlignCenter)
         layout.addStretch()
-
-    def save_feature_settings(self):
-        session = Session()
-        try:
-            r_val = 'true' if self.enable_repair_checkbox.isChecked() else 'false'
-            m_val = 'true' if self.enable_money_checkbox.isChecked() else 'false'
-            i_val = 'true' if self.enable_imei_checkbox.isChecked() else 'false'
-
-            # Update or insert
-            def update_key(k, v):
-                sett = session.query(Setting).filter_by(key=k).first()
-                if sett:
-                    sett.value = v
-                else:
-                    session.add(Setting(key=k, value=v))
-
-            update_key('enable_repair_service', r_val)
-            update_key('enable_money_transfer', m_val)
-            update_key('enable_imei_tracking', i_val)
-
-            session.commit()
-            QMessageBox.information(self, "Success", "Feature adaptability settings updated successfully.")
-            
-            # Update main window navigation dynamically
-            main_window = self.window()
-            if hasattr(main_window, 'apply_feature_settings'):
-                main_window.apply_feature_settings()
-                
-            self.refresh_data()
-        except Exception as e:
-            session.rollback()
-            QMessageBox.critical(self, "Error", f"Failed to save feature settings: {e}")
-        finally:
-            session.close()
 
     def wipe_all_data(self):
         confirm1 = QMessageBox.question(

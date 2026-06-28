@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout,
-                             QTabWidget, QDialog, QDialogButtonBox)
+                             QTabWidget, QDialog, QDialogButtonBox, QCompleter)
 from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
@@ -71,6 +71,26 @@ class PurchaseView(QWidget):
         self.date_input.setDate(QDate.currentDate())
         
         self.supplier_combo = QComboBox()
+        self.supplier_combo.setEditable(True)
+        self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.supplier_combo.currentTextChanged.connect(self.check_supplier_match)
+        if self.supplier_combo.lineEdit():
+            self.supplier_combo.lineEdit().textChanged.connect(self.check_supplier_match)
+
+        supp_layout = QHBoxLayout()
+        supp_layout.setContentsMargins(0, 0, 0, 0)
+        supp_layout.setSpacing(6)
+        supp_layout.addWidget(self.supplier_combo, 1)
+
+        self.add_supplier_btn = QPushButton("+")
+        self.add_supplier_btn.setToolTip("Add new supplier")
+        self.add_supplier_btn.setProperty("class", "btn-quick-add")
+        self.add_supplier_btn.setFixedWidth(40)
+        self.add_supplier_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_supplier_btn.setCursor(Qt.PointingHandCursor)
+        self.add_supplier_btn.clicked.connect(self.handle_add_supplier_click)
+        self.add_supplier_btn.hide()
+        supp_layout.addWidget(self.add_supplier_btn)
         
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
@@ -87,7 +107,7 @@ class PurchaseView(QWidget):
 
         form_layout.addRow("Invoice Number *:", self.invoice_input)
         form_layout.addRow("Invoice Date:", self.date_input)
-        form_layout.addRow("Supplier:", self.supplier_combo)
+        form_layout.addRow("Supplier:", supp_layout)
         form_layout.addRow("Payment Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
         form_layout.addRow("Paid Amount (₹):", self.paid_input)
@@ -133,7 +153,7 @@ class PurchaseView(QWidget):
         self.product_code_input.setPlaceholderText("Code")
         self.product_code_input.setFixedWidth(120)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
-        row1_layout.addWidget(QLabel("Code:"), 0)
+        row1_layout.addWidget(QLabel("Product Code:"), 0)
         row1_layout.addWidget(self.product_code_input, 1)
         
         self.category_combo = QComboBox()
@@ -144,39 +164,60 @@ class PurchaseView(QWidget):
         self.product_combo = QComboBox()
         self.product_combo.setPlaceholderText("Select Product")
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        row1_layout.addWidget(QLabel("Product:"), 0)
-        row1_layout.addWidget(self.product_combo, 5)
+        row1_layout.addWidget(QLabel("Product Name:"), 0)
+        row1_layout.addWidget(self.product_combo, 4)
 
         right_layout.addLayout(row1_layout)
 
         row2_layout = QHBoxLayout()
 
-        self.qty_input = QSpinBox()
-        self.qty_input.setRange(1, 1000)
-        self.qty_input.setValue(1)
-        row2_layout.addWidget(QLabel("Qty:"), 0)
-        row2_layout.addWidget(self.qty_input, 1)
+        self.brand_input = QLineEdit()
+        self.brand_input.setPlaceholderText("Brand")
+        row2_layout.addWidget(QLabel("Brand:"), 0)
+        row2_layout.addWidget(self.brand_input, 1)
+
+        self.model_input = QLineEdit()
+        self.model_input.setPlaceholderText("Model")
+        row2_layout.addWidget(QLabel("Model:"), 0)
+        row2_layout.addWidget(self.model_input, 1)
+
+        right_layout.addLayout(row2_layout)
+
+        row3_layout = QHBoxLayout()
 
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        row2_layout.addWidget(QLabel("Rate (₹):"), 0)
-        row2_layout.addWidget(self.rate_input, 2)
+        row3_layout.addWidget(QLabel("Purchase Price (₹):"), 0)
+        row3_layout.addWidget(self.rate_input, 2)
+
+        self.selling_price_input = QDoubleSpinBox()
+        self.selling_price_input.setRange(0.0, 9999999.0)
+        self.selling_price_input.setValue(0.0)
+        self.selling_price_input.setDecimals(2)
+        row3_layout.addWidget(QLabel("Selling Price (₹):"), 0)
+        row3_layout.addWidget(self.selling_price_input, 2)
+
+        self.qty_input = QSpinBox()
+        self.qty_input.setRange(1, 1000)
+        self.qty_input.setValue(1)
+        row3_layout.addWidget(QLabel("Qty:"), 0)
+        row3_layout.addWidget(self.qty_input, 1)
 
         self.add_item_btn = QPushButton("Add Item")
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        row2_layout.addWidget(self.add_item_btn, 2)
+        row3_layout.addWidget(self.add_item_btn, 2)
 
-        right_layout.addLayout(row2_layout)
+        right_layout.addLayout(row3_layout)
 
         # Items Table
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Qty", "Rate (₹)", "Total (₹)", "Action"])
+        self.table.setColumnCount(10)
+        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Category", "Brand", "Model", "Qty", "Purchase Price (₹)", "Selling Price (₹)", "Total (₹)", "Action"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 110)
+        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
+        self.table.setColumnWidth(9, 100)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
         right_layout.addWidget(self.table)
@@ -254,8 +295,65 @@ class PurchaseView(QWidget):
         # Lazy loading state
         self.history_offset = 0
         self.has_more_history = True
-        self.history_table.verticalScrollBar().valueChanged.connect(self.handle_history_scroll)
+    def load_suppliers(self, select_supplier_id=None):
+        curr_id = select_supplier_id if select_supplier_id is not None else self.supplier_combo.currentData()
+        self.supplier_combo.blockSignals(True)
+        self.supplier_combo.clear()
+        self.supplier_combo.addItem("-- Select Supplier / Cash --", None)
+        session = Session()
+        try:
+            suppliers = session.query(Supplier).all()
+            for s in suppliers:
+                self.supplier_combo.addItem(s.name, s.id)
+        except Exception as e:
+            print(f"Error loading suppliers: {e}")
+        finally:
+            session.close()
 
+        # Re-attach completer model
+        completer = QCompleter(self.supplier_combo.model(), self.supplier_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.supplier_combo.setCompleter(completer)
+        self.supplier_combo.blockSignals(False)
+
+        if curr_id is not None:
+            idx = self.supplier_combo.findData(curr_id)
+            if idx >= 0:
+                self.supplier_combo.setCurrentIndex(idx)
+        if hasattr(self, 'add_supplier_btn'):
+            self.check_supplier_match()
+
+    def check_supplier_match(self):
+        text = self.supplier_combo.currentText().strip()
+        if not text or text == "-- Select Supplier / Cash --":
+            self.add_supplier_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.supplier_combo.count()):
+            item_text = self.supplier_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select Supplier / Cash --" and item_text.lower() == text.lower():
+                matched = True
+                if self.supplier_combo.currentIndex() != i:
+                    self.supplier_combo.blockSignals(True)
+                    self.supplier_combo.setCurrentIndex(i)
+                    self.supplier_combo.blockSignals(False)
+                break
+        
+        if not matched:
+            self.add_supplier_btn.show()
+        else:
+            self.add_supplier_btn.hide()
+
+    def handle_add_supplier_click(self):
+        from ui.masters.suppliers import SupplierDialog
+        typed_text = self.supplier_combo.currentText().strip()
+        if typed_text == "-- Select Supplier / Cash --":
+            typed_text = ""
+        dlg = SupplierDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_supplier_id'):
+            self.load_suppliers(select_supplier_id=dlg.saved_supplier_id)
 
     def filter_products_by_category(self):
         self.product_combo.blockSignals(True)
@@ -305,11 +403,7 @@ class PurchaseView(QWidget):
             self.bank_combo.blockSignals(True)
 
             # Load Suppliers
-            self.supplier_combo.clear()
-            self.supplier_combo.addItem("-- Select Supplier / Cash --", None)
-            suppliers = session.query(Supplier).all()
-            for s in suppliers:
-                self.supplier_combo.addItem(s.name, s.id)
+            self.load_suppliers()
 
             # Load Categories
             self.category_combo.clear()
@@ -447,11 +541,23 @@ class PurchaseView(QWidget):
         if prod_id and prod_id in self.products_cache:
             prod = self.products_cache[prod_id]
             self.rate_input.setValue(prod.purchase_price)
+            if hasattr(self, 'selling_price_input'):
+                self.selling_price_input.setValue(prod.selling_price)
+            if hasattr(self, 'brand_input'):
+                self.brand_input.setText(prod.brand if prod.brand else "")
+            if hasattr(self, 'model_input'):
+                self.model_input.setText(prod.model if prod.model else "")
             # Sync product code input for visual feedback
             if prod.product_code:
                 self.product_code_input.setText(prod.product_code)
         else:
             self.rate_input.setValue(0.0)
+            if hasattr(self, 'selling_price_input'):
+                self.selling_price_input.setValue(0.0)
+            if hasattr(self, 'brand_input'):
+                self.brand_input.clear()
+            if hasattr(self, 'model_input'):
+                self.model_input.clear()
             self.product_code_input.clear()
 
     def handle_product_code_entry(self):
@@ -495,16 +601,24 @@ class PurchaseView(QWidget):
         prod_id = self.product_combo.currentData()
         qty = self.qty_input.value()
         rate = self.rate_input.value()
+        selling_price = self.selling_price_input.value() if hasattr(self, 'selling_price_input') else 0.0
+        brand = self.brand_input.text().strip() if hasattr(self, 'brand_input') else ""
+        model = self.model_input.text().strip() if hasattr(self, 'model_input') else ""
 
         p_cache = self.products_cache.get(prod_id)
         prod_text = p_cache.name if p_cache else self.product_combo.currentText()
         prod_code = p_cache.product_code if p_cache else "-"
+        category = p_cache.category if p_cache else "-"
 
         # Check if already added
         for item in self.bill_items:
             if item["product_id"] == prod_id:
                 item["qty"] += qty
                 item["rate"] = rate  # update with latest rate
+                item["selling_price"] = selling_price
+                item["brand"] = brand
+                item["model"] = model
+                item["category"] = category
                 self.update_table()
                 return
 
@@ -512,8 +626,12 @@ class PurchaseView(QWidget):
             "product_id": prod_id,
             "product_code": prod_code,
             "name": prod_text,
+            "category": category,
+            "brand": brand,
+            "model": model,
             "qty": qty,
-            "rate": rate
+            "rate": rate,
+            "selling_price": selling_price
         })
         
         self.update_table()
@@ -526,12 +644,16 @@ class PurchaseView(QWidget):
         self.table.setRowCount(len(self.bill_items))
         for i, item in enumerate(self.bill_items):
             self.table.setItem(i, 0, QTableWidgetItem(item.get("product_code", "-")))
-            self.table.setItem(i, 1, QTableWidgetItem(item["name"]))
-            self.table.setItem(i, 2, QTableWidgetItem(str(item["qty"])))
-            self.table.setItem(i, 3, QTableWidgetItem(f"{item['rate']:.2f}"))
+            self.table.setItem(i, 1, QTableWidgetItem(item.get("name", "-")))
+            self.table.setItem(i, 2, QTableWidgetItem(item.get("category", "-")))
+            self.table.setItem(i, 3, QTableWidgetItem(item.get("brand", "-")))
+            self.table.setItem(i, 4, QTableWidgetItem(item.get("model", "-")))
+            self.table.setItem(i, 5, QTableWidgetItem(str(item.get("qty", 0))))
+            self.table.setItem(i, 6, QTableWidgetItem(f"{item.get('rate', 0.0):.2f}"))
+            self.table.setItem(i, 7, QTableWidgetItem(f"{item.get('selling_price', 0.0):.2f}"))
             
-            subtotal = item["qty"] * item["rate"]
-            self.table.setItem(i, 4, QTableWidgetItem(f"{subtotal:.2f}"))
+            subtotal = item.get("qty", 0) * item.get("rate", 0.0)
+            self.table.setItem(i, 8, QTableWidgetItem(f"{subtotal:.2f}"))
 
             # Delete button (centered wrapper container)
             btn_container = QWidget()
@@ -544,7 +666,7 @@ class PurchaseView(QWidget):
             del_btn.setProperty("class", "btn-action-delete")
             del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
             btn_layout.addWidget(del_btn)
-            self.table.setCellWidget(i, 5, btn_container)
+            self.table.setCellWidget(i, 9, btn_container)
 
         self.update_summary()
 
@@ -682,9 +804,16 @@ class PurchaseView(QWidget):
 
                 # Update product stock and rate
                 prod = session.query(Product).get(item["product_id"])
-                prod.stock_qty += item["qty"]
-                # Optionally update purchase price to the latest price
-                prod.purchase_price = item["rate"]
+                if prod:
+                    prod.stock_qty += item["qty"]
+                    # Optionally update purchase price to the latest price
+                    prod.purchase_price = item["rate"]
+                    if item.get("selling_price", 0.0) > 0:
+                        prod.selling_price = item["selling_price"]
+                    if item.get("brand"):
+                        prod.brand = item["brand"]
+                    if item.get("model"):
+                        prod.model = item["model"]
 
             # Update Supplier Outstanding Balance
             supplier = session.query(Supplier).get(supp_id)
@@ -736,6 +865,12 @@ class PurchaseView(QWidget):
             self.paid_input.setValue(0.0)
             self.qty_input.setValue(1)
             self.rate_input.setValue(0.0)
+            if hasattr(self, 'selling_price_input'):
+                self.selling_price_input.setValue(0.0)
+            if hasattr(self, 'brand_input'):
+                self.brand_input.clear()
+            if hasattr(self, 'model_input'):
+                self.model_input.clear()
             self.refresh_data()
 
         except Exception as e:
@@ -935,9 +1070,13 @@ class PurchaseView(QWidget):
                 self.bill_items.append({
                     "product_id": item.product_id,
                     "product_code": item.product.product_code if item.product else "-",
-                    "name": item.product.name,
+                    "name": item.product.name if item.product else "Unknown",
+                    "category": item.product.category if item.product else "-",
+                    "brand": item.product.brand if item.product else "-",
+                    "model": item.product.model if item.product else "-",
                     "qty": item.qty,
-                    "rate": item.rate
+                    "rate": item.rate,
+                    "selling_price": item.product.selling_price if item.product else 0.0
                 })
                 
             self.update_table()
@@ -1034,4 +1173,10 @@ class PurchaseView(QWidget):
         self.paid_input.setValue(0.0)
         self.qty_input.setValue(1)
         self.rate_input.setValue(0.0)
+        if hasattr(self, 'selling_price_input'):
+            self.selling_price_input.setValue(0.0)
+        if hasattr(self, 'brand_input'):
+            self.brand_input.clear()
+        if hasattr(self, 'model_input'):
+            self.model_input.clear()
         self.refresh_data()
