@@ -155,6 +155,7 @@ class PurchaseView(QWidget):
         self.product_code_input.setPlaceholderText("Code")
         self.product_code_input.setFixedWidth(120)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
+        self.product_code_input._skip_enter_nav = True
         row1_layout.addWidget(QLabel("Product Code:"), 0)
         row1_layout.addWidget(self.product_code_input, 1)
         

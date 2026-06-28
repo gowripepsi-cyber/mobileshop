@@ -13,10 +13,12 @@ from database import init_db
 from styles import GLOBAL_STYLE
 from ui.login_window import LoginWindow
 from ui.main_window import MainWindow
+from utils.ui_helpers import setup_global_enter_navigation
 
 def main():
     # 1. Run GUI App
     app = QApplication(sys.argv)
+    setup_global_enter_navigation(app)
     
     # Apply modern custom stylesheet globally
     app.setStyleSheet(GLOBAL_STYLE)
