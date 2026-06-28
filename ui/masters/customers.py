@@ -118,7 +118,8 @@ class CustomersView(QWidget):
         self.search_input.textChanged.connect(self.refresh_data)
         top_bar.addWidget(self.search_input, 4)
 
-        self.add_btn = QPushButton("Add Customer")
+        self.add_btn = QPushButton("Add Customer (Ctrl+N)")
+        self.add_btn.setToolTip("Add new customer (Ctrl+N)")
         self.add_btn.clicked.connect(self.add_customer)
         top_bar.addWidget(self.add_btn, 1)
 

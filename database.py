@@ -102,17 +102,47 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE payments ADD COLUMN sales_id INTEGER REFERENCES sales_master(id)"))
 
+    # Schema migration: check and add columns to users table
+    user_columns = [c['name'] for c in inspector.get_columns('users')]
+    if 'full_name' not in user_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN full_name TEXT"))
+    if 'is_active' not in user_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1"))
+    if 'last_login' not in user_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN last_login DATETIME"))
+    if 'created_at' not in user_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+    if 'permissions' not in user_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
+
     session = Session()
     try:
+        # Update existing users with role 'Admin' to 'Administrator'
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE users SET role = 'Administrator' WHERE role = 'Admin'"))
+
         # 1. Seed admin user if it doesn't exist
         admin = session.query(User).filter_by(username='admin').first()
         if not admin:
             admin_user = User(
                 username='admin',
                 password_hash=get_hash('admin'),
-                role='Admin'
+                full_name='System Administrator',
+                role='Administrator',
+                is_active=True
             )
             session.add(admin_user)
+        else:
+            if not admin.full_name:
+                admin.full_name = 'System Administrator'
+            if admin.role != 'Administrator':
+                admin.role = 'Administrator'
+            admin.is_active = True
             
         # 2. Seed bank accounts and opening transactions if empty
         bank_count = session.query(BankAccount).count()

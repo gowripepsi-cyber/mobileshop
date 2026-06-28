@@ -68,13 +68,23 @@ class LoginWindow(QDialog):
 
         session = Session()
         try:
+            import datetime
             hashed_pwd = get_hash(password)
             user = session.query(User).filter_by(username=username, password_hash=hashed_pwd).first()
             if user:
+                if not user.is_active:
+                    self.error_label.setText("Your account has been disabled. Please contact an administrator.")
+                    return
+
+                user.last_login = datetime.datetime.now()
+                session.commit()
+
                 self.user_data = {
                     "id": user.id,
                     "username": user.username,
-                    "role": user.role
+                    "full_name": user.full_name or user.username,
+                    "role": user.role,
+                    "permissions": user.get_permissions()
                 }
                 self.accept()
             else:

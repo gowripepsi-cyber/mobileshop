@@ -187,6 +187,10 @@ class MainWindow(QMainWindow):
             sc = QShortcut(QKeySequence(key), self)
             sc.activated.connect(partial(self.open_master_tab, tab_idx))
 
+        # Setup universal Add shortcut (Ctrl+N) for master records
+        self.universal_add_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.universal_add_shortcut.activated.connect(self.handle_universal_add)
+
         # Set default view
         self.apply_feature_settings()
         self.switch_view(0)
@@ -233,10 +237,18 @@ class MainWindow(QMainWindow):
         if hasattr(widget, "refresh_data"):
             widget.refresh_data()
 
+        from utils.permissions import enforce_ui_permissions
+        enforce_ui_permissions(self)
+
     def open_master_tab(self, tab_index):
         self.switch_view(1)
         if hasattr(self, 'masters_view'):
             self.masters_view.set_active_tab(tab_index)
+
+    def handle_universal_add(self):
+        self.switch_view(1)
+        if hasattr(self, 'masters_view'):
+            self.masters_view.trigger_add_action()
 
     def handle_logout(self):
         confirm = QMessageBox.question(
@@ -291,10 +303,14 @@ class MainWindow(QMainWindow):
         finally:
             session.close()
 
-        if 4 in self.nav_buttons:
-            self.nav_buttons[4].setVisible(enable_repair)
-        if 8 in self.nav_buttons:
-            self.nav_buttons[8].setVisible(enable_money)
+        if 4 in self.nav_buttons and not enable_repair:
+            self.nav_buttons[4].setVisible(False)
+        if 8 in self.nav_buttons and not enable_money:
+            self.nav_buttons[8].setVisible(False)
+
+        # Enforce Role-Based Access Control permissions
+        from utils.permissions import enforce_ui_permissions
+        enforce_ui_permissions(self)
 
         # Fallback if the active view is now disabled
         curr_idx = self.stacked_widget.currentIndex()

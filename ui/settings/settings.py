@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
 from PySide6.QtCore import Qt
 from database import Session, Setting, User, get_hash, engine, init_db
 from utils.db_backup import backup_db, restore_db
+from ui.settings.user_management import UserManagementView
 
 class SettingsView(QWidget):
     def __init__(self, parent=None):
@@ -22,17 +23,21 @@ class SettingsView(QWidget):
         self.setup_shop_tab()
         self.tabs.addTab(self.shop_tab, "Shop Profile Details")
 
-        # Tab 2: Security
+        # Tab 2: User Management
+        self.user_mgmt_tab = UserManagementView(self)
+        self.tabs.addTab(self.user_mgmt_tab, "User Management (RBAC)")
+
+        # Tab 3: Security
         self.security_tab = QWidget()
         self.setup_security_tab()
         self.tabs.addTab(self.security_tab, "Change Password")
 
-        # Tab 3: Database Admin
+        # Tab 4: Database Admin
         self.db_tab = QWidget()
         self.setup_db_tab()
         self.tabs.addTab(self.db_tab, "Database Admin (Backup & Restore)")
 
-        # Tab 4: System Maintenance & Factory Reset
+        # Tab 5: System Maintenance & Factory Reset
         self.feature_tab = QWidget()
         self.setup_feature_tab()
         self.tabs.addTab(self.feature_tab, "System Maintenance")
@@ -162,6 +167,9 @@ class SettingsView(QWidget):
             if s_contact: self.shop_contact_input.setText(s_contact.value)
             if s_address: self.shop_address_input.setText(s_address.value)
             if s_gst: self.shop_gst_input.setText(s_gst.value)
+
+            if hasattr(self, 'user_mgmt_tab'):
+                self.user_mgmt_tab.refresh_data()
 
         except Exception as e:
             print(f"Error loading settings: {e}")

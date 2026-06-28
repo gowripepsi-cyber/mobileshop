@@ -605,4 +605,109 @@ QPushButton[class="btn-action-success"]:hover {
 QPushButton[class="btn-action-success"]:pressed {
     background-color: #047857;
 }
+
+/* GroupBox Styling */
+QGroupBox {
+    font-weight: bold;
+    font-size: 13px;
+    border: 1px solid #28284e;
+    border-radius: 8px;
+    margin-top: 15px;
+    padding-top: 15px;
+    background-color: #151528;
+    color: #ffffff;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 15px;
+    padding: 0 8px;
+    background-color: #151528;
+    color: #818cf8;
+    font-weight: bold;
+}
+
+/* TreeWidget and TreeView Styling */
+QTreeWidget, QTreeView {
+    background-color: #141426;
+    alternate-background-color: #191930;
+    border: 1px solid #28284e;
+    border-radius: 6px;
+    color: #f1f5f9;
+    outline: none;
+}
+
+QTreeWidget:disabled, QTreeView:disabled {
+    background-color: #141426;
+    color: #cbd5e1;
+}
+
+QTreeWidget::item, QTreeView::item {
+    padding: 8px 6px;
+    color: #f1f5f9;
+    border-bottom: 1px solid #1e1e38;
+}
+
+QTreeWidget::item:hover, QTreeView::item:hover {
+    background-color: #222244;
+    color: #ffffff;
+}
+
+QTreeWidget::item:selected, QTreeView::item:selected {
+    background-color: #4f46e5;
+    color: #ffffff;
+}
+
+QTreeWidget::item:disabled, QTreeView::item:disabled {
+    color: #cbd5e1;
+    background-color: #141426;
+}
+
+/* Branch / Arrow styling */
+QTreeWidget::branch, QTreeView::branch {
+    background-color: #141426;
+}
+
+QTreeWidget::branch:selected, QTreeView::branch:selected {
+    background-color: #4f46e5;
+}
+
+QTreeWidget::branch:hover, QTreeView::branch:hover {
+    background-color: #222244;
+}
+
+/* Checkbox / Indicator styling in TreeWidget and standalone QCheckBox */
+QTreeWidget::indicator, QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    background-color: #1e1e38;
+    border: 2px solid #475569;
+    border-radius: 4px;
+}
+
+QTreeWidget::indicator:hover, QCheckBox::indicator:hover {
+    border: 2px solid #818cf8;
+    background-color: #28284e;
+}
+
+QTreeWidget::indicator:checked, QCheckBox::indicator:checked {
+    background-color: #6366f1;
+    border: 2px solid #818cf8;
+}
+
+QTreeWidget::indicator:unchecked, QCheckBox::indicator:unchecked {
+    background-color: #141426;
+    border: 2px solid #475569;
+}
+
+QTreeWidget::indicator:disabled, QCheckBox::indicator:disabled {
+    background-color: #18182e;
+    border: 2px solid #334155;
+}
+
+QTreeWidget::indicator:checked:disabled, QCheckBox::indicator:checked:disabled {
+    background-color: #3730a3;
+    border: 2px solid #818cf8;
+}
 """

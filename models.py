@@ -1,6 +1,7 @@
 import datetime
+import json
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Text, Boolean
 
 Base = declarative_base()
 
@@ -9,7 +10,23 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default='Admin')  # Admin, Technician, Sales
+    full_name = Column(String, nullable=True)
+    role = Column(String, default='Standard User')  # Administrator, Standard User
+    is_active = Column(Boolean, default=True)
+    last_login = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    permissions = Column(Text, nullable=True)  # JSON string storing module permissions
+
+    def get_permissions(self):
+        if not self.permissions:
+            return {}
+        try:
+            return json.loads(self.permissions)
+        except Exception:
+            return {}
+
+    def set_permissions(self, perm_dict):
+        self.permissions = json.dumps(perm_dict)
 
 class Customer(Base):
     __tablename__ = 'customers'

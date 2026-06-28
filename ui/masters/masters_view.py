@@ -42,6 +42,17 @@ class MastersView(QWidget):
 
         layout.addWidget(self.tabs)
 
+    def trigger_add_action(self):
+        current_widget = self.tabs.currentWidget()
+        if current_widget == self.products_view:
+            self.products_view.add_product()
+        elif current_widget == self.customers_view:
+            self.customers_view.add_customer()
+        elif current_widget == self.suppliers_view:
+            self.suppliers_view.add_supplier()
+        elif current_widget == self.bank_accounts_view:
+            self.bank_accounts_view.add_account()
+
     def on_tab_changed(self, index):
         widget = self.tabs.widget(index)
         if hasattr(widget, "refresh_data"):

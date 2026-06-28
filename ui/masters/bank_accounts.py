@@ -134,7 +134,8 @@ class BankAccountsView(QWidget):
         self.search_input.textChanged.connect(self.refresh_data)
         top_bar.addWidget(self.search_input, 4)
 
-        self.add_btn = QPushButton("Add Account")
+        self.add_btn = QPushButton("Add Account (Ctrl+N)")
+        self.add_btn.setToolTip("Add new bank account (Ctrl+N)")
         self.add_btn.clicked.connect(self.add_account)
         top_bar.addWidget(self.add_btn, 1)
 
