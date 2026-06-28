@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_purchase_pdf
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class PurchaseView(QWidget):
     def __init__(self, parent=None):
@@ -73,6 +74,7 @@ class PurchaseView(QWidget):
         self.supplier_combo = QComboBox()
         self.supplier_combo.setEditable(True)
         self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.supplier_combo)
         self.supplier_combo.currentTextChanged.connect(self.check_supplier_match)
         if self.supplier_combo.lineEdit():
             self.supplier_combo.lineEdit().textChanged.connect(self.check_supplier_match)

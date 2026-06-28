@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, PurchaseReturnMaster, PurchaseReturnItem
 from utils.pdf_generator import generate_purchase_return_pdf
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class PurchaseReturnEntryWidget(QWidget):
     def __init__(self, parent=None, history_widget=None):
@@ -44,7 +45,29 @@ class PurchaseReturnEntryWidget(QWidget):
         self.date_input.setDate(QDate.currentDate())
         
         self.supplier_combo = QComboBox()
+        self.supplier_combo.setEditable(True)
+        self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.supplier_combo)
+        self.supplier_combo.currentTextChanged.connect(self.check_supplier_match)
+        if self.supplier_combo.lineEdit():
+            self.supplier_combo.lineEdit().setPlaceholderText("Select or type supplier name")
+            self.supplier_combo.lineEdit().textChanged.connect(self.check_supplier_match)
         self.supplier_combo.currentIndexChanged.connect(self.load_supplier_purchases)
+
+        supp_layout = QHBoxLayout()
+        supp_layout.setContentsMargins(0, 0, 0, 0)
+        supp_layout.setSpacing(6)
+        supp_layout.addWidget(self.supplier_combo, 1)
+
+        self.add_supplier_btn = QPushButton("+")
+        self.add_supplier_btn.setToolTip("Add new supplier")
+        self.add_supplier_btn.setProperty("class", "btn-quick-add")
+        self.add_supplier_btn.setFixedWidth(40)
+        self.add_supplier_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_supplier_btn.setCursor(Qt.PointingHandCursor)
+        self.add_supplier_btn.clicked.connect(self.handle_add_supplier_click)
+        self.add_supplier_btn.hide()
+        supp_layout.addWidget(self.add_supplier_btn)
         
         self.invoice_combo = QComboBox()
         
@@ -69,7 +92,7 @@ class PurchaseReturnEntryWidget(QWidget):
 
         form_layout.addRow("Return Number *:", self.return_no_input)
         form_layout.addRow("Return Date:", self.date_input)
-        form_layout.addRow("Supplier *:", self.supplier_combo)
+        form_layout.addRow("Supplier *:", supp_layout)
         form_layout.addRow("Ref Purchase Invoice:", self.invoice_combo)
         form_layout.addRow("Refund Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
@@ -167,6 +190,42 @@ class PurchaseReturnEntryWidget(QWidget):
 
     def toggle_bank_account(self, mode):
         self.bank_combo.setEnabled(mode == "Bank")
+
+    def check_supplier_match(self):
+        text = self.supplier_combo.currentText().strip()
+        if not text or text == "-- Select Supplier --":
+            self.add_supplier_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.supplier_combo.count()):
+            item_text = self.supplier_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select Supplier --" and item_text.lower() == text.lower():
+                matched = True
+                if self.supplier_combo.currentIndex() != i:
+                    self.supplier_combo.blockSignals(True)
+                    self.supplier_combo.setCurrentIndex(i)
+                    self.supplier_combo.blockSignals(False)
+                    self.load_supplier_purchases()
+                break
+        
+        if not matched:
+            self.add_supplier_btn.show()
+        else:
+            self.add_supplier_btn.hide()
+
+    def handle_add_supplier_click(self):
+        from ui.masters.suppliers import SupplierDialog
+        typed_text = self.supplier_combo.currentText().strip()
+        if typed_text == "-- Select Supplier --":
+            typed_text = ""
+        dlg = SupplierDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_supplier_id'):
+            self.refresh_data()
+            for idx in range(self.supplier_combo.count()):
+                if self.supplier_combo.itemData(idx) == dlg.saved_supplier_id:
+                    self.supplier_combo.setCurrentIndex(idx)
+                    break
 
     def load_supplier_purchases(self):
         supp_id = self.supplier_combo.currentData()
@@ -307,6 +366,7 @@ class PurchaseReturnEntryWidget(QWidget):
             self.category_combo.blockSignals(False)
             self.bank_combo.blockSignals(False)
 
+            self.check_supplier_match()
             self.filter_products_by_category()
         except Exception as e:
             print(f"Error loading purchase return fields: {e}")

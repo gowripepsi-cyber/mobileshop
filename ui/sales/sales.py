@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_sales_pdf
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class SalesView(QWidget):
     def __init__(self, parent=None):
@@ -74,6 +75,7 @@ class SalesView(QWidget):
         self.customer_combo = QComboBox()
         self.customer_combo.setEditable(True)
         self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.customer_combo)
         self.customer_combo.currentTextChanged.connect(self.check_customer_match)
         if self.customer_combo.lineEdit():
             self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)

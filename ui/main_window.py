@@ -1,12 +1,11 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QStackedWidget, QMessageBox, QSpacerItem, QSizePolicy
 from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtGui import QShortcut, QKeySequence
+from functools import partial
 
 # Import views
 from ui.dashboard import DashboardView
-from ui.masters.products import ProductsView
-from ui.masters.customers import CustomersView
-from ui.masters.suppliers import SuppliersView
-from ui.masters.bank_accounts import BankAccountsView
+from ui.masters.masters_view import MastersView
 from ui.inventory.purchase import PurchaseView
 from ui.sales.sales import SalesView
 from ui.services.jobs import ServicesView
@@ -49,17 +48,14 @@ class MainWindow(QMainWindow):
         self.nav_buttons = {}
         nav_items = [
             ("Dashboard", 0),
-            ("Products", 1),
-            ("Customers", 2),
-            ("Suppliers", 3),
-            ("Bank Accounts", 4),
-            ("Purchase Entry", 5),
-            ("Sales Invoice", 6),
-            ("Service Cards", 7),
-            ("Payments", 8),
-            ("Reports", 9),
-            ("Settings", 10),
-            ("UPI / Money Transfer", 11),
+            ("Master Records", 1),
+            ("Purchase Entry", 2),
+            ("Sales Invoice", 3),
+            ("Service Cards", 4),
+            ("Payments", 5),
+            ("Reports", 6),
+            ("Settings", 7),
+            ("UPI / Money Transfer", 8),
         ]
 
         # Map index to shortcut key
@@ -71,11 +67,8 @@ class MainWindow(QMainWindow):
             4: "Ctrl+5",
             5: "Ctrl+6",
             6: "Ctrl+7",
-            7: "Ctrl+8",
-            8: "Ctrl+9",
-            9: "Ctrl+0",
-            10: "Ctrl+,",
-            11: "Ctrl+Shift+M"
+            7: "Ctrl+,",
+            8: "Ctrl+Shift+M"
         }
 
         for text, index in nav_items:
@@ -152,10 +145,11 @@ class MainWindow(QMainWindow):
 
         # Instantiate all Views
         self.dashboard_view = DashboardView(self)
-        self.products_view = ProductsView(self)
-        self.customers_view = CustomersView(self)
-        self.suppliers_view = SuppliersView(self)
-        self.bank_accounts_view = BankAccountsView(self)
+        self.masters_view = MastersView(self)
+        self.products_view = self.masters_view.products_view
+        self.customers_view = self.masters_view.customers_view
+        self.suppliers_view = self.masters_view.suppliers_view
+        self.bank_accounts_view = self.masters_view.bank_accounts_view
         self.purchase_view = PurchaseView(self)
         self.sales_view = SalesView(self)
         self.services_view = ServicesView(self)
@@ -166,20 +160,32 @@ class MainWindow(QMainWindow):
 
         # Add Views to Stacked Widget in order
         self.stacked_widget.addWidget(self.dashboard_view)      # 0
-        self.stacked_widget.addWidget(self.products_view)       # 1
-        self.stacked_widget.addWidget(self.customers_view)      # 2
-        self.stacked_widget.addWidget(self.suppliers_view)      # 3
-        self.stacked_widget.addWidget(self.bank_accounts_view)   # 4
-        self.stacked_widget.addWidget(self.purchase_view)       # 5
-        self.stacked_widget.addWidget(self.sales_view)          # 6
-        self.stacked_widget.addWidget(self.services_view)       # 7
-        self.stacked_widget.addWidget(self.payments_view)       # 8
-        self.stacked_widget.addWidget(self.reports_view)        # 9
-        self.stacked_widget.addWidget(self.settings_view)       # 10
-        self.stacked_widget.addWidget(self.money_transfer_view)  # 11
+        self.stacked_widget.addWidget(self.masters_view)        # 1
+        self.stacked_widget.addWidget(self.purchase_view)       # 2
+        self.stacked_widget.addWidget(self.sales_view)          # 3
+        self.stacked_widget.addWidget(self.services_view)       # 4
+        self.stacked_widget.addWidget(self.payments_view)       # 5
+        self.stacked_widget.addWidget(self.reports_view)        # 6
+        self.stacked_widget.addWidget(self.settings_view)       # 7
+        self.stacked_widget.addWidget(self.money_transfer_view)  # 8
 
         content_wrapper_layout.addWidget(self.stacked_widget)
         main_layout.addWidget(content_wrapper)
+
+        # Setup master record sub-tab shortcuts
+        master_shortcuts = [
+            ("Ctrl+Shift+P", 0),
+            ("Ctrl+Alt+1", 0),
+            ("Ctrl+Shift+C", 1),
+            ("Ctrl+Alt+2", 1),
+            ("Ctrl+Shift+S", 2),
+            ("Ctrl+Alt+3", 2),
+            ("Ctrl+Shift+B", 3),
+            ("Ctrl+Alt+4", 3),
+        ]
+        for key, tab_idx in master_shortcuts:
+            sc = QShortcut(QKeySequence(key), self)
+            sc.activated.connect(partial(self.open_master_tab, tab_idx))
 
         # Set default view
         self.apply_feature_settings()
@@ -211,17 +217,14 @@ class MainWindow(QMainWindow):
         # Update Header Title
         title_map = {
             0: "Dashboard",
-            1: "Products Master",
-            2: "Customers Master",
-            3: "Suppliers Master",
-            4: "Bank Accounts Master",
-            5: "Purchase Entry (Inventory)",
-            6: "Sales Invoice",
-            7: "Repair Center Job Cards",
-            8: "Payments Ledger",
-            9: "Reports & Financial Analysis",
-            10: "System Settings & Database Admin",
-            11: "UPI / Money Transfer"
+            1: "Master Records",
+            2: "Purchase Entry (Inventory)",
+            3: "Sales Invoice",
+            4: "Repair Center Job Cards",
+            5: "Payments Ledger",
+            6: "Reports & Financial Analysis",
+            7: "System Settings & Database Admin",
+            8: "UPI / Money Transfer"
         }
         self.header_title.setText(title_map.get(index, "Inventory & Accounting"))
 
@@ -229,6 +232,11 @@ class MainWindow(QMainWindow):
         widget = self.stacked_widget.widget(index)
         if hasattr(widget, "refresh_data"):
             widget.refresh_data()
+
+    def open_master_tab(self, tab_index):
+        self.switch_view(1)
+        if hasattr(self, 'masters_view'):
+            self.masters_view.set_active_tab(tab_index)
 
     def handle_logout(self):
         confirm = QMessageBox.question(
@@ -283,12 +291,12 @@ class MainWindow(QMainWindow):
         finally:
             session.close()
 
-        if 7 in self.nav_buttons:
-            self.nav_buttons[7].setVisible(enable_repair)
-        if 11 in self.nav_buttons:
-            self.nav_buttons[11].setVisible(enable_money)
+        if 4 in self.nav_buttons:
+            self.nav_buttons[4].setVisible(enable_repair)
+        if 8 in self.nav_buttons:
+            self.nav_buttons[8].setVisible(enable_money)
 
         # Fallback if the active view is now disabled
         curr_idx = self.stacked_widget.currentIndex()
-        if (curr_idx == 7 and not enable_repair) or (curr_idx == 11 and not enable_money):
+        if (curr_idx == 4 and not enable_repair) or (curr_idx == 8 and not enable_money):
             self.switch_view(0)

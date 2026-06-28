@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from database import Session, Setting
 from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product
 from utils.pdf_generator import generate_service_pdf
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class JobCardDialog(QDialog):
     def __init__(self, job=None, parent=None):
@@ -42,7 +43,31 @@ class JobCardDialog(QDialog):
         self.job_num_input = QLineEdit()
         self.job_num_input.setPlaceholderText("e.g. JOB-1001")
         
-        self.cust_name_input = QLineEdit()
+        self.cust_name_combo = QComboBox()
+        self.cust_name_combo.setEditable(True)
+        self.cust_name_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.cust_name_combo)
+        self.cust_name_combo.currentTextChanged.connect(self.check_customer_match)
+        if self.cust_name_combo.lineEdit():
+            self.cust_name_combo.lineEdit().setPlaceholderText("Select or type customer name")
+            self.cust_name_combo.lineEdit().textChanged.connect(self.check_customer_match)
+        self.cust_name_combo.currentIndexChanged.connect(self.on_customer_selected)
+
+        cust_layout = QHBoxLayout()
+        cust_layout.setContentsMargins(0, 0, 0, 0)
+        cust_layout.setSpacing(6)
+        cust_layout.addWidget(self.cust_name_combo, 1)
+
+        self.add_cust_btn = QPushButton("+")
+        self.add_cust_btn.setToolTip("Add new customer")
+        self.add_cust_btn.setProperty("class", "btn-quick-add")
+        self.add_cust_btn.setFixedWidth(40)
+        self.add_cust_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_cust_btn.setCursor(Qt.PointingHandCursor)
+        self.add_cust_btn.clicked.connect(self.handle_add_customer_click)
+        self.add_cust_btn.hide()
+        cust_layout.addWidget(self.add_cust_btn)
+
         self.cust_mobile_input = QLineEdit()
         self.cust_mobile_input.setPlaceholderText("Search customer mobile or type new")
         self.cust_mobile_input.textChanged.connect(self.lookup_customer_by_mobile)
@@ -59,8 +84,8 @@ class JobCardDialog(QDialog):
         self.status_combo.addItems(["Received", "Under Repair", "Ready", "Delivered"])
 
         form_layout.addRow("Job Number *:", self.job_num_input)
+        form_layout.addRow("Customer Name *:", cust_layout)
         form_layout.addRow("Customer Mobile *:", self.cust_mobile_input)
-        form_layout.addRow("Customer Name *:", self.cust_name_input)
         form_layout.addRow("Device Model *:", self.device_model_input)
         if self.show_imei:
             form_layout.addRow("Device IMEI/Serial *:", self.imei_input)
@@ -84,11 +109,13 @@ class JobCardDialog(QDialog):
         btn_layout.addWidget(self.cancel_btn)
         layout.addLayout(btn_layout)
 
+        self.load_customers()
+
         if self.job:
             self.job_num_input.setText(self.job.job_number)
             self.job_num_input.setEnabled(False)
             self.cust_mobile_input.setText(self.job.mobile)
-            self.cust_name_input.setText(self.job.customer_name)
+            self.cust_name_combo.setCurrentText(self.job.customer_name)
             self.device_model_input.setText(self.job.device_model)
             self.imei_input.setText(self.job.imei)
             self.complaint_input.setPlainText(self.job.complaint or "")
@@ -104,18 +131,80 @@ class JobCardDialog(QDialog):
                 self.job_num_input.setText("JOB-1001")
             session.close()
 
+    def load_customers(self, select_customer_name=None):
+        session = Session()
+        try:
+            self.cust_name_combo.blockSignals(True)
+            self.cust_name_combo.clear()
+            self.cust_name_combo.addItem("-- Select or Type Customer --", None)
+            customers = session.query(Customer).all()
+            for c in customers:
+                self.cust_name_combo.addItem(c.name, {"mobile": c.mobile})
+            if select_customer_name:
+                self.cust_name_combo.setCurrentText(select_customer_name)
+            self.cust_name_combo.blockSignals(False)
+            self.check_customer_match()
+        except Exception:
+            pass
+        finally:
+            session.close()
+
+    def check_customer_match(self):
+        text = self.cust_name_combo.currentText().strip()
+        if not text or text == "-- Select or Type Customer --":
+            self.add_cust_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.cust_name_combo.count()):
+            item_text = self.cust_name_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select or Type Customer --" and item_text.lower() == text.lower():
+                matched = True
+                break
+        
+        if not matched:
+            self.add_cust_btn.show()
+        else:
+            self.add_cust_btn.hide()
+
+    def on_customer_selected(self, index):
+        data = self.cust_name_combo.currentData()
+        if data and isinstance(data, dict) and data.get("mobile"):
+            self.cust_mobile_input.setText(data["mobile"])
+
+    def handle_add_customer_click(self):
+        from ui.masters.customers import CustomerDialog
+        typed_text = self.cust_name_combo.currentText().strip()
+        if typed_text == "-- Select or Type Customer --":
+            typed_text = ""
+        dlg = CustomerDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_customer_name'):
+            session = Session()
+            try:
+                saved_cust = session.query(Customer).filter_by(name=dlg.saved_customer_name).first()
+                saved_mobile = saved_cust.mobile if saved_cust else ""
+            except Exception:
+                saved_mobile = ""
+            finally:
+                session.close()
+            self.load_customers(select_customer_name=dlg.saved_customer_name)
+            if saved_mobile:
+                self.cust_mobile_input.setText(saved_mobile)
+
     def lookup_customer_by_mobile(self, text):
         if len(text.strip()) >= 10:
             session = Session()
             cust = session.query(Customer).filter_by(mobile=text.strip()).first()
             if cust:
-                self.cust_name_input.setText(cust.name)
+                self.cust_name_combo.setCurrentText(cust.name)
             session.close()
 
     def handle_save(self):
         job_num = self.job_num_input.text().strip()
         mobile = self.cust_mobile_input.text().strip()
-        name = self.cust_name_input.text().strip()
+        name = self.cust_name_combo.currentText().strip()
+        if name == "-- Select or Type Customer --":
+            name = ""
         model = self.device_model_input.text().strip()
         imei = self.imei_input.text().strip()
         complaint = self.complaint_input.toPlainText().strip()

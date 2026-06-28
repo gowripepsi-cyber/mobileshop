@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
 from PySide6.QtCore import Qt
 from database import Session
 from models import Product, Category
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class CategoryManagerDialog(QDialog):
     def __init__(self, parent=None):
@@ -280,6 +281,7 @@ class ProductDialog(QDialog):
         self.category_combo = QComboBox()
         self.category_combo.setEditable(True)
         self.category_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.category_combo)
         
         # Autocomplete configuration
         completer = QCompleter(self.category_combo.model(), self.category_combo)

@@ -445,23 +445,27 @@ class DashboardView(QWidget):
                 main_window.services_view.view_job_details(res_ref)
         elif res_type == "Customer":
             if hasattr(main_window, 'customers_view'):
-                main_window.switch_view(2)
+                main_window.switch_view(1)
+                if hasattr(main_window, 'masters_view'):
+                    main_window.masters_view.set_active_tab(1)
                 main_window.customers_view.search_input.setText(res_ref)
         elif res_type == "Supplier":
             if hasattr(main_window, 'suppliers_view'):
-                main_window.switch_view(3)
+                main_window.switch_view(1)
+                if hasattr(main_window, 'masters_view'):
+                    main_window.masters_view.set_active_tab(2)
                 main_window.suppliers_view.search_input.setText(res_ref)
 
     def handle_card_click(self, title):
         main_win = self.window()
         if title == "Customer Outstanding":
             if hasattr(main_win, 'switch_view'):
-                main_win.switch_view(9)  # Reports View index
+                main_win.switch_view(6)  # Reports View index
                 if hasattr(main_win, 'reports_view'):
                     main_win.reports_view.tabs.setCurrentIndex(3)  # Customer Receivables tab
         elif title == "Supplier Outstanding":
             if hasattr(main_win, 'switch_view'):
-                main_win.switch_view(9)  # Reports View index
+                main_win.switch_view(6)  # Reports View index
                 if hasattr(main_win, 'reports_view'):
                     main_win.reports_view.tabs.setCurrentIndex(4)  # Supplier Payables tab
 

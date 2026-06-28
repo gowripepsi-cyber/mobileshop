@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category, SalesReturnMaster, SalesReturnItem
 from utils.pdf_generator import generate_sales_return_pdf
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class SalesReturnEntryWidget(QWidget):
     def __init__(self, parent=None, history_widget=None):
@@ -44,7 +45,29 @@ class SalesReturnEntryWidget(QWidget):
         self.date_input.setDate(QDate.currentDate())
         
         self.customer_combo = QComboBox()
+        self.customer_combo.setEditable(True)
+        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.customer_combo)
+        self.customer_combo.currentTextChanged.connect(self.check_customer_match)
+        if self.customer_combo.lineEdit():
+            self.customer_combo.lineEdit().setPlaceholderText("Select or type customer name")
+            self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)
         self.customer_combo.currentIndexChanged.connect(self.load_customer_invoices)
+
+        cust_layout = QHBoxLayout()
+        cust_layout.setContentsMargins(0, 0, 0, 0)
+        cust_layout.setSpacing(6)
+        cust_layout.addWidget(self.customer_combo, 1)
+
+        self.add_customer_btn = QPushButton("+")
+        self.add_customer_btn.setToolTip("Add new customer")
+        self.add_customer_btn.setProperty("class", "btn-quick-add")
+        self.add_customer_btn.setFixedWidth(40)
+        self.add_customer_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_customer_btn.setCursor(Qt.PointingHandCursor)
+        self.add_customer_btn.clicked.connect(self.handle_add_customer_click)
+        self.add_customer_btn.hide()
+        cust_layout.addWidget(self.add_customer_btn)
         
         self.invoice_combo = QComboBox()
         
@@ -69,7 +92,7 @@ class SalesReturnEntryWidget(QWidget):
 
         form_layout.addRow("Return Number *:", self.return_no_input)
         form_layout.addRow("Return Date:", self.date_input)
-        form_layout.addRow("Customer *:", self.customer_combo)
+        form_layout.addRow("Customer *:", cust_layout)
         form_layout.addRow("Ref Sales Invoice:", self.invoice_combo)
         form_layout.addRow("Refund Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
@@ -167,6 +190,42 @@ class SalesReturnEntryWidget(QWidget):
 
     def toggle_bank_account(self, mode):
         self.bank_combo.setEnabled(mode == "Bank")
+
+    def check_customer_match(self):
+        text = self.customer_combo.currentText().strip()
+        if not text or text == "-- Select Customer --":
+            self.add_customer_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.customer_combo.count()):
+            item_text = self.customer_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select Customer --" and item_text.lower() == text.lower():
+                matched = True
+                if self.customer_combo.currentIndex() != i:
+                    self.customer_combo.blockSignals(True)
+                    self.customer_combo.setCurrentIndex(i)
+                    self.customer_combo.blockSignals(False)
+                    self.load_customer_invoices()
+                break
+        
+        if not matched:
+            self.add_customer_btn.show()
+        else:
+            self.add_customer_btn.hide()
+
+    def handle_add_customer_click(self):
+        from ui.masters.customers import CustomerDialog
+        typed_text = self.customer_combo.currentText().strip()
+        if typed_text == "-- Select Customer --":
+            typed_text = ""
+        dlg = CustomerDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_customer_id'):
+            self.refresh_data()
+            for idx in range(self.customer_combo.count()):
+                if self.customer_combo.itemData(idx) == dlg.saved_customer_id:
+                    self.customer_combo.setCurrentIndex(idx)
+                    break
 
     def load_customer_invoices(self):
         cust_id = self.customer_combo.currentData()
@@ -309,6 +368,7 @@ class SalesReturnEntryWidget(QWidget):
             self.category_combo.blockSignals(False)
             self.bank_combo.blockSignals(False)
 
+            self.check_customer_match()
             self.filter_products_by_category()
         except Exception as e:
             print(f"Error loading sales return fields: {e}")

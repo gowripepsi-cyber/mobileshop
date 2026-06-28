@@ -8,6 +8,7 @@ from database import Session, Setting
 from sqlalchemy import func
 from models import Payment, Customer, Supplier, BankAccount, CashTransaction, BankTransaction, FundTransfer, DirectTransaction
 from utils.pdf_generator import generate_payment_pdf
+from utils.ui_helpers import enable_quick_add_auto_select
 
 class PaymentsView(QWidget):
     def __init__(self, parent=None):
@@ -67,7 +68,30 @@ class PaymentsView(QWidget):
         form_layout.addRow(lbl)
 
         self.c_customer_combo = QComboBox()
+        self.c_customer_combo.setEditable(True)
+        self.c_customer_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.c_customer_combo)
+        self.c_customer_combo.currentTextChanged.connect(self.check_c_customer_match)
+        if self.c_customer_combo.lineEdit():
+            self.c_customer_combo.lineEdit().setPlaceholderText("Select or type customer name")
+            self.c_customer_combo.lineEdit().textChanged.connect(self.check_c_customer_match)
         self.c_customer_combo.currentIndexChanged.connect(self.update_cust_outstanding_lbl)
+
+        c_cust_layout = QHBoxLayout()
+        c_cust_layout.setContentsMargins(0, 0, 0, 0)
+        c_cust_layout.setSpacing(6)
+        c_cust_layout.addWidget(self.c_customer_combo, 1)
+
+        self.add_c_cust_btn = QPushButton("+")
+        self.add_c_cust_btn.setToolTip("Add new customer")
+        self.add_c_cust_btn.setProperty("class", "btn-quick-add")
+        self.add_c_cust_btn.setFixedWidth(40)
+        self.add_c_cust_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_c_cust_btn.setCursor(Qt.PointingHandCursor)
+        self.add_c_cust_btn.clicked.connect(self.handle_add_c_customer_click)
+        self.add_c_cust_btn.hide()
+        c_cust_layout.addWidget(self.add_c_cust_btn)
+
         self.c_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
         self.c_outstanding_lbl.setStyleSheet("font-weight: bold; color: #f59e0b;")
 
@@ -92,7 +116,7 @@ class PaymentsView(QWidget):
         self.c_remarks = QLineEdit()
         self.c_remarks.setPlaceholderText("Remarks (optional)")
 
-        form_layout.addRow("Select Customer *:", self.c_customer_combo)
+        form_layout.addRow("Select Customer *:", c_cust_layout)
         form_layout.addRow("", self.c_outstanding_lbl)
         form_layout.addRow("Collect Against Invoice:", self.c_sales_combo)
         form_layout.addRow("Payment Date:", self.c_date)
@@ -147,7 +171,30 @@ class PaymentsView(QWidget):
         form_layout.addRow(lbl)
 
         self.s_supplier_combo = QComboBox()
+        self.s_supplier_combo.setEditable(True)
+        self.s_supplier_combo.setInsertPolicy(QComboBox.NoInsert)
+        enable_quick_add_auto_select(self.s_supplier_combo)
+        self.s_supplier_combo.currentTextChanged.connect(self.check_s_supplier_match)
+        if self.s_supplier_combo.lineEdit():
+            self.s_supplier_combo.lineEdit().setPlaceholderText("Select or type supplier name")
+            self.s_supplier_combo.lineEdit().textChanged.connect(self.check_s_supplier_match)
         self.s_supplier_combo.currentIndexChanged.connect(self.update_supp_outstanding_lbl)
+
+        s_supp_layout = QHBoxLayout()
+        s_supp_layout.setContentsMargins(0, 0, 0, 0)
+        s_supp_layout.setSpacing(6)
+        s_supp_layout.addWidget(self.s_supplier_combo, 1)
+
+        self.add_s_supp_btn = QPushButton("+")
+        self.add_s_supp_btn.setToolTip("Add new supplier")
+        self.add_s_supp_btn.setProperty("class", "btn-quick-add")
+        self.add_s_supp_btn.setFixedWidth(40)
+        self.add_s_supp_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_s_supp_btn.setCursor(Qt.PointingHandCursor)
+        self.add_s_supp_btn.clicked.connect(self.handle_add_s_supplier_click)
+        self.add_s_supp_btn.hide()
+        s_supp_layout.addWidget(self.add_s_supp_btn)
+
         self.s_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
         self.s_outstanding_lbl.setStyleSheet("font-weight: bold; color: #ef4444;")
 
@@ -172,7 +219,7 @@ class PaymentsView(QWidget):
         self.s_remarks = QLineEdit()
         self.s_remarks.setPlaceholderText("Remarks (optional)")
 
-        form_layout.addRow("Select Supplier *:", self.s_supplier_combo)
+        form_layout.addRow("Select Supplier *:", s_supp_layout)
         form_layout.addRow("", self.s_outstanding_lbl)
         form_layout.addRow("Pay Against Bill:", self.s_purchase_combo)
         form_layout.addRow("Payment Date:", self.s_date)
@@ -746,6 +793,7 @@ class PaymentsView(QWidget):
             # 1. Load Customers
             self.c_customer_combo.blockSignals(True)
             self.c_customer_combo.clear()
+            self.c_customer_combo.addItem("-- Select Customer --", None)
             self.customers_cache = {}
             customers = session.query(Customer).all()
             for c in customers:
@@ -753,10 +801,12 @@ class PaymentsView(QWidget):
                 self.c_customer_combo.addItem(c.name, c.id)
             self.c_customer_combo.blockSignals(False)
             self.update_cust_outstanding_lbl()
+            self.check_c_customer_match()
 
             # 2. Load Suppliers
             self.s_supplier_combo.blockSignals(True)
             self.s_supplier_combo.clear()
+            self.s_supplier_combo.addItem("-- Select Supplier --", None)
             self.suppliers_cache = {}
             suppliers = session.query(Supplier).all()
             for s in suppliers:
@@ -764,6 +814,7 @@ class PaymentsView(QWidget):
                 self.s_supplier_combo.addItem(s.name, s.id)
             self.s_supplier_combo.blockSignals(False)
             self.update_supp_outstanding_lbl()
+            self.check_s_supplier_match()
 
             # 3. Load Banks
             self.c_bank.clear()
@@ -1030,6 +1081,42 @@ class PaymentsView(QWidget):
         finally:
             session.close()
 
+    def check_c_customer_match(self):
+        text = self.c_customer_combo.currentText().strip()
+        if not text or text == "-- Select Customer --":
+            self.add_c_cust_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.c_customer_combo.count()):
+            item_text = self.c_customer_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select Customer --" and item_text.lower() == text.lower():
+                matched = True
+                if self.c_customer_combo.currentIndex() != i:
+                    self.c_customer_combo.blockSignals(True)
+                    self.c_customer_combo.setCurrentIndex(i)
+                    self.c_customer_combo.blockSignals(False)
+                    self.update_cust_outstanding_lbl()
+                break
+        
+        if not matched:
+            self.add_c_cust_btn.show()
+        else:
+            self.add_c_cust_btn.hide()
+
+    def handle_add_c_customer_click(self):
+        from ui.masters.customers import CustomerDialog
+        typed_text = self.c_customer_combo.currentText().strip()
+        if typed_text == "-- Select Customer --":
+            typed_text = ""
+        dlg = CustomerDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_customer_id'):
+            self.refresh_data()
+            for idx in range(self.c_customer_combo.count()):
+                if self.c_customer_combo.itemData(idx) == dlg.saved_customer_id:
+                    self.c_customer_combo.setCurrentIndex(idx)
+                    break
+
     def update_cust_outstanding_lbl(self):
         cust_id = self.c_customer_combo.currentData()
         if cust_id and hasattr(self, 'customers_cache') and cust_id in self.customers_cache:
@@ -1080,6 +1167,42 @@ class PaymentsView(QWidget):
                 session.close()
         else:
             self.c_amount.setValue(0.0)
+
+    def check_s_supplier_match(self):
+        text = self.s_supplier_combo.currentText().strip()
+        if not text or text == "-- Select Supplier --":
+            self.add_s_supp_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.s_supplier_combo.count()):
+            item_text = self.s_supplier_combo.itemText(i).strip()
+            if item_text and item_text != "-- Select Supplier --" and item_text.lower() == text.lower():
+                matched = True
+                if self.s_supplier_combo.currentIndex() != i:
+                    self.s_supplier_combo.blockSignals(True)
+                    self.s_supplier_combo.setCurrentIndex(i)
+                    self.s_supplier_combo.blockSignals(False)
+                    self.update_supp_outstanding_lbl()
+                break
+        
+        if not matched:
+            self.add_s_supp_btn.show()
+        else:
+            self.add_s_supp_btn.hide()
+
+    def handle_add_s_supplier_click(self):
+        from ui.masters.suppliers import SupplierDialog
+        typed_text = self.s_supplier_combo.currentText().strip()
+        if typed_text == "-- Select Supplier --":
+            typed_text = ""
+        dlg = SupplierDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_supplier_id'):
+            self.refresh_data()
+            for idx in range(self.s_supplier_combo.count()):
+                if self.s_supplier_combo.itemData(idx) == dlg.saved_supplier_id:
+                    self.s_supplier_combo.setCurrentIndex(idx)
+                    break
 
     def update_supp_outstanding_lbl(self):
         supp_id = self.s_supplier_combo.currentData()
