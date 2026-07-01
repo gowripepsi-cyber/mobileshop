@@ -1,6 +1,6 @@
 import datetime
 import os
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout,
                              QTabWidget, QDialog, QDialogButtonBox, QCompleter)
@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_purchase_pdf
-from utils.ui_helpers import enable_quick_add_auto_select
+from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, SearchableComboBox
 
 class PurchaseView(QWidget):
     def __init__(self, parent=None):
@@ -149,70 +149,84 @@ class PurchaseView(QWidget):
         entry_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         right_layout.addWidget(entry_title)
 
-        row1_layout = QHBoxLayout()
+        grid_layout = QGridLayout()
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setHorizontalSpacing(15)
+        grid_layout.setVerticalSpacing(10)
+        
+        # Column Stretches:
+        # Col 0, 2, 4 are labels -> stretch 0
+        # Col 1 is Code & Purchase Price -> stretch 0 (width limited by product_code_input fixed width)
+        # Col 3 is Category & Selling Price -> stretch 2
+        # Col 5 is Product, Model & Qty/Button -> stretch 4
+        grid_layout.setColumnStretch(0, 0)
+        grid_layout.setColumnStretch(1, 0)
+        grid_layout.setColumnStretch(2, 0)
+        grid_layout.setColumnStretch(3, 2)
+        grid_layout.setColumnStretch(4, 0)
+        grid_layout.setColumnStretch(5, 4)
         
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
         self.product_code_input.setFixedWidth(120)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
         self.product_code_input._skip_enter_nav = True
-        row1_layout.addWidget(QLabel("Product Code:"), 0)
-        row1_layout.addWidget(self.product_code_input, 1)
+        grid_layout.addWidget(QLabel("Product Code:"), 0, 0)
+        grid_layout.addWidget(self.product_code_input, 0, 1)
         
-        self.category_combo = QComboBox()
+        self.category_combo = SearchableComboBox()
+        self.category_combo.setPlaceholderText("Select Category")
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
-        row1_layout.addWidget(QLabel("Category:"), 0)
-        row1_layout.addWidget(self.category_combo, 2)
+        grid_layout.addWidget(QLabel("Category:"), 0, 2)
+        grid_layout.addWidget(self.category_combo, 0, 3)
         
-        self.product_combo = QComboBox()
-        self.product_combo.setPlaceholderText("Select Product")
-        self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        row1_layout.addWidget(QLabel("Product Name:"), 0)
-        row1_layout.addWidget(self.product_combo, 4)
-
-        right_layout.addLayout(row1_layout)
-
-        row2_layout = QHBoxLayout()
-
         self.brand_input = QLineEdit()
         self.brand_input.setPlaceholderText("Brand")
-        row2_layout.addWidget(QLabel("Brand:"), 0)
-        row2_layout.addWidget(self.brand_input, 1)
+        grid_layout.addWidget(QLabel("Brand:"), 0, 4)
+        grid_layout.addWidget(self.brand_input, 0, 5)
+
+        self.product_combo = SearchableProductComboBox()
+        self.product_combo.setPlaceholderText("Select Product")
+        self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
+        grid_layout.addWidget(QLabel("Product Name:"), 1, 0)
+        grid_layout.addWidget(self.product_combo, 1, 1, 1, 3)
 
         self.model_input = QLineEdit()
         self.model_input.setPlaceholderText("Model")
-        row2_layout.addWidget(QLabel("Model:"), 0)
-        row2_layout.addWidget(self.model_input, 1)
-
-        right_layout.addLayout(row2_layout)
-
-        row3_layout = QHBoxLayout()
+        grid_layout.addWidget(QLabel("Model:"), 1, 4)
+        grid_layout.addWidget(self.model_input, 1, 5)
 
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        row3_layout.addWidget(QLabel("Purchase Price (₹):"), 0)
-        row3_layout.addWidget(self.rate_input, 2)
+        grid_layout.addWidget(QLabel("Purchase Price (₹):"), 2, 0)
+        grid_layout.addWidget(self.rate_input, 2, 1)
 
         self.selling_price_input = QDoubleSpinBox()
         self.selling_price_input.setRange(0.0, 9999999.0)
         self.selling_price_input.setValue(0.0)
         self.selling_price_input.setDecimals(2)
-        row3_layout.addWidget(QLabel("Selling Price (₹):"), 0)
-        row3_layout.addWidget(self.selling_price_input, 2)
+        grid_layout.addWidget(QLabel("Selling Price (₹):"), 2, 2)
+        grid_layout.addWidget(self.selling_price_input, 2, 3)
 
         self.qty_input = QSpinBox()
         self.qty_input.setRange(1, 1000)
         self.qty_input.setValue(1)
-        row3_layout.addWidget(QLabel("Qty:"), 0)
-        row3_layout.addWidget(self.qty_input, 1)
+        grid_layout.addWidget(QLabel("Qty:"), 2, 4)
+
+        qty_layout = QHBoxLayout()
+        qty_layout.setContentsMargins(0, 0, 0, 0)
+        qty_layout.setSpacing(10)
+        qty_layout.addWidget(self.qty_input, 1)
 
         self.add_item_btn = QPushButton("Add Item")
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        row3_layout.addWidget(self.add_item_btn, 2)
+        qty_layout.addWidget(self.add_item_btn, 2)
 
-        right_layout.addLayout(row3_layout)
+        grid_layout.addLayout(qty_layout, 2, 5)
+
+        right_layout.addLayout(grid_layout)
 
         # Items Table
         self.table = QTableWidget()
@@ -359,18 +373,12 @@ class PurchaseView(QWidget):
             self.load_suppliers(select_supplier_id=dlg.saved_supplier_id)
 
     def filter_products_by_category(self):
-        self.product_combo.blockSignals(True)
-        self.product_combo.clear()
-        
-        cat_name = self.category_combo.currentText()
+        cat_name = self.category_combo.currentText().strip()
+        filtered_products = []
         for prod_id, p in self.products_cache.items():
-            if cat_name == "-- All Categories --" or p.category == cat_name:
-                display_txt = f"{p.name} ({p.brand} - {p.model})"
-                if p.imei:
-                    display_txt += f" [IMEI: {p.imei}]"
-                self.product_combo.addItem(display_txt, p.id)
-                
-        self.product_combo.blockSignals(False)
+            if not cat_name or cat_name == "-- All Categories --" or p.category == cat_name:
+                filtered_products.append(p)
+        self.product_combo.set_products(filtered_products)
         self.update_rate_on_product_change()
 
     def refresh_data(self):
@@ -414,6 +422,8 @@ class PurchaseView(QWidget):
             categories = session.query(Category).all()
             for c in categories:
                 self.category_combo.addItem(c.name)
+            self.category_combo.setCurrentIndex(-1)
+            self.category_combo.update_completer()
 
             # Load Bank Accounts
             self.bank_combo.clear()
@@ -586,9 +596,7 @@ class PurchaseView(QWidget):
                 self.category_combo.setCurrentIndex(cat_idx)
                 self.category_combo.blockSignals(False)
             self.filter_products_by_category()
-            prod_idx = self.product_combo.findData(found_product.id)
-            if prod_idx >= 0:
-                self.product_combo.setCurrentIndex(prod_idx)
+            self.product_combo.select_product_id(found_product.id)
             self.qty_input.setFocus()
             self.qty_input.selectAll()
         else:
@@ -978,9 +986,14 @@ class PurchaseView(QWidget):
             # Prepare items list
             pdf_items = []
             for item in purchase.items:
-                p_code = f"[{item.product.product_code}] " if item.product and item.product.product_code else ""
+                if item.product:
+                    p_code = f"[{item.product.product_code}] " if item.product.product_code else ""
+                    p_name = f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})"
+                else:
+                    p_name = f"Unknown Product (ID: {item.product_id})"
+
                 pdf_items.append({
-                    "name": f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})",
+                    "name": p_name,
                     "qty": item.qty,
                     "rate": item.rate,
                     "total": item.qty * item.rate

@@ -383,12 +383,10 @@ class BillingDialog(QDialog):
         # Row 1: Product selection and Custom input
         row1_layout = QHBoxLayout()
         self.part_product_combo = QComboBox()
-        self.part_product_combo.setStyleSheet("padding: 6px;")
         self.part_product_combo.currentIndexChanged.connect(self.handle_product_selection_change)
         
         self.part_custom_name_input = QLineEdit()
         self.part_custom_name_input.setPlaceholderText("Custom Part Name")
-        self.part_custom_name_input.setStyleSheet("padding: 6px;")
         
         row1_layout.addWidget(self.part_product_combo, 3)
         row1_layout.addWidget(self.part_custom_name_input, 2)
@@ -403,11 +401,9 @@ class BillingDialog(QDialog):
         self.part_qty_input = QSpinBox()
         self.part_qty_input.setRange(1, 9999)
         self.part_qty_input.setValue(1)
-        self.part_qty_input.setStyleSheet("padding: 6px;")
         
         self.part_cost_input = QDoubleSpinBox()
         self.part_cost_input.setRange(0, 999999)
-        self.part_cost_input.setStyleSheet("padding: 6px;")
         self.part_cost_input.setPrefix("₹ ")
         
         self.add_part_btn = QPushButton("Add Part")
@@ -482,17 +478,15 @@ class BillingDialog(QDialog):
 
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
-        self.pay_mode_combo.setStyleSheet("padding: 6px;")
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank)
 
         self.bank_combo = QComboBox()
         self.bank_combo.setEnabled(False)
-        self.bank_combo.setStyleSheet("padding: 6px;")
 
         self.paid_input = QDoubleSpinBox()
         self.paid_input.setRange(0, 999999)
         self.paid_input.setValue(self.job.paid_amount)
-        self.paid_input.setStyleSheet("font-size: 14px; font-weight: bold; padding: 6px;")
+        self.paid_input.setStyleSheet("QDoubleSpinBox { font-size: 14px; font-weight: bold; }")
         self.paid_input.setPrefix("₹ ")
         self.paid_input.valueChanged.connect(self.recalculate_totals)
 

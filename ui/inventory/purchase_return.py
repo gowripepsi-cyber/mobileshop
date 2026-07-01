@@ -1,6 +1,6 @@
 import datetime
 import os
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout, 
                              QDialog, QDialogButtonBox)
@@ -121,49 +121,64 @@ class PurchaseReturnEntryWidget(QWidget):
         entry_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         right_layout.addWidget(entry_title)
 
-        row1_layout = QHBoxLayout()
+        grid_layout = QGridLayout()
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setHorizontalSpacing(15)
+        grid_layout.setVerticalSpacing(10)
+        
+        # Column Stretches:
+        # Col 0, 2, 4 are labels -> stretch 0
+        # Col 1 is Code & Qty -> stretch 0 (width limited by product_code_input fixed width)
+        # Col 3 is Category & Rate -> stretch 2
+        # Col 5 is Product & Button -> stretch 4
+        grid_layout.setColumnStretch(0, 0)
+        grid_layout.setColumnStretch(1, 0)
+        grid_layout.setColumnStretch(2, 0)
+        grid_layout.setColumnStretch(3, 2)
+        grid_layout.setColumnStretch(4, 0)
+        grid_layout.setColumnStretch(5, 4)
         
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
         self.product_code_input.setFixedWidth(120)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
         self.product_code_input._skip_enter_nav = True
-        row1_layout.addWidget(QLabel("Code:"), 0)
-        row1_layout.addWidget(self.product_code_input, 1)
+        grid_layout.addWidget(QLabel("Code:"), 0, 0)
+        grid_layout.addWidget(self.product_code_input, 0, 1)
         
         self.category_combo = QComboBox()
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
-        row1_layout.addWidget(QLabel("Category:"), 0)
-        row1_layout.addWidget(self.category_combo, 2)
+        self.category_combo.hide()
         
         self.product_combo = QComboBox()
         self.product_combo.setPlaceholderText("Select Product")
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        row1_layout.addWidget(QLabel("Product:"), 0)
-        row1_layout.addWidget(self.product_combo, 5)
-
-        right_layout.addLayout(row1_layout)
-
-        row2_layout = QHBoxLayout()
+        grid_layout.addWidget(QLabel("Product:"), 0, 2)
+        grid_layout.addWidget(self.product_combo, 0, 3, 1, 3)
 
         self.qty_input = QSpinBox()
         self.qty_input.setRange(1, 1000)
         self.qty_input.setValue(1)
-        row2_layout.addWidget(QLabel("Qty:"), 0)
-        row2_layout.addWidget(self.qty_input, 1)
+        grid_layout.addWidget(QLabel("Qty:"), 1, 0)
+        grid_layout.addWidget(self.qty_input, 1, 1)
 
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        row2_layout.addWidget(QLabel("Rate (₹):"), 0)
-        row2_layout.addWidget(self.rate_input, 2)
+        grid_layout.addWidget(QLabel("Rate (₹):"), 1, 2)
+        grid_layout.addWidget(self.rate_input, 1, 3)
 
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.addStretch()
         self.add_item_btn = QPushButton("Add Item")
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        row2_layout.addWidget(self.add_item_btn, 2)
+        btn_layout.addWidget(self.add_item_btn)
 
-        right_layout.addLayout(row2_layout)
+        grid_layout.addLayout(btn_layout, 1, 5)
+
+        right_layout.addLayout(grid_layout)
 
         # Table
         self.table = QTableWidget()
@@ -527,11 +542,15 @@ class PurchaseReturnEntryWidget(QWidget):
                 session.add(ret_item)
 
                 prod = session.query(Product).get(item["product_id"])
-                prod.stock_qty -= item["qty"]
+                if prod:
+                    prod.stock_qty -= item["qty"]
+                    p_code = f"[{prod.product_code}] " if prod.product_code else ""
+                    p_name = f"{p_code}{prod.name} ({prod.brand} {prod.model})"
+                else:
+                    p_name = f"Unknown Product (ID: {item['product_id']})"
 
-                p_code = f"[{prod.product_code}] " if prod.product_code else ""
                 pdf_items.append({
-                    "name": f"{p_code}{prod.name} ({prod.brand} {prod.model})",
+                    "name": p_name,
                     "qty": item["qty"],
                     "rate": item["rate"],
                     "total": item["qty"] * item["rate"]
@@ -851,9 +870,14 @@ class PurchaseReturnHistoryWidget(QWidget):
 
             pdf_items = []
             for item in ret.items:
-                p_code = f"[{item.product.product_code}] " if item.product and item.product.product_code else ""
+                if item.product:
+                    p_code = f"[{item.product.product_code}] " if item.product.product_code else ""
+                    p_name = f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})"
+                else:
+                    p_name = f"Unknown Product (ID: {item.product_id})"
+
                 pdf_items.append({
-                    "name": f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})",
+                    "name": p_name,
                     "qty": item.qty,
                     "rate": item.rate,
                     "total": item.qty * item.rate

@@ -34,7 +34,7 @@ class DashboardView(QWidget):
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Search name, mobile number, job number, bill number...")
-        self.search_input.setStyleSheet("font-size: 14px; padding: 10px 15px; border-radius: 8px;")
+        self.search_input.setStyleSheet("QLineEdit { font-size: 14px; padding: 10px 15px; border-radius: 8px; }")
         self.search_input.textChanged.connect(self.handle_search)
         search_layout.addWidget(self.search_input)
         self.main_layout.addLayout(search_layout)

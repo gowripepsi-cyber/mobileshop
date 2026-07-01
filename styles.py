@@ -147,7 +147,7 @@ QWidget {
 }
 
 /* Form inputs & buttons */
-QLineEdit, QPlainTextEdit, QTextEdit {
+QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit {
     background-color: #141426;
     border: 1px solid #2c2c54;
     border-radius: 6px;
@@ -157,17 +157,23 @@ QLineEdit, QPlainTextEdit, QTextEdit {
     selection-background-color: #6366f1;
 }
 
-QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus {
+QLineEdit:hover, QPlainTextEdit:hover, QTextEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {
+    border: 1px solid #434380;
+}
+
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QComboBox:on, QComboBox:editable:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
     border: 1px solid #6366f1;
 }
 
-QComboBox {
-    background-color: #141426;
-    border: 1px solid #2c2c54;
-    border-radius: 6px;
-    padding: 6px 12px;
-    min-height: 28px;
-    color: #ffffff;
+QComboBox QLineEdit {
+    border: none;
+    background: transparent;
+    padding: 0px;
+}
+
+QComboBox QLineEdit:focus {
+    border: none;
+    background: transparent;
 }
 
 QComboBox::drop-down {
@@ -206,18 +212,6 @@ QComboBox QAbstractItemView::item:disabled, QListView::item:disabled {
     background-color: #2b2b3c;
 }
 
-QSpinBox, QDoubleSpinBox, QDateEdit {
-    background-color: #141426;
-    border: 1px solid #2c2c54;
-    border-radius: 6px;
-    padding: 6px 12px;
-    min-height: 28px;
-    color: #ffffff;
-}
-
-QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
-    border: 1px solid #6366f1;
-}
 
 /* Standard Buttons */
 QPushButton {
