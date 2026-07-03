@@ -216,9 +216,10 @@ QComboBox QAbstractItemView::item:disabled, QListView::item:disabled {
 /* Standard Buttons */
 QPushButton {
     background-color: #6366f1;
-    border: none;
+    border: 1px solid transparent;
     color: #ffffff;
-    padding: 9px 18px;
+    padding: 6px 18px;
+    min-height: 28px;
     font-weight: bold;
     border-radius: 6px;
 }

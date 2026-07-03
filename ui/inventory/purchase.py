@@ -757,7 +757,7 @@ class PurchaseView(QWidget):
                     session.delete(tx)
 
                 # 5. Clear old purchase items (they will be recreated)
-                session.query(PurchaseItem).filter_by(purchase_id=purchase.id).delete()
+                purchase.items.clear()
 
                 # If bank transaction, check bank balance
                 if pay_mode == "Bank" and paid > 0:

@@ -806,7 +806,7 @@ class BillingDialog(QDialog):
                         prod.stock_qty += op.qty
 
             # Reset and rewrite parts list
-            session.query(ServicePart).filter_by(job_id=job.id).delete()
+            job.parts.clear()
             for p in self.parts_list:
                 part = ServicePart(
                     job_id=job.id,

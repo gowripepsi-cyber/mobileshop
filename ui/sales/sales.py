@@ -669,7 +669,7 @@ class SalesView(QWidget):
                     session.delete(tx)
 
                 # 5. Clear old sales items (they will be recreated)
-                session.query(SalesItem).filter_by(sales_id=sale.id).delete()
+                sale.items.clear()
 
                 # 6. Check stock level availability for new quantities
                 for item in self.invoice_items:

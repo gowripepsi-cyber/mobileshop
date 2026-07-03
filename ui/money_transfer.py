@@ -22,6 +22,7 @@ class MoneyTransferView(QWidget):
         layout.setSpacing(4)
         lbl = QLabel(label_text)
         lbl.setStyleSheet("font-weight: 500; color: #94a3b8; font-size: 11px;")
+        lbl.setFixedHeight(16)
         layout.addWidget(lbl)
         layout.addWidget(widget)
         return container
@@ -80,44 +81,37 @@ class MoneyTransferView(QWidget):
         
         radio_container = QWidget()
         radio_layout = QHBoxLayout(radio_container)
-        radio_layout.setContentsMargins(5, 5, 5, 5)
+        radio_layout.setContentsMargins(0, 0, 0, 0)
         radio_layout.setSpacing(12)
+        radio_layout.setAlignment(Qt.AlignVCenter)
+        radio_container.setFixedHeight(42)
         radio_layout.addWidget(self.r_upi)
         radio_layout.addWidget(self.r_bank)
         radio_grp = self.create_field_group("Transfer Type *:", radio_container)
         radio_grp.setMaximumWidth(180)
 
-        # Dynamic Fields Container (Full Width)
-        self.dynamic_container = QWidget()
-        dyn_layout = QHBoxLayout(self.dynamic_container)
-        dyn_layout.setContentsMargins(0, 0, 0, 0)
-        dyn_layout.setSpacing(0)
-        
+        # Dynamic Fields (UPI ID or Bank Account No + IFSC)
         self.t_upi_id = QLineEdit()
         self.t_upi_id.setPlaceholderText("UPI ID or UPI Mobile Number")
         self.upi_widget = self.create_field_group("UPI ID / Mobile *:", self.t_upi_id)
         
-        self.bank_widget = QWidget()
-        bank_h = QHBoxLayout(self.bank_widget)
-        bank_h.setContentsMargins(0, 0, 0, 0)
-        bank_h.setSpacing(10)
-        
         self.t_bank_account_no = QLineEdit()
         self.t_bank_account_no.setPlaceholderText("Bank Account Number")
+        self.bank_acc_grp = self.create_field_group("Account Number *:", self.t_bank_account_no)
+        
         self.t_ifsc = QLineEdit()
         self.t_ifsc.setPlaceholderText("IFSC Code")
+        self.bank_ifsc_grp = self.create_field_group("IFSC Code *:", self.t_ifsc)
         
-        bank_h.addWidget(self.create_field_group("Account Number *:", self.t_bank_account_no))
-        bank_h.addWidget(self.create_field_group("IFSC Code *:", self.t_ifsc))
-        self.bank_widget.hide()
-        
-        dyn_layout.addWidget(self.upi_widget)
-        dyn_layout.addWidget(self.bank_widget)
+        self.bank_acc_grp.hide()
+        self.bank_ifsc_grp.hide()
 
         row1_layout.addWidget(t_cust_grp, 2)
         row1_layout.addWidget(t_beneficiary_grp, 2)
         row1_layout.addWidget(radio_grp)
-        row1_layout.addWidget(self.dynamic_container, 3)
+        row1_layout.addWidget(self.upi_widget, 3)
+        row1_layout.addWidget(self.bank_acc_grp, 1.5)
+        row1_layout.addWidget(self.bank_ifsc_grp, 1.5)
         form_layout.addWidget(row1)
 
         # Row 2: Amount, Service Charge, Payout Bank Account, Remarks, Submit button
@@ -147,8 +141,10 @@ class MoneyTransferView(QWidget):
         
         status_radio_container = QWidget()
         status_radio_layout = QHBoxLayout(status_radio_container)
-        status_radio_layout.setContentsMargins(5, 5, 5, 5)
+        status_radio_layout.setContentsMargins(0, 0, 0, 0)
         status_radio_layout.setSpacing(15)
+        status_radio_layout.setAlignment(Qt.AlignVCenter)
+        status_radio_container.setFixedHeight(42)
         status_radio_layout.addWidget(self.r_paid)
         status_radio_layout.addWidget(self.r_pay_later)
         
@@ -258,10 +254,12 @@ class MoneyTransferView(QWidget):
     def on_transfer_type_changed(self):
         if self.r_upi.isChecked():
             self.upi_widget.show()
-            self.bank_widget.hide()
+            self.bank_acc_grp.hide()
+            self.bank_ifsc_grp.hide()
         else:
             self.upi_widget.hide()
-            self.bank_widget.show()
+            self.bank_acc_grp.show()
+            self.bank_ifsc_grp.show()
 
 
 
