@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTable
                              QMessageBox, QFileDialog, QTabWidget, QFrame, QFormLayout,
                              QComboBox, QDateEdit, QDoubleSpinBox, QDialog, QGridLayout,
                              QDialogButtonBox)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
 from database import Session
 from sqlalchemy.orm import joinedload
@@ -48,6 +48,11 @@ class ReportsView(QWidget):
         self.payables_tab = QWidget()
         self.setup_payables_tab()
         self.tabs.addTab(self.payables_tab, "Supplier Payables")
+
+        # Tab 6: GST Returns
+        self.gst_tab = QWidget()
+        self.setup_gst_returns_tab()
+        self.tabs.addTab(self.gst_tab, "GST Returns (GSTR-1 & 2)")
 
         layout.addWidget(self.tabs)
 
@@ -1689,6 +1694,310 @@ class ReportsView(QWidget):
         finally:
             session.close()
 
+    def setup_gst_returns_tab(self):
+        # Overall tab layout
+        main_layout = QVBoxLayout(self.gst_tab)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(15)
+
+        # 1. Filters layout
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(10)
+
+        filter_layout.addWidget(QLabel("From Date:"))
+        self.gst_from_date = QDateEdit()
+        self.gst_from_date.setCalendarPopup(True)
+        self.gst_from_date.setDate(QDate.currentDate().addMonths(-1))
+        self.gst_from_date.setDisplayFormat("yyyy-MM-dd")
+        filter_layout.addWidget(self.gst_from_date)
+
+        filter_layout.addWidget(QLabel("To Date:"))
+        self.gst_to_date = QDateEdit()
+        self.gst_to_date.setCalendarPopup(True)
+        self.gst_to_date.setDate(QDate.currentDate())
+        self.gst_to_date.setDisplayFormat("yyyy-MM-dd")
+        filter_layout.addWidget(self.gst_to_date)
+
+        self.gst_fetch_btn = QPushButton("Fetch GST Data")
+        self.gst_fetch_btn.clicked.connect(self.fetch_gst_data)
+        self.gst_fetch_btn.setProperty("class", "btn-primary")
+        filter_layout.addWidget(self.gst_fetch_btn)
+
+        self.gst_export_btn = QPushButton("Export GSTR Excel")
+        self.gst_export_btn.clicked.connect(self.export_gst_excel)
+        self.gst_export_btn.setProperty("class", "btn-success")
+        filter_layout.addWidget(self.gst_export_btn)
+
+        filter_layout.addStretch()
+        main_layout.addLayout(filter_layout)
+
+        # 2. Summary Cards layout
+        summary_grid = QGridLayout()
+        summary_grid.setSpacing(15)
+
+        # Sales/Output Tax Card
+        sales_card = QFrame()
+        sales_card.setFrameShape(QFrame.StyledPanel)
+        sales_card.setProperty("class", "CardFrame")
+        sales_card_layout = QVBoxLayout(sales_card)
+        self.lbl_taxable_sales = QLabel("₹0.00")
+        self.lbl_taxable_sales.setStyleSheet("font-size: 20px; font-weight: bold; color: #10b981;")
+        self.lbl_output_tax = QLabel("₹0.00")
+        self.lbl_output_tax.setStyleSheet("font-size: 16px; font-weight: bold; color: #34d399;")
+        sales_card_layout.addWidget(QLabel("<b>Outward Supplies (Sales)</b>"))
+        sales_card_layout.addWidget(QLabel("Taxable Value:"))
+        sales_card_layout.addWidget(self.lbl_taxable_sales)
+        sales_card_layout.addWidget(QLabel("Total Output GST:"))
+        sales_card_layout.addWidget(self.lbl_output_tax)
+        summary_grid.addWidget(sales_card, 0, 0)
+
+        # Purchases/Input Tax Card
+        purchases_card = QFrame()
+        purchases_card.setFrameShape(QFrame.StyledPanel)
+        purchases_card.setProperty("class", "CardFrame")
+        purchases_card_layout = QVBoxLayout(purchases_card)
+        self.lbl_taxable_purchases = QLabel("₹0.00")
+        self.lbl_taxable_purchases.setStyleSheet("font-size: 20px; font-weight: bold; color: #3b82f6;")
+        self.lbl_input_tax = QLabel("₹0.00")
+        self.lbl_input_tax.setStyleSheet("font-size: 16px; font-weight: bold; color: #60a5fa;")
+        purchases_card_layout.addWidget(QLabel("<b>Inward Supplies (Purchases)</b>"))
+        purchases_card_layout.addWidget(QLabel("Taxable Value:"))
+        purchases_card_layout.addWidget(self.lbl_taxable_purchases)
+        purchases_card_layout.addWidget(QLabel("Total ITC / Input GST:"))
+        purchases_card_layout.addWidget(self.lbl_input_tax)
+        summary_grid.addWidget(purchases_card, 0, 1)
+
+        # Net Tax Card
+        net_card = QFrame()
+        net_card.setFrameShape(QFrame.StyledPanel)
+        net_card.setProperty("class", "CardFrame")
+        net_card_layout = QVBoxLayout(net_card)
+        self.lbl_net_payable = QLabel("₹0.00")
+        self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #ef4444;")
+        net_card_layout.addWidget(QLabel("<b>Consolidated Net Position</b>"))
+        net_card_layout.addWidget(QLabel("Net GST Payable (Output - Input):"))
+        net_card_layout.addWidget(self.lbl_net_payable)
+        net_card_layout.addStretch()
+        summary_grid.addWidget(net_card, 0, 2)
+
+        main_layout.addLayout(summary_grid)
+
+        # 3. Sub-tabs for GSTR-1 and GSTR-2 tables
+        self.gstr_subtabs = QTabWidget()
+        
+        # GSTR-1 Tab
+        gstr1_tab = QWidget()
+        gstr1_layout = QVBoxLayout(gstr1_tab)
+        self.gstr1_table = QTableWidget()
+        self.gstr1_table.setColumnCount(10)
+        self.gstr1_table.setHorizontalHeaderLabels([
+            "Invoice No", "Date", "Customer Name", "GSTIN", 
+            "Taxable Value (₹)", "CGST (₹)", "SGST (₹)", "IGST (₹)", "Total GST (₹)", "Invoice Total (₹)"
+        ])
+        self.gstr1_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        gstr1_layout.addWidget(self.gstr1_table)
+        self.gstr_subtabs.addTab(gstr1_tab, "GSTR-1 (Sales Output Tax)")
+
+        # GSTR-2 Tab
+        gstr2_tab = QWidget()
+        gstr2_layout = QVBoxLayout(gstr2_tab)
+        self.gstr2_table = QTableWidget()
+        self.gstr2_table.setColumnCount(10)
+        self.gstr2_table.setHorizontalHeaderLabels([
+            "Invoice No", "Date", "Supplier Name", "GSTIN", 
+            "Taxable Value (₹)", "CGST (₹)", "SGST (₹)", "IGST (₹)", "Total GST (₹)", "Invoice Total (₹)"
+        ])
+        self.gstr2_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        gstr2_layout.addWidget(self.gstr2_table)
+        self.gstr_subtabs.addTab(gstr2_tab, "GSTR-2 (Purchases ITC)")
+
+        main_layout.addWidget(self.gstr_subtabs)
+
+    def fetch_gst_data(self):
+        from_dt = self.gst_from_date.date().toPython()
+        to_dt = self.gst_to_date.date().toPython()
+
+        session = Session()
+        try:
+            # Query Sales (GSTR-1)
+            sales = session.query(SalesMaster).options(joinedload(SalesMaster.customer)).filter(
+                SalesMaster.date >= from_dt,
+                SalesMaster.date <= to_dt,
+                SalesMaster.gst_enabled == True
+            ).order_by(SalesMaster.date.desc()).all()
+
+            # Query Purchases (GSTR-2)
+            purchases = session.query(PurchaseMaster).options(joinedload(PurchaseMaster.supplier)).filter(
+                PurchaseMaster.date >= from_dt,
+                PurchaseMaster.date <= to_dt,
+                PurchaseMaster.gst_enabled == True
+            ).order_by(PurchaseMaster.date.desc()).all()
+
+            # Process Sales
+            total_taxable_sales = 0.0
+            total_output_tax = 0.0
+            self.gstr1_table.setRowCount(len(sales))
+            for i, s in enumerate(sales):
+                cust_name = s.customer.name if s.customer else "Walk-in Customer"
+                cust_gstin = getattr(s.customer, 'gst', '') or 'N/A'
+                taxable = getattr(s, 'taxable_amount', s.total_amount) or s.total_amount
+                cgst = getattr(s, 'total_cgst', 0.0) or 0.0
+                sgst = getattr(s, 'total_sgst', 0.0) or 0.0
+                igst = getattr(s, 'total_igst', 0.0) or 0.0
+                gst = getattr(s, 'total_gst', 0.0) or 0.0
+                total_bill = s.total_amount
+
+                total_taxable_sales += taxable
+                total_output_tax += gst
+
+                self.gstr1_table.setItem(i, 0, QTableWidgetItem(s.invoice_number))
+                self.gstr1_table.setItem(i, 1, QTableWidgetItem(s.date.strftime("%Y-%m-%d")))
+                self.gstr1_table.setItem(i, 2, QTableWidgetItem(cust_name))
+                self.gstr1_table.setItem(i, 3, QTableWidgetItem(cust_gstin))
+                self.gstr1_table.setItem(i, 4, QTableWidgetItem(f"{taxable:.2f}"))
+                self.gstr1_table.setItem(i, 5, QTableWidgetItem(f"{cgst:.2f}"))
+                self.gstr1_table.setItem(i, 6, QTableWidgetItem(f"{sgst:.2f}"))
+                self.gstr1_table.setItem(i, 7, QTableWidgetItem(f"{igst:.2f}"))
+                self.gstr1_table.setItem(i, 8, QTableWidgetItem(f"{gst:.2f}"))
+                self.gstr1_table.setItem(i, 9, QTableWidgetItem(f"{total_bill:.2f}"))
+
+            # Process Purchases
+            total_taxable_purchases = 0.0
+            total_input_tax = 0.0
+            self.gstr2_table.setRowCount(len(purchases))
+            for i, p in enumerate(purchases):
+                supp_name = p.supplier.name if p.supplier else "Unknown Supplier"
+                supp_gstin = getattr(p.supplier, 'gst', '') or 'N/A'
+                taxable = getattr(p, 'taxable_amount', p.total_amount) or p.total_amount
+                cgst = getattr(p, 'total_cgst', 0.0) or 0.0
+                sgst = getattr(p, 'total_sgst', 0.0) or 0.0
+                igst = getattr(p, 'total_igst', 0.0) or 0.0
+                gst = getattr(p, 'total_gst', 0.0) or 0.0
+                total_bill = p.total_amount
+
+                total_taxable_purchases += taxable
+                total_input_tax += gst
+
+                self.gstr2_table.setItem(i, 0, QTableWidgetItem(p.invoice_number))
+                self.gstr2_table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
+                self.gstr2_table.setItem(i, 2, QTableWidgetItem(supp_name))
+                self.gstr2_table.setItem(i, 3, QTableWidgetItem(supp_gstin))
+                self.gstr2_table.setItem(i, 4, QTableWidgetItem(f"{taxable:.2f}"))
+                self.gstr2_table.setItem(i, 5, QTableWidgetItem(f"{cgst:.2f}"))
+                self.gstr2_table.setItem(i, 6, QTableWidgetItem(f"{sgst:.2f}"))
+                self.gstr2_table.setItem(i, 7, QTableWidgetItem(f"{igst:.2f}"))
+                self.gstr2_table.setItem(i, 8, QTableWidgetItem(f"{gst:.2f}"))
+                self.gstr2_table.setItem(i, 9, QTableWidgetItem(f"{total_bill:.2f}"))
+
+            # Update summary labels
+            self.lbl_taxable_sales.setText(f"₹{total_taxable_sales:,.2f}")
+            self.lbl_output_tax.setText(f"₹{total_output_tax:,.2f}")
+
+            self.lbl_taxable_purchases.setText(f"₹{total_taxable_purchases:,.2f}")
+            self.lbl_input_tax.setText(f"₹{total_input_tax:,.2f}")
+
+            net_payable = total_output_tax - total_input_tax
+            if net_payable >= 0:
+                self.lbl_net_payable.setText(f"₹{net_payable:,.2f} (Payable)")
+                self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #ef4444;")
+            else:
+                self.lbl_net_payable.setText(f"₹{abs(net_payable):,.2f} (ITC Refund)")
+                self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #10b981;")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to fetch GST data: {e}")
+        finally:
+            session.close()
+
+    def export_gst_excel(self):
+        # Ask where to save
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save GST Return Excel", "GST_Return_Report.xlsx", "Excel Files (*.xlsx)"
+        )
+        if not file_path:
+            return
+
+        session = Session()
+        try:
+            from_dt = self.gst_from_date.date().toPython()
+            to_dt = self.gst_to_date.date().toPython()
+
+            # Query GSTR-1 and GSTR-2 datasets
+            sales = session.query(SalesMaster).options(joinedload(SalesMaster.customer)).filter(
+                SalesMaster.date >= from_dt,
+                SalesMaster.date <= to_dt,
+                SalesMaster.gst_enabled == True
+            ).all()
+
+            purchases = session.query(PurchaseMaster).options(joinedload(PurchaseMaster.supplier)).filter(
+                PurchaseMaster.date >= from_dt,
+                PurchaseMaster.date <= to_dt,
+                PurchaseMaster.gst_enabled == True
+            ).all()
+
+            # Map GSTR-1
+            gstr1_list = []
+            for s in sales:
+                gstr1_list.append({
+                    "Invoice Number": s.invoice_number,
+                    "Invoice Date": s.date.strftime("%Y-%m-%d"),
+                    "Customer Name": s.customer.name if s.customer else "Walk-in Customer",
+                    "Customer GSTIN": getattr(s.customer, 'gst', '') or '',
+                    "Taxable Value": getattr(s, 'taxable_amount', s.total_amount) or s.total_amount,
+                    "CGST": getattr(s, 'total_cgst', 0.0) or 0.0,
+                    "SGST": getattr(s, 'total_sgst', 0.0) or 0.0,
+                    "IGST": getattr(s, 'total_igst', 0.0) or 0.0,
+                    "Total GST": getattr(s, 'total_gst', 0.0) or 0.0,
+                    "Invoice Total": s.total_amount
+                })
+            df_gstr1 = pd.DataFrame(gstr1_list)
+
+            # Map GSTR-2
+            gstr2_list = []
+            for p in purchases:
+                gstr2_list.append({
+                    "Invoice Number": p.invoice_number,
+                    "Invoice Date": p.date.strftime("%Y-%m-%d"),
+                    "Supplier Name": p.supplier.name if p.supplier else "Unknown Supplier",
+                    "Supplier GSTIN": getattr(p.supplier, 'gst', '') or '',
+                    "Taxable Value": getattr(p, 'taxable_amount', p.total_amount) or p.total_amount,
+                    "CGST": getattr(p, 'total_cgst', 0.0) or 0.0,
+                    "SGST": getattr(p, 'total_sgst', 0.0) or 0.0,
+                    "IGST": getattr(p, 'total_igst', 0.0) or 0.0,
+                    "Total GST": getattr(p, 'total_gst', 0.0) or 0.0,
+                    "Invoice Total": p.total_amount
+                })
+            df_gstr2 = pd.DataFrame(gstr2_list)
+
+            # Consolidated Summary
+            total_taxable_s = sum(x["Taxable Value"] for x in gstr1_list) if gstr1_list else 0.0
+            total_gst_s = sum(x["Total GST"] for x in gstr1_list) if gstr1_list else 0.0
+            total_taxable_p = sum(x["Taxable Value"] for x in gstr2_list) if gstr2_list else 0.0
+            total_gst_p = sum(x["Total GST"] for x in gstr2_list) if gstr2_list else 0.0
+            net_payable = total_gst_s - total_gst_p
+
+            summary_data = [
+                {"Metric": "Outward Supplies (Sales) - Taxable Value", "Amount (₹)": total_taxable_s},
+                {"Metric": "Outward Supplies (Sales) - Output GST Liability", "Amount (₹)": total_gst_s},
+                {"Metric": "Inward Supplies (Purchases) - Taxable Value", "Amount (₹)": total_taxable_p},
+                {"Metric": "Inward Supplies (Purchases) - Input GST Credit (ITC)", "Amount (₹)": total_gst_p},
+                {"Metric": "Net Position (Output Tax - ITC)", "Amount (₹)": net_payable}
+            ]
+            df_summary = pd.DataFrame(summary_data)
+
+            # Write to Excel Sheets
+            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+                df_summary.to_excel(writer, sheet_name="Consolidated Summary", index=False)
+                df_gstr1.to_excel(writer, sheet_name="GSTR-1 (Sales)", index=False)
+                df_gstr2.to_excel(writer, sheet_name="GSTR-2 (Purchases)", index=False)
+
+            QMessageBox.information(self, "Success", f"GST Excel Return successfully written to:\n{file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export GST Excel: {e}")
+        finally:
+            session.close()
+
 # Helper function
 def func_sum(column):
     from sqlalchemy import func
@@ -2027,7 +2336,8 @@ class ProductDrillDownDialog(QDialog):
 
         except Exception as e:
             print(f"Error loading drill-down data: {e}")
-            traceback.print_exc()
         finally:
             session.close()
+
+
 

@@ -182,9 +182,10 @@ class CategoryManagerDialog(QDialog):
             session.close()
 
 class ProductDialog(QDialog):
-    def __init__(self, product=None, parent=None):
+    def __init__(self, product=None, initial_name="", parent=None):
         super().__init__(parent)
         self.product = product
+        self.initial_name = initial_name
         self.setWindowTitle("Edit Product" if product else "Add New Product")
         
         # Check settings for IMEI visibility
@@ -201,9 +202,9 @@ class ProductDialog(QDialog):
             session.close()
 
         if self.show_imei:
-            self.setFixedSize(400, 460)
+            self.setFixedSize(400, 490)
         else:
-            self.setFixedSize(400, 430)
+            self.setFixedSize(400, 460)
             
         self.init_ui()
 
@@ -329,6 +330,9 @@ class ProductDialog(QDialog):
         self.add_category_btn.hide()
         cat_layout.addWidget(self.add_category_btn)
         
+        self.unit_combo = QComboBox()
+        self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+
         self.brand_input = QLineEdit()
         self.model_input = QLineEdit()
         self.imei_input = QLineEdit()
@@ -341,9 +345,13 @@ class ProductDialog(QDialog):
         self.low_stock_limit_input = QLineEdit()
         self.low_stock_limit_input.setText("5")
 
+        if not self.product and self.initial_name:
+            self.name_input.setText(self.initial_name)
+
         form_layout.addRow("Product Code *:", self.product_code_input)
         form_layout.addRow("Product Name *:", self.name_input)
         form_layout.addRow("Category *:", cat_layout)
+        form_layout.addRow("Unit *:", self.unit_combo)
         form_layout.addRow("Brand *:", self.brand_input)
         form_layout.addRow("Model *:", self.model_input)
         if self.show_imei:
@@ -384,6 +392,11 @@ class ProductDialog(QDialog):
                 self.category_combo.addItem(cat)
                 self.category_combo.setCurrentText(cat)
 
+            unit_val = getattr(self.product, 'unit', 'Pcs') or 'Pcs'
+            u_idx = self.unit_combo.findText(unit_val)
+            if u_idx >= 0:
+                self.unit_combo.setCurrentIndex(u_idx)
+
             self.brand_input.setText(self.product.brand)
             self.model_input.setText(self.product.model)
             self.imei_input.setText(self.product.imei or "")
@@ -411,6 +424,8 @@ class ProductDialog(QDialog):
         if not name or not brand or not model:
             QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)")
             return
+
+        unit = self.unit_combo.currentText().strip() or "Pcs"
 
         try:
             purchase_price = float(self.purchase_price_input.text())
@@ -460,15 +475,22 @@ class ProductDialog(QDialog):
                 prod.selling_price = selling_price
                 prod.stock_qty = stock_qty
                 prod.low_stock_limit = low_stock_limit
+                prod.unit = unit
+                self.saved_product_id = prod.id
+                self.saved_product_name = prod.name
             else:
                 # Add
                 new_prod = Product(
                     product_code=product_code,
                     name=name, category=category, brand=brand, model=model, imei=imei,
                     purchase_price=purchase_price, selling_price=selling_price, stock_qty=stock_qty,
-                    low_stock_limit=low_stock_limit
+                    low_stock_limit=low_stock_limit,
+                    unit=unit
                 )
                 session.add(new_prod)
+                session.flush()
+                self.saved_product_id = new_prod.id
+                self.saved_product_name = new_prod.name
 
             session.commit()
             self.accept()

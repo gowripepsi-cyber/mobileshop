@@ -175,11 +175,22 @@ def generate_sales_pdf(invoice_data, file_path):
     story.append(Spacer(1, 15))
 
     # 4. Summary / Totals block
-    summary_data = [
+    summary_data = []
+    if invoice_data.get('gst_enabled'):
+        summary_data.append([Paragraph("", style_sub), Paragraph("Taxable Amount:", style_bold), Paragraph(f"Rs. {invoice_data.get('taxable_amount', 0.0):,.2f}", style_bold)])
+        if invoice_data.get('total_cgst', 0.0) > 0:
+            summary_data.append([Paragraph("", style_sub), Paragraph("CGST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_cgst', 0.0):,.2f}", style_bold)])
+        if invoice_data.get('total_sgst', 0.0) > 0:
+            summary_data.append([Paragraph("", style_sub), Paragraph("SGST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_sgst', 0.0):,.2f}", style_bold)])
+        if invoice_data.get('total_igst', 0.0) > 0:
+            summary_data.append([Paragraph("", style_sub), Paragraph("IGST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_igst', 0.0):,.2f}", style_bold)])
+        summary_data.append([Paragraph("", style_sub), Paragraph("Total GST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_gst', 0.0):,.2f}", style_bold)])
+        
+    summary_data.extend([
         [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {invoice_data['total_amount']:,.2f}", style_bold)],
         [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {invoice_data['paid_amount']:,.2f}", style_bold)],
         [Paragraph("", style_sub), Paragraph("Balance Outstanding:", style_bold), Paragraph(f"Rs. {invoice_data['balance']:,.2f}", style_bold)]
-    ]
+    ])
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
     summary_table.setStyle(TableStyle([
@@ -316,7 +327,7 @@ def generate_purchase_pdf(purchase_data, file_path):
         ],
         [
             Paragraph(purchase_data['supplier_address'] or "N/A", style_sub),
-            Paragraph("", style_sub)
+            Paragraph(f"GSTIN: {purchase_data.get('supplier_gst') or '-'}", style_sub)
         ]
     ]
     bill_from_table = Table(bill_from_data, colWidths=[270, 270])
@@ -369,11 +380,22 @@ def generate_purchase_pdf(purchase_data, file_path):
     story.append(Spacer(1, 15))
 
     # 4. Summary / Totals block
-    summary_data = [
+    summary_data = []
+    if purchase_data.get('gst_enabled'):
+        summary_data.append([Paragraph("", style_sub), Paragraph("Taxable Amount:", style_bold), Paragraph(f"Rs. {purchase_data.get('taxable_amount', 0.0):,.2f}", style_bold)])
+        if purchase_data.get('total_cgst', 0.0) > 0:
+            summary_data.append([Paragraph("", style_sub), Paragraph("CGST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_cgst', 0.0):,.2f}", style_bold)])
+        if purchase_data.get('total_sgst', 0.0) > 0:
+            summary_data.append([Paragraph("", style_sub), Paragraph("SGST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_sgst', 0.0):,.2f}", style_bold)])
+        if purchase_data.get('total_igst', 0.0) > 0:
+            summary_data.append([Paragraph("", style_sub), Paragraph("IGST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_igst', 0.0):,.2f}", style_bold)])
+        summary_data.append([Paragraph("", style_sub), Paragraph("Total GST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_gst', 0.0):,.2f}", style_bold)])
+        
+    summary_data.extend([
         [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {purchase_data['total_amount']:,.2f}", style_bold)],
         [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {purchase_data['paid_amount']:,.2f}", style_bold)],
         [Paragraph("", style_sub), Paragraph("Balance Payable:", style_bold), Paragraph(f"Rs. {purchase_data['balance']:,.2f}", style_bold)]
-    ]
+    ])
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
     summary_table.setStyle(TableStyle([

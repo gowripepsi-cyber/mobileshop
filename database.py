@@ -68,6 +68,30 @@ def init_db():
     if 'product_code' not in prod_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE products ADD COLUMN product_code TEXT"))
+    if 'unit' not in prod_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products ADD COLUMN unit TEXT DEFAULT 'Pcs'"))
+
+    # Schema migration: check and add unit column to items tables
+    pur_item_cols = [c['name'] for c in inspector.get_columns('purchase_items')]
+    if 'unit' not in pur_item_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE purchase_items ADD COLUMN unit TEXT DEFAULT 'Pcs'"))
+
+    sales_item_cols = [c['name'] for c in inspector.get_columns('sales_items')]
+    if 'unit' not in sales_item_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE sales_items ADD COLUMN unit TEXT DEFAULT 'Pcs'"))
+
+    pur_ret_item_cols = [c['name'] for c in inspector.get_columns('purchase_return_items')]
+    if 'unit' not in pur_ret_item_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE purchase_return_items ADD COLUMN unit TEXT DEFAULT 'Pcs'"))
+
+    sales_ret_item_cols = [c['name'] for c in inspector.get_columns('sales_return_items')]
+    if 'unit' not in sales_ret_item_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE sales_return_items ADD COLUMN unit TEXT DEFAULT 'Pcs'"))
 
     # Schema migration: check and add missing columns to suppliers table
     supp_columns = [c['name'] for c in inspector.get_columns('suppliers')]
@@ -119,6 +143,47 @@ def init_db():
     if 'permissions' not in user_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
+
+    # Schema migration: check and add missing GST columns to suppliers
+    if 'gst' not in supp_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE suppliers ADD COLUMN gst TEXT"))
+
+    # Schema migration: check and add GST columns to purchase_master
+    pur_master_cols = [c['name'] for c in inspector.get_columns('purchase_master')]
+    if 'gst_enabled' not in pur_master_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN gst_enabled INTEGER DEFAULT 0"))
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN gst_type TEXT DEFAULT 'CGST+SGST'"))
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN taxable_amount REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN total_cgst REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN total_sgst REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN total_igst REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE purchase_master ADD COLUMN total_gst REAL DEFAULT 0.0"))
+
+    # Schema migration: check and add GST columns to sales_master
+    sales_master_cols = [c['name'] for c in inspector.get_columns('sales_master')]
+    if 'gst_enabled' not in sales_master_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN gst_enabled INTEGER DEFAULT 0"))
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN gst_type TEXT DEFAULT 'CGST+SGST'"))
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN taxable_amount REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN total_cgst REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN total_sgst REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN total_igst REAL DEFAULT 0.0"))
+            conn.execute(text("ALTER TABLE sales_master ADD COLUMN total_gst REAL DEFAULT 0.0"))
+
+    # Schema migration: check and add GST columns to line items
+    for tbl in ('purchase_items', 'sales_items', 'purchase_return_items', 'sales_return_items'):
+        cols = [c['name'] for c in inspector.get_columns(tbl)]
+        if 'gst_rate' not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN gst_rate REAL DEFAULT 0.0"))
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN cgst_amount REAL DEFAULT 0.0"))
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN sgst_amount REAL DEFAULT 0.0"))
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN igst_amount REAL DEFAULT 0.0"))
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN tax_amount REAL DEFAULT 0.0"))
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN taxable_value REAL DEFAULT 0.0"))
 
     session = Session()
     try:
@@ -207,6 +272,10 @@ def init_db():
         enable_imei = session.query(Setting).filter_by(key='enable_imei_tracking').first()
         if not enable_imei:
             session.add(Setting(key='enable_imei_tracking', value='true'))
+
+        enable_gst = session.query(Setting).filter_by(key='enable_gst').first()
+        if not enable_gst:
+            session.add(Setting(key='enable_gst', value='false'))
 
         # 5. Seed default categories if empty
         cat_count = session.query(Category).count()

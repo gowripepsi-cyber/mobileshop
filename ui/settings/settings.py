@@ -64,11 +64,13 @@ class SettingsView(QWidget):
         self.shop_contact_input = QLineEdit()
         self.shop_address_input = QLineEdit()
         self.shop_gst_input = QLineEdit()
+        self.enable_gst_checkbox = QCheckBox("Enable GST Taxation System")
 
         form_layout.addRow("Shop / Business Name *:", self.shop_name_input)
         form_layout.addRow("Contact Number *:", self.shop_contact_input)
         form_layout.addRow("Billing Address:", self.shop_address_input)
         form_layout.addRow("Shop GSTIN:", self.shop_gst_input)
+        form_layout.addRow("", self.enable_gst_checkbox)
 
         self.save_shop_btn = QPushButton("Save Details")
         self.save_shop_btn.setProperty("class", "btn-success")
@@ -162,11 +164,14 @@ class SettingsView(QWidget):
             s_contact = session.query(Setting).filter_by(key='shop_contact').first()
             s_address = session.query(Setting).filter_by(key='shop_address').first()
             s_gst = session.query(Setting).filter_by(key='shop_gst').first()
+            enable_gst_setting = session.query(Setting).filter_by(key='enable_gst').first()
 
             if s_name: self.shop_name_input.setText(s_name.value)
             if s_contact: self.shop_contact_input.setText(s_contact.value)
             if s_address: self.shop_address_input.setText(s_address.value)
             if s_gst: self.shop_gst_input.setText(s_gst.value)
+            if enable_gst_setting:
+                self.enable_gst_checkbox.setChecked(enable_gst_setting.value == 'true')
 
             if hasattr(self, 'user_mgmt_tab'):
                 self.user_mgmt_tab.refresh_data()
@@ -192,11 +197,17 @@ class SettingsView(QWidget):
             s_contact = session.query(Setting).filter_by(key='shop_contact').first()
             s_address = session.query(Setting).filter_by(key='shop_address').first()
             s_gst = session.query(Setting).filter_by(key='shop_gst').first()
+            enable_gst_setting = session.query(Setting).filter_by(key='enable_gst').first()
 
             s_name.value = name
             s_contact.value = contact
             s_address.value = address
             s_gst.value = gst
+            
+            if not enable_gst_setting:
+                enable_gst_setting = Setting(key='enable_gst', value='false')
+                session.add(enable_gst_setting)
+            enable_gst_setting.value = 'true' if self.enable_gst_checkbox.isChecked() else 'false'
 
             session.commit()
             QMessageBox.information(self, "Success", "Shop profile details updated successfully.")

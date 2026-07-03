@@ -41,7 +41,9 @@ class TestInventoryDB(unittest.TestCase):
         if not supp:
             supp = Supplier(name="Test Supplier", mobile="9999999999", address="Test Addr", outstanding_balance=0.0)
             self.session.add(supp)
-            self.session.commit()
+        else:
+            supp.outstanding_balance = 0.0
+        self.session.commit()
 
         # Save Purchase entry (Qty 10 @ 10000. Total = 100000. Paid = 40000. Outstanding = 60000)
         invoice_no = f"TEST-PUR-{datetime.datetime.now().microsecond}"
@@ -100,7 +102,9 @@ class TestInventoryDB(unittest.TestCase):
         if not cust:
             cust = Customer(name="Test Customer", mobile="8888888888", address="Test Addr", outstanding_balance=0.0)
             self.session.add(cust)
-            self.session.commit()
+        else:
+            cust.outstanding_balance = 0.0
+        self.session.commit()
 
         # Sale 3 items. Unit Rate = 13000, Discount = 1000 per item. Total = (13000 * 3) - 3000 = 36000.
         # Paid = 20000. Balance Receivable = 16000.
@@ -549,6 +553,190 @@ class TestInventoryDB(unittest.TestCase):
         # Clean up bank accounts
         self.session.delete(pay_bank)
         self.session.delete(payout_bank)
+        self.session.commit()
+
+    def test_11_product_unit_flow(self):
+        # 1. Create a product with a custom unit e.g., 'Box'
+        p = Product(
+            name="Test Unit Product",
+            brand="TestBrand",
+            model="TestModel",
+            imei="TEST-IMEI-UNIT-101",
+            purchase_price=500.0,
+            selling_price=800.0,
+            stock_qty=0,
+            unit="Box"
+        )
+        self.session.add(p)
+        self.session.commit()
+
+        # 2. Verify unit is 'Box' in the database
+        db_p = self.session.query(Product).filter_by(imei="TEST-IMEI-UNIT-101").first()
+        self.assertIsNotNone(db_p)
+        self.assertEqual(db_p.unit, "Box")
+
+        # 3. Create a PurchaseItem with 'Box' unit
+        supp = self.session.query(Supplier).first()
+        if not supp:
+            supp = Supplier(name="Test Supplier", mobile="9999999999", address="Test Addr")
+            self.session.add(supp)
+            self.session.commit()
+        
+        purchase = PurchaseMaster(
+            invoice_number=f"TEST-PUR-UNIT-{datetime.datetime.now().microsecond}",
+            date=datetime.date.today(),
+            supplier_id=supp.id,
+            total_amount=5000.0,
+            paid_amount=5000.0,
+            balance_payable=0.0
+        )
+        self.session.add(purchase)
+        self.session.commit()
+
+        p_item = PurchaseItem(
+            purchase_id=purchase.id,
+            product_id=db_p.id,
+            qty=10,
+            rate=500.0,
+            unit="Box"
+        )
+        self.session.add(p_item)
+        self.session.commit()
+
+        # Verify unit is stored in PurchaseItem
+        db_item = self.session.query(PurchaseItem).filter_by(purchase_id=purchase.id).first()
+        self.assertEqual(db_item.unit, "Box")
+
+        # Clean up
+        self.session.delete(p_item)
+        self.session.delete(purchase)
+        self.session.delete(db_p)
+        self.session.commit()
+
+    def test_12_gst_transaction_flow(self):
+        # 1. Setup entities
+        prod = Product(
+            name="GST Test Product",
+            brand="TestBrand",
+            model="TestModel",
+            imei="TEST-IMEI-GST-12",
+            purchase_price=2000.0,
+            selling_price=3000.0,
+            stock_qty=10
+        )
+        self.session.add(prod)
+        
+        supp = Supplier(name="GST Supplier", mobile="9876543210", address="Test Address", gst="29ABCDE1234F1Z5")
+        self.session.add(supp)
+        
+        cust = Customer(name="GST Customer", mobile="9876543211", address="Test Address", gst="29XYZAB1234C1Z0")
+        self.session.add(cust)
+        
+        self.session.commit()
+
+        # 2. Test Purchase transaction with GST
+        pur = PurchaseMaster(
+            invoice_number="PUR-TEST-GST-12",
+            date=datetime.date.today(),
+            supplier_id=supp.id,
+            total_amount=11800.0,
+            paid_amount=11800.0,
+            balance_payable=0.0,
+            gst_enabled=True,
+            gst_type="CGST+SGST",
+            taxable_amount=10000.0,
+            total_cgst=900.0,
+            total_sgst=900.0,
+            total_igst=0.0,
+            total_gst=1800.0
+        )
+        self.session.add(pur)
+        self.session.flush()
+
+        pur_item = PurchaseItem(
+            purchase_id=pur.id,
+            product_id=prod.id,
+            qty=5,
+            rate=2000.0,
+            unit="Pcs",
+            gst_rate=18.0,
+            cgst_amount=900.0/2,
+            sgst_amount=900.0/2,
+            igst_amount=0.0,
+            tax_amount=900.0,
+            taxable_value=10000.0
+        )
+        self.session.add(pur_item)
+        self.session.commit()
+
+        # Verify purchase fields
+        db_pur = self.session.query(PurchaseMaster).filter_by(invoice_number="PUR-TEST-GST-12").first()
+        self.assertIsNotNone(db_pur)
+        self.assertTrue(db_pur.gst_enabled)
+        self.assertEqual(db_pur.total_amount, 11800.0)
+        self.assertEqual(db_pur.total_gst, 1800.0)
+        self.assertEqual(db_pur.gst_type, "CGST+SGST")
+
+        db_pur_item = self.session.query(PurchaseItem).filter_by(purchase_id=pur.id).first()
+        self.assertIsNotNone(db_pur_item)
+        self.assertEqual(db_pur_item.gst_rate, 18.0)
+        self.assertEqual(db_pur_item.tax_amount, 900.0)
+
+        # 3. Test Sales transaction with GST
+        sale = SalesMaster(
+            invoice_number="INV-TEST-GST-12",
+            date=datetime.date.today(),
+            customer_id=cust.id,
+            total_amount=3540.0,
+            paid_amount=3540.0,
+            balance_receivable=0.0,
+            gst_enabled=True,
+            gst_type="IGST",
+            taxable_amount=3000.0,
+            total_cgst=0.0,
+            total_sgst=0.0,
+            total_igst=540.0,
+            total_gst=540.0
+        )
+        self.session.add(sale)
+        self.session.flush()
+
+        sale_item = SalesItem(
+            sales_id=sale.id,
+            product_id=prod.id,
+            qty=1,
+            rate=3000.0,
+            unit="Pcs",
+            gst_rate=18.0,
+            cgst_amount=0.0,
+            sgst_amount=0.0,
+            igst_amount=540.0,
+            tax_amount=540.0,
+            taxable_value=3000.0
+        )
+        self.session.add(sale_item)
+        self.session.commit()
+
+        # Verify sales fields
+        db_sale = self.session.query(SalesMaster).filter_by(invoice_number="INV-TEST-GST-12").first()
+        self.assertIsNotNone(db_sale)
+        self.assertTrue(db_sale.gst_enabled)
+        self.assertEqual(db_sale.total_gst, 540.0)
+        self.assertEqual(db_sale.gst_type, "IGST")
+
+        db_sale_item = self.session.query(SalesItem).filter_by(sales_id=sale.id).first()
+        self.assertIsNotNone(db_sale_item)
+        self.assertEqual(db_sale_item.gst_rate, 18.0)
+        self.assertEqual(db_sale_item.tax_amount, 540.0)
+
+        # 4. Clean up
+        self.session.delete(pur_item)
+        self.session.delete(pur)
+        self.session.delete(sale_item)
+        self.session.delete(sale)
+        self.session.delete(prod)
+        self.session.delete(supp)
+        self.session.delete(cust)
         self.session.commit()
 
 if __name__ == '__main__':

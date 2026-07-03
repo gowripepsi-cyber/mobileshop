@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout,
-                             QTabWidget, QDialog, QDialogButtonBox, QCompleter)
+                             QTabWidget, QDialog, QDialogButtonBox, QCompleter, QCheckBox)
 from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
@@ -16,6 +16,7 @@ class PurchaseView(QWidget):
         self.bill_items = []  # list of dicts: {"product_id": int, "name": str, "qty": int, "rate": float}
         self.editing_purchase_id = None  # Tracks if we are editing a purchase bill
         self.products_cache = {}
+        self.gst_globally_enabled = False
         self.init_ui()
 
     def init_ui(self):
@@ -107,9 +108,22 @@ class PurchaseView(QWidget):
         self.paid_input.setDecimals(2)
         self.paid_input.valueChanged.connect(self.update_summary)
 
+        # GST widgets
+        self.gst_enabled_checkbox = QCheckBox("Tax Invoice (GST)")
+        self.gst_enabled_checkbox.stateChanged.connect(self.on_gst_checkbox_changed)
+        
+        self.gst_type_combo = QComboBox()
+        self.gst_type_combo.addItems(["Local (CGST+SGST)", "Inter-State (IGST)"])
+        self.gst_type_combo.currentIndexChanged.connect(self.update_summary)
+        
+        self.gst_enabled_label = QLabel("Tax Invoice:")
+        self.gst_type_label = QLabel("GST Type:")
+
         form_layout.addRow("Invoice Number *:", self.invoice_input)
         form_layout.addRow("Invoice Date:", self.date_input)
         form_layout.addRow("Supplier:", supp_layout)
+        form_layout.addRow(self.gst_enabled_label, self.gst_enabled_checkbox)
+        form_layout.addRow(self.gst_type_label, self.gst_type_combo)
         form_layout.addRow("Payment Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
         form_layout.addRow("Paid Amount (₹):", self.paid_input)
@@ -166,6 +180,13 @@ class PurchaseView(QWidget):
         grid_layout.setColumnStretch(4, 0)
         grid_layout.setColumnStretch(5, 4)
         
+        self.brand_input = QLineEdit()
+        self.brand_input.hide()
+        self.model_input = QLineEdit()
+        self.model_input.hide()
+        self.selling_price_input = QDoubleSpinBox()
+        self.selling_price_input.hide()
+
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
         self.product_code_input.setFixedWidth(120)
@@ -180,61 +201,73 @@ class PurchaseView(QWidget):
         grid_layout.addWidget(QLabel("Category:"), 0, 2)
         grid_layout.addWidget(self.category_combo, 0, 3)
         
-        self.brand_input = QLineEdit()
-        self.brand_input.setPlaceholderText("Brand")
-        grid_layout.addWidget(QLabel("Brand:"), 0, 4)
-        grid_layout.addWidget(self.brand_input, 0, 5)
-
         self.product_combo = SearchableProductComboBox()
         self.product_combo.setPlaceholderText("Select Product")
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        grid_layout.addWidget(QLabel("Product Name:"), 1, 0)
-        grid_layout.addWidget(self.product_combo, 1, 1, 1, 3)
+        
+        # Connect text changes to check product match for quick add
+        self.product_combo.currentTextChanged.connect(self.check_product_match)
+        if self.product_combo.lineEdit():
+            self.product_combo.lineEdit().textChanged.connect(self.check_product_match)
 
-        self.model_input = QLineEdit()
-        self.model_input.setPlaceholderText("Model")
-        grid_layout.addWidget(QLabel("Model:"), 1, 4)
-        grid_layout.addWidget(self.model_input, 1, 5)
+        self.add_product_btn = QPushButton("+")
+        self.add_product_btn.setToolTip("Add new product")
+        self.add_product_btn.setProperty("class", "btn-quick-add")
+        self.add_product_btn.setFixedWidth(40)
+        self.add_product_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_product_btn.setCursor(Qt.PointingHandCursor)
+        self.add_product_btn.clicked.connect(self.handle_add_product_click)
+        self.add_product_btn.hide()
+
+        prod_layout = QHBoxLayout()
+        prod_layout.setContentsMargins(0, 0, 0, 0)
+        prod_layout.setSpacing(6)
+        prod_layout.addWidget(self.product_combo, 1)
+        prod_layout.addWidget(self.add_product_btn)
+
+        grid_layout.addWidget(QLabel("Item Name:"), 0, 4)
+        grid_layout.addLayout(prod_layout, 0, 5)
+
+        self.qty_input = QSpinBox()
+        self.qty_input.setRange(1, 100000)
+        self.qty_input.setValue(1)
+        grid_layout.addWidget(QLabel("Quantity:"), 1, 0)
+        grid_layout.addWidget(self.qty_input, 1, 1)
+
+        self.unit_combo = QComboBox()
+        self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+        grid_layout.addWidget(QLabel("Unit:"), 1, 2)
+        grid_layout.addWidget(self.unit_combo, 1, 3)
+
+        self.gst_rate_label = QLabel("GST %:")
+        self.gst_rate_combo = QComboBox()
+        self.gst_rate_combo.addItems(["0%", "5%", "12%", "18%", "28%"])
+        self.gst_rate_combo.setCurrentText("18%")
+        grid_layout.addWidget(self.gst_rate_label, 1, 4)
+        grid_layout.addWidget(self.gst_rate_combo, 1, 5)
 
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        grid_layout.addWidget(QLabel("Purchase Price (₹):"), 2, 0)
+        
+        self.rate_label = QLabel("Rate (per unit):")
+        grid_layout.addWidget(self.rate_label, 2, 0)
         grid_layout.addWidget(self.rate_input, 2, 1)
-
-        self.selling_price_input = QDoubleSpinBox()
-        self.selling_price_input.setRange(0.0, 9999999.0)
-        self.selling_price_input.setValue(0.0)
-        self.selling_price_input.setDecimals(2)
-        grid_layout.addWidget(QLabel("Selling Price (₹):"), 2, 2)
-        grid_layout.addWidget(self.selling_price_input, 2, 3)
-
-        self.qty_input = QSpinBox()
-        self.qty_input.setRange(1, 1000)
-        self.qty_input.setValue(1)
-        grid_layout.addWidget(QLabel("Qty:"), 2, 4)
-
-        qty_layout = QHBoxLayout()
-        qty_layout.setContentsMargins(0, 0, 0, 0)
-        qty_layout.setSpacing(10)
-        qty_layout.addWidget(self.qty_input, 1)
 
         self.add_item_btn = QPushButton("Add Item")
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        qty_layout.addWidget(self.add_item_btn, 2)
-
-        grid_layout.addLayout(qty_layout, 2, 5)
+        grid_layout.addWidget(self.add_item_btn, 2, 5)
 
         right_layout.addLayout(grid_layout)
 
         # Items Table
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Category", "Brand", "Model", "Qty", "Purchase Price (₹)", "Selling Price (₹)", "Total (₹)", "Action"])
+        self.table.setColumnCount(8)
+        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Category", "Qty", "Unit", "Rate (₹)", "Total (₹)", "Action"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
-        self.table.setColumnWidth(9, 100)
+        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.table.setColumnWidth(7, 100)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
         right_layout.addWidget(self.table)
@@ -372,6 +405,41 @@ class PurchaseView(QWidget):
         if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_supplier_id'):
             self.load_suppliers(select_supplier_id=dlg.saved_supplier_id)
 
+    def check_product_match(self):
+        text = self.product_combo.currentText().strip()
+        if not text or text == "Select Product" or text.startswith("--"):
+            self.add_product_btn.hide()
+            return
+        
+        matched = False
+        for i in range(self.product_combo.count()):
+            item_text = self.product_combo.itemText(i).strip()
+            if item_text and item_text != "Select Product":
+                name_part = item_text
+                if " | " in item_text:
+                    name_part = item_text.split(" | ")[1]
+                if " (" in name_part:
+                    name_part = name_part.split(" (")[0]
+                
+                if name_part.strip().lower() == text.lower() or item_text.lower() == text.lower():
+                    matched = True
+                    break
+        
+        if not matched:
+            self.add_product_btn.show()
+        else:
+            self.add_product_btn.hide()
+
+    def handle_add_product_click(self):
+        from ui.masters.products import ProductDialog
+        typed_text = self.product_combo.currentText().strip()
+        if typed_text == "Select Product":
+            typed_text = ""
+        dlg = ProductDialog(initial_name=typed_text, parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_product_id'):
+            self.refresh_data()
+            self.product_combo.select_product_id(dlg.saved_product_id)
+
     def filter_products_by_category(self):
         cat_name = self.category_combo.currentText().strip()
         filtered_products = []
@@ -380,6 +448,8 @@ class PurchaseView(QWidget):
                 filtered_products.append(p)
         self.product_combo.set_products(filtered_products)
         self.update_rate_on_product_change()
+        if hasattr(self, 'add_product_btn'):
+            self.check_product_match()
 
     def refresh_data(self):
         session = Session()
@@ -443,6 +513,13 @@ class PurchaseView(QWidget):
             self.supplier_combo.blockSignals(False)
             self.category_combo.blockSignals(False)
             self.bank_combo.blockSignals(False)
+
+            # Load global GST setting
+            self.gst_globally_enabled = False
+            gst_setting = session.query(Setting).filter_by(key='enable_gst').first()
+            if gst_setting and gst_setting.value == 'true':
+                self.gst_globally_enabled = True
+            self.apply_gst_visibility()
 
             self.filter_products_by_category()
 
@@ -563,6 +640,11 @@ class PurchaseView(QWidget):
             # Sync product code input for visual feedback
             if prod.product_code:
                 self.product_code_input.setText(prod.product_code)
+            # Sync unit
+            unit_val = getattr(prod, 'unit', 'Pcs') or 'Pcs'
+            u_idx = self.unit_combo.findText(unit_val)
+            if u_idx >= 0:
+                self.unit_combo.setCurrentIndex(u_idx)
         else:
             self.rate_input.setValue(0.0)
             if hasattr(self, 'selling_price_input'):
@@ -572,6 +654,7 @@ class PurchaseView(QWidget):
             if hasattr(self, 'model_input'):
                 self.model_input.clear()
             self.product_code_input.clear()
+            self.unit_combo.setCurrentIndex(0)
 
     def handle_product_code_entry(self):
         text = self.product_code_input.text().strip()
@@ -604,6 +687,46 @@ class PurchaseView(QWidget):
             self.product_code_input.selectAll()
             self.product_code_input.setFocus()
 
+    def on_gst_checkbox_changed(self):
+        self.apply_gst_visibility()
+        self.update_summary()
+
+    def apply_gst_visibility(self):
+        globally_enabled = getattr(self, 'gst_globally_enabled', False)
+        
+        self.gst_enabled_label.setVisible(globally_enabled)
+        self.gst_enabled_checkbox.setVisible(globally_enabled)
+        
+        gst_active = globally_enabled and self.gst_enabled_checkbox.isChecked()
+        
+        self.gst_type_label.setVisible(gst_active)
+        self.gst_type_combo.setVisible(gst_active)
+        
+        self.gst_rate_label.setVisible(gst_active)
+        self.gst_rate_combo.setVisible(gst_active)
+        
+        self.setup_table_columns(gst_active)
+
+    def setup_table_columns(self, gst_active):
+        if gst_active:
+            self.table.setColumnCount(10)
+            self.table.setHorizontalHeaderLabels([
+                "Product Code", "Product Name", "Category", 
+                "Qty", "Unit", "Rate (₹)", "GST %", "Tax (₹)", "Total (₹)", "Action"
+            ])
+            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
+            self.table.setColumnWidth(9, 100)
+        else:
+            self.table.setColumnCount(8)
+            self.table.setHorizontalHeaderLabels([
+                "Product Code", "Product Name", "Category", 
+                "Qty", "Unit", "Rate (₹)", "Total (₹)", "Action"
+            ])
+            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+            self.table.setColumnWidth(7, 100)
+
     def add_item_to_list(self):
         prod_idx = self.product_combo.currentIndex()
         if prod_idx < 0:
@@ -611,7 +734,19 @@ class PurchaseView(QWidget):
 
         prod_id = self.product_combo.currentData()
         qty = self.qty_input.value()
+        unit = self.unit_combo.currentText()
         rate = self.rate_input.value()
+        
+        gst_active = getattr(self, 'gst_globally_enabled', False) and self.gst_enabled_checkbox.isChecked()
+        if gst_active:
+            gst_rate_text = self.gst_rate_combo.currentText().replace("%", "")
+            gst_rate = float(gst_rate_text)
+        else:
+            gst_rate = 0.0
+
+        taxable_value = qty * rate
+        tax_amount = taxable_value * (gst_rate / 100.0)
+
         selling_price = self.selling_price_input.value() if hasattr(self, 'selling_price_input') else 0.0
         brand = self.brand_input.text().strip() if hasattr(self, 'brand_input') else ""
         model = self.model_input.text().strip() if hasattr(self, 'model_input') else ""
@@ -621,11 +756,13 @@ class PurchaseView(QWidget):
         prod_code = p_cache.product_code if p_cache else "-"
         category = p_cache.category if p_cache else "-"
 
-        # Check if already added
+        # Check if already added (match by product_id AND unit AND gst_rate)
         for item in self.bill_items:
-            if item["product_id"] == prod_id:
+            if item["product_id"] == prod_id and item.get("unit") == unit and item.get("gst_rate", 0.0) == gst_rate:
                 item["qty"] += qty
                 item["rate"] = rate  # update with latest rate
+                item["taxable_value"] = item["qty"] * rate
+                item["tax_amount"] = item["taxable_value"] * (gst_rate / 100.0)
                 item["selling_price"] = selling_price
                 item["brand"] = brand
                 item["model"] = model
@@ -641,7 +778,11 @@ class PurchaseView(QWidget):
             "brand": brand,
             "model": model,
             "qty": qty,
+            "unit": unit,
             "rate": rate,
+            "gst_rate": gst_rate,
+            "tax_amount": tax_amount,
+            "taxable_value": taxable_value,
             "selling_price": selling_price
         })
         
@@ -652,43 +793,73 @@ class PurchaseView(QWidget):
         self.update_table()
 
     def update_table(self):
+        gst_active = getattr(self, 'gst_globally_enabled', False) and self.gst_enabled_checkbox.isChecked()
         self.table.setRowCount(len(self.bill_items))
         for i, item in enumerate(self.bill_items):
             self.table.setItem(i, 0, QTableWidgetItem(item.get("product_code", "-")))
             self.table.setItem(i, 1, QTableWidgetItem(item.get("name", "-")))
             self.table.setItem(i, 2, QTableWidgetItem(item.get("category", "-")))
-            self.table.setItem(i, 3, QTableWidgetItem(item.get("brand", "-")))
-            self.table.setItem(i, 4, QTableWidgetItem(item.get("model", "-")))
-            self.table.setItem(i, 5, QTableWidgetItem(str(item.get("qty", 0))))
-            self.table.setItem(i, 6, QTableWidgetItem(f"{item.get('rate', 0.0):.2f}"))
-            self.table.setItem(i, 7, QTableWidgetItem(f"{item.get('selling_price', 0.0):.2f}"))
+            self.table.setItem(i, 3, QTableWidgetItem(str(item.get("qty", 0))))
+            self.table.setItem(i, 4, QTableWidgetItem(item.get("unit", "Pcs")))
+            self.table.setItem(i, 5, QTableWidgetItem(f"{item.get('rate', 0.0):.2f}"))
             
-            subtotal = item.get("qty", 0) * item.get("rate", 0.0)
-            self.table.setItem(i, 8, QTableWidgetItem(f"{subtotal:.2f}"))
+            if gst_active:
+                gst_rate = item.get("gst_rate", 0.0)
+                tax_amt = item.get("tax_amount", 0.0)
+                subtotal = (item.get("qty", 0) * item.get("rate", 0.0)) + tax_amt
+                
+                self.table.setItem(i, 6, QTableWidgetItem(f"{gst_rate:.0f}%"))
+                self.table.setItem(i, 7, QTableWidgetItem(f"{tax_amt:.2f}"))
+                self.table.setItem(i, 8, QTableWidgetItem(f"{subtotal:.2f}"))
+                
+                # Delete button at column index 9
+                btn_container = QWidget()
+                btn_layout = QHBoxLayout(btn_container)
+                btn_layout.setContentsMargins(4, 4, 4, 4)
+                btn_layout.setSpacing(0)
+                btn_layout.setAlignment(Qt.AlignCenter)
 
-            # Delete button (centered wrapper container)
-            btn_container = QWidget()
-            btn_layout = QHBoxLayout(btn_container)
-            btn_layout.setContentsMargins(4, 4, 4, 4)
-            btn_layout.setSpacing(0)
-            btn_layout.setAlignment(Qt.AlignCenter)
+                del_btn = QPushButton("Delete")
+                del_btn.setProperty("class", "btn-action-delete")
+                del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
+                btn_layout.addWidget(del_btn)
+                self.table.setCellWidget(i, 9, btn_container)
+            else:
+                subtotal = item.get("qty", 0) * item.get("rate", 0.0)
+                self.table.setItem(i, 6, QTableWidgetItem(f"{subtotal:.2f}"))
 
-            del_btn = QPushButton("Delete")
-            del_btn.setProperty("class", "btn-action-delete")
-            del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
-            btn_layout.addWidget(del_btn)
-            self.table.setCellWidget(i, 9, btn_container)
+                # Delete button at column index 7
+                btn_container = QWidget()
+                btn_layout = QHBoxLayout(btn_container)
+                btn_layout.setContentsMargins(4, 4, 4, 4)
+                btn_layout.setSpacing(0)
+                btn_layout.setAlignment(Qt.AlignCenter)
+
+                del_btn = QPushButton("Delete")
+                del_btn.setProperty("class", "btn-action-delete")
+                del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
+                btn_layout.addWidget(del_btn)
+                self.table.setCellWidget(i, 7, btn_container)
 
         self.update_summary()
 
     def update_summary(self):
-        total = sum(item["qty"] * item["rate"] for item in self.bill_items)
+        gst_active = getattr(self, 'gst_globally_enabled', False) and self.gst_enabled_checkbox.isChecked()
+        
+        if gst_active:
+            taxable_sum = sum(item.get("qty", 0) * item.get("rate", 0.0) for item in self.bill_items)
+            tax_sum = sum(item.get("tax_amount", 0.0) for item in self.bill_items)
+            total = taxable_sum + tax_sum
+            
+            self.total_lbl.setText(f"Taxable: ₹{taxable_sum:,.2f} | GST: ₹{tax_sum:,.2f} | Total: ₹{total:,.2f}")
+        else:
+            total = sum(item.get("qty", 0) * item.get("rate", 0.0) for item in self.bill_items)
+            self.total_lbl.setText(f"Total Amount: ₹{total:,.2f}")
+
         paid = self.paid_input.value()
         balance = total - paid
         if balance < 0:
             balance = 0.0
-
-        self.total_lbl.setText(f"Total Amount: ₹{total:,.2f}")
         self.balance_lbl.setText(f"Balance Payable: ₹{balance:,.2f}")
 
     def save_purchase(self):
@@ -702,7 +873,35 @@ class PurchaseView(QWidget):
             QMessageBox.warning(self, "Validation Error", "Please add at least one item to the bill.")
             return
 
-        total = sum(item["qty"] * item["rate"] for item in self.bill_items)
+        # Determine if GST is active for this invoice
+        gst_active = self.gst_globally_enabled and self.gst_enabled_checkbox.isChecked()
+        gst_type = self.gst_type_combo.currentText()
+        
+        taxable_amount = 0.0
+        total_cgst = 0.0
+        total_sgst = 0.0
+        total_igst = 0.0
+        total_gst = 0.0
+
+        if gst_active:
+            for item in self.bill_items:
+                taxable = item["qty"] * item["rate"]
+                gst_rate = item.get("gst_rate", 0.0)
+                tax_amt = taxable * (gst_rate / 100.0)
+                
+                taxable_amount += taxable
+                total_gst += tax_amt
+                
+                if gst_type == "Local (CGST+SGST)":
+                    total_cgst += tax_amt / 2.0
+                    total_sgst += tax_amt / 2.0
+                else:
+                    total_igst += tax_amt
+            total = taxable_amount + total_gst
+        else:
+            total = sum(item["qty"] * item["rate"] for item in self.bill_items)
+            taxable_amount = total
+
         paid = self.paid_input.value()
         balance = total - paid
         if balance < 0:
@@ -774,6 +973,13 @@ class PurchaseView(QWidget):
                 purchase.total_amount = total
                 purchase.paid_amount = paid
                 purchase.balance_payable = balance
+                purchase.gst_enabled = gst_active
+                purchase.gst_type = "CGST+SGST" if gst_type == "Local (CGST+SGST)" else "IGST"
+                purchase.taxable_amount = taxable_amount
+                purchase.total_cgst = total_cgst
+                purchase.total_sgst = total_sgst
+                purchase.total_igst = total_igst
+                purchase.total_gst = total_gst
 
             else:
                 # Check duplicate invoice number
@@ -798,18 +1004,46 @@ class PurchaseView(QWidget):
                     supplier_id=supp_id,
                     total_amount=total,
                     paid_amount=paid,
-                    balance_payable=balance
+                    balance_payable=balance,
+                    gst_enabled=gst_active,
+                    gst_type="CGST+SGST" if gst_type == "Local (CGST+SGST)" else "IGST",
+                    taxable_amount=taxable_amount,
+                    total_cgst=total_cgst,
+                    total_sgst=total_sgst,
+                    total_igst=total_igst,
+                    total_gst=total_gst
                 )
                 session.add(purchase)
                 session.flush() # Get purchase ID safely within the transaction
 
             # Save Purchase Items & update stocks
             for item in self.bill_items:
+                g_rate = item.get("gst_rate", 0.0) if gst_active else 0.0
+                taxable_val = item["qty"] * item["rate"]
+                tax_amt = taxable_val * (g_rate / 100.0)
+                
+                cgst_amt = 0.0
+                sgst_amt = 0.0
+                igst_amt = 0.0
+                if gst_active:
+                    if gst_type == "Local (CGST+SGST)":
+                        cgst_amt = tax_amt / 2.0
+                        sgst_amt = tax_amt / 2.0
+                    else:
+                        igst_amt = tax_amt
+
                 p_item = PurchaseItem(
                     purchase_id=purchase.id,
                     product_id=item["product_id"],
                     qty=item["qty"],
-                    rate=item["rate"]
+                    rate=item["rate"],
+                    unit=item.get("unit", "Pcs"),
+                    gst_rate=g_rate,
+                    cgst_amount=cgst_amt,
+                    sgst_amount=sgst_amt,
+                    igst_amount=igst_amt,
+                    tax_amount=tax_amt,
+                    taxable_value=taxable_val
                 )
                 session.add(p_item)
 
@@ -933,7 +1167,7 @@ class PurchaseView(QWidget):
                     display_name = f"Unknown Product (ID: {item.product_id})"
                 items_table.setItem(i, 0, QTableWidgetItem(p_code))
                 items_table.setItem(i, 1, QTableWidgetItem(display_name))
-                items_table.setItem(i, 2, QTableWidgetItem(str(item.qty)))
+                items_table.setItem(i, 2, QTableWidgetItem(f"{item.qty} {getattr(item, 'unit', 'Pcs') or 'Pcs'}"))
                 items_table.setItem(i, 3, QTableWidgetItem(f"{item.rate:.2f}"))
                 subtotal = item.qty * item.rate
                 items_table.setItem(i, 4, QTableWidgetItem(f"{subtotal:.2f}"))
@@ -985,6 +1219,7 @@ class PurchaseView(QWidget):
 
             # Prepare items list
             pdf_items = []
+            gst_active = getattr(purchase, 'gst_enabled', False) or False
             for item in purchase.items:
                 if item.product:
                     p_code = f"[{item.product.product_code}] " if item.product.product_code else ""
@@ -992,11 +1227,18 @@ class PurchaseView(QWidget):
                 else:
                     p_name = f"Unknown Product (ID: {item.product_id})"
 
+                g_rate = getattr(item, 'gst_rate', 0.0) or 0.0
+                tax_amt = getattr(item, 'tax_amount', 0.0) or 0.0
+                taxable_val = getattr(item, 'taxable_value', item.qty * item.rate) or (item.qty * item.rate)
+
                 pdf_items.append({
                     "name": p_name,
-                    "qty": item.qty,
+                    "qty": f"{item.qty} {getattr(item, 'unit', 'Pcs') or 'Pcs'}",
                     "rate": item.rate,
-                    "total": item.qty * item.rate
+                    "gst_rate": g_rate,
+                    "tax_amount": tax_amt,
+                    "taxable_value": taxable_val,
+                    "total": (taxable_val + tax_amt) if gst_active else (item.qty * item.rate)
                 })
 
             # Prepare Purchase PDF data
@@ -1010,10 +1252,18 @@ class PurchaseView(QWidget):
                 "supplier_name": purchase.supplier.name,
                 "supplier_mobile": purchase.supplier.mobile,
                 "supplier_address": purchase.supplier.address,
+                "supplier_gst": getattr(purchase.supplier, 'gst', '') or '',
                 "items": pdf_items,
                 "total_amount": purchase.total_amount,
                 "paid_amount": purchase.paid_amount,
-                "balance": purchase.balance_payable
+                "balance": purchase.balance_payable,
+                "gst_enabled": gst_active,
+                "gst_type": getattr(purchase, 'gst_type', 'CGST+SGST') or 'CGST+SGST',
+                "taxable_amount": getattr(purchase, 'taxable_amount', purchase.total_amount) or purchase.total_amount,
+                "total_cgst": getattr(purchase, 'total_cgst', 0.0) or 0.0,
+                "total_sgst": getattr(purchase, 'total_sgst', 0.0) or 0.0,
+                "total_igst": getattr(purchase, 'total_igst', 0.0) or 0.0,
+                "total_gst": getattr(purchase, 'total_gst', 0.0) or 0.0
             }
 
             os.makedirs("invoices", exist_ok=True)
@@ -1080,6 +1330,12 @@ class PurchaseView(QWidget):
                 
             self.paid_input.setValue(purchase.paid_amount)
             
+            # Load GST settings
+            is_gst = getattr(purchase, 'gst_enabled', False) or False
+            self.gst_enabled_checkbox.setChecked(is_gst)
+            gst_type_val = getattr(purchase, 'gst_type', 'CGST+SGST')
+            self.gst_type_combo.setCurrentText("Local (CGST+SGST)" if gst_type_val == "CGST+SGST" else "Inter-State (IGST)")
+            
             # Load items
             self.bill_items = []
             for item in purchase.items:
@@ -1091,11 +1347,15 @@ class PurchaseView(QWidget):
                     "brand": item.product.brand if item.product else "-",
                     "model": item.product.model if item.product else "-",
                     "qty": item.qty,
+                    "unit": getattr(item, 'unit', 'Pcs') or 'Pcs',
                     "rate": item.rate,
+                    "gst_rate": getattr(item, 'gst_rate', 0.0) or 0.0,
+                    "tax_amount": getattr(item, 'tax_amount', 0.0) or 0.0,
+                    "taxable_value": getattr(item, 'taxable_value', item.qty * item.rate) or (item.qty * item.rate),
                     "selling_price": item.product.selling_price if item.product else 0.0
                 })
                 
-            self.update_table()
+            self.apply_gst_visibility()
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load purchase for editing: {e}")
