@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QWidget
 from PySide6.QtCore import Qt
 from database import Session, User, get_hash, Setting
+from utils.ui_helpers import setup_password_toggle
 
 class LoginWindow(QDialog):
     def __init__(self, parent=None):
@@ -40,6 +41,7 @@ class LoginWindow(QDialog):
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setFixedHeight(40)
+        setup_password_toggle(self.password_input)
         layout.addWidget(self.password_input)
 
         # Error label

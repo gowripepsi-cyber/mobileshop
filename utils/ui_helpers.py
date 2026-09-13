@@ -1,6 +1,51 @@
-from PySide6.QtCore import QObject, QEvent, QTimer, Qt
+from PySide6.QtCore import QObject, QEvent, QTimer, Qt, QByteArray
 from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpinBox, 
                              QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter)
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
+from PySide6.QtSvg import QSvgRenderer
+
+EYE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+  <circle cx="12" cy="12" r="3"></circle>
+</svg>"""
+
+EYE_OFF_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+  <line x1="1" y1="1" x2="23" y2="23"></line>
+</svg>"""
+
+def _svg_to_icon(svg_str, size=18):
+    renderer = QSvgRenderer(QByteArray(svg_str.encode('utf-8')))
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
+
+def setup_password_toggle(line_edit: QLineEdit):
+    """
+    Attaches a clickable eye icon to a password QLineEdit to toggle password visibility.
+    """
+    icon_hidden = _svg_to_icon(EYE_SVG)
+    icon_visible = _svg_to_icon(EYE_OFF_SVG)
+
+    action = line_edit.addAction(icon_hidden, QLineEdit.TrailingPosition)
+    action.setToolTip("Show Password")
+
+    def toggle():
+        if line_edit.echoMode() == QLineEdit.Password:
+            line_edit.setEchoMode(QLineEdit.Normal)
+            action.setIcon(icon_visible)
+            action.setToolTip("Hide Password")
+        else:
+            line_edit.setEchoMode(QLineEdit.Password)
+            action.setIcon(icon_hidden)
+            action.setToolTip("Show Password")
+
+    action.triggered.connect(toggle)
+    return action
+
 
 class AutoSelectFilter(QObject):
     """
@@ -202,4 +247,3 @@ class SearchableProductComboBox(SearchableComboBox):
             parent_view = parent_view.parent()
         if parent_view:
             parent_view.update_rate_on_product_change()
-        return super().eventFilter(obj, event)

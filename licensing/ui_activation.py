@@ -13,11 +13,18 @@ from PySide6.QtGui import QClipboard
 
 from licensing import manager
 from licensing import crypto_utils
+from utils.ui_helpers import setup_password_toggle
 
 # Sha256 hashes of vendor credentials:
 # Username: vendor
-# Password: admin@inventory2026
+# Passwords accepted:
+#   admin@mobileshop2026 (primary)
+#   admin@inventory2026  (compatibility)
 VENDOR_USER_HASH = "630ba09448af522154f38ef7685ef1f44b0f3e9430f80829a03ce24f400f3754"
+VENDOR_PASS_HASHES = {
+    "eb81458ed6233107869846cba983748999d33ed7bbaa275d376dd1e87a485d66",  # admin@mobileshop2026
+    "79bb8b115d58e709b5db5bf9a6913eaa8bdb8c77f5f2c3db75b8eba473f7670c",  # admin@inventory2026
+}
 VENDOR_PASS_HASH = "eb81458ed6233107869846cba983748999d33ed7bbaa275d376dd1e87a485d66"
 
 def init_history_db():
@@ -275,6 +282,7 @@ class VendorLoginDialog(QDialog):
         self.pass_input.setPlaceholderText("Vendor Password")
         self.pass_input.setEchoMode(QLineEdit.Password)
         self.pass_input.setFixedHeight(35)
+        setup_password_toggle(self.pass_input)
         layout.addWidget(self.pass_input)
 
         self.err_lbl = QLabel("")
@@ -301,12 +309,12 @@ class VendorLoginDialog(QDialog):
 
     def handle_login(self):
         user = self.user_input.text().strip()
-        pwd = self.pass_input.text()
+        pwd = self.pass_input.text().strip()
 
         u_hash = hashlib.sha256(user.encode('utf-8')).hexdigest()
         p_hash = hashlib.sha256(pwd.encode('utf-8')).hexdigest()
 
-        if u_hash == VENDOR_USER_HASH and p_hash == VENDOR_PASS_HASH:
+        if u_hash == VENDOR_USER_HASH and (p_hash in VENDOR_PASS_HASHES or p_hash == VENDOR_PASS_HASH):
             self.accept()
         else:
             self.err_lbl.setText("Incorrect vendor credentials.")
