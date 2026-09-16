@@ -236,6 +236,14 @@ class ProductDialog(QDialog):
         finally:
             session.close()
         self.category_combo.blockSignals(False)
+
+        # Autocomplete configuration
+        completer = QCompleter(self.category_combo.model(), self.category_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.category_combo.setCompleter(completer)
+        completer.activated[str].connect(self._on_completer_activated)
         
         if current_txt:
             idx = self.category_combo.findText(current_txt)
@@ -243,8 +251,16 @@ class ProductDialog(QDialog):
                 self.category_combo.setCurrentIndex(idx)
             else:
                 self.category_combo.setEditText(current_txt)
+        elif self.category_combo.count() > 0:
+            self.category_combo.setCurrentIndex(0)
+
         if hasattr(self, 'add_category_btn'):
             self.check_category_match()
+
+    def _on_completer_activated(self, text):
+        self.category_combo.setCurrentText(text)
+        self.suggest_product_code()
+        self.check_category_match()
 
     def check_category_match(self):
         text = self.category_combo.currentText().strip()
@@ -262,6 +278,14 @@ class ProductDialog(QDialog):
             self.add_category_btn.show()
         else:
             self.add_category_btn.hide()
+
+    def on_category_text_changed(self, text):
+        self.check_category_match()
+        if self.category_combo.hasFocus() and text:
+            completer = self.category_combo.completer()
+            if completer:
+                completer.setCompletionPrefix(text)
+                completer.complete()
 
     def handle_add_category_click(self):
         typed_text = self.category_combo.currentText().strip()
@@ -283,12 +307,6 @@ class ProductDialog(QDialog):
         self.category_combo.setEditable(True)
         self.category_combo.setInsertPolicy(QComboBox.NoInsert)
         enable_quick_add_auto_select(self.category_combo)
-        
-        # Autocomplete configuration
-        completer = QCompleter(self.category_combo.model(), self.category_combo)
-        completer.setFilterMode(Qt.MatchContains)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.category_combo.setCompleter(completer)
         
         self.load_categories()
         
@@ -312,7 +330,7 @@ class ProductDialog(QDialog):
         self.category_combo.currentTextChanged.connect(self.suggest_product_code)
         self.category_combo.currentTextChanged.connect(self.check_category_match)
         if self.category_combo.lineEdit():
-            self.category_combo.lineEdit().textChanged.connect(self.check_category_match)
+            self.category_combo.lineEdit().textChanged.connect(self.on_category_text_changed)
 
         # Layout for category combo and Add Category (+) button
         cat_layout = QHBoxLayout()

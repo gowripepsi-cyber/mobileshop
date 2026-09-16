@@ -13,13 +13,13 @@ def get_hash(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 def get_category_code(session, category_name: str) -> str:
-    category = session.query(Category).filter_by(name=category_name).first()
+    category = session.query(Category).filter(Category.name.ilike(category_name.strip())).first() if category_name else None
     if category:
         return str(category.id % 10)
     return "1"
 
 def generate_next_product_code(session, category_name: str) -> str:
-    category = session.query(Category).filter_by(name=category_name).first()
+    category = session.query(Category).filter(Category.name.ilike(category_name.strip())).first() if category_name else None
     category_id = category.id if category else 1
     cat_code = str(category_id % 10) if category_id else "1"
     

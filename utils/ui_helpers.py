@@ -50,35 +50,30 @@ def setup_password_toggle(line_edit: QLineEdit):
 class AutoSelectFilter(QObject):
     """
     Event filter attached to editable QComboBox widgets and their inner QLineEdits.
-    Automatically clears existing text on focus (FocusIn) or mouse click (MouseButtonPress / MouseButtonRelease)
-    so users can immediately type new values without manually deleting existing text.
+    Automatically selects existing text on focus (FocusIn) so users can immediately
+    type new values to replace existing text without manually deleting it first,
+    while preserving selections made from the dropdown popup.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._clearing = False
 
     def eventFilter(self, obj, event):
-        if event.type() in (QEvent.FocusIn, QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
-            if not self._clearing:
-                self._clearing = True
-                QTimer.singleShot(0, lambda: self._do_clear(obj))
+        if event.type() == QEvent.FocusIn:
+            QTimer.singleShot(0, lambda: self._do_select_all(obj))
         return super().eventFilter(obj, event)
 
-    def _do_clear(self, obj):
-        self._clearing = False
+    def _do_select_all(self, obj):
         try:
             if isinstance(obj, QLineEdit):
-                obj.clear()
+                obj.selectAll()
             elif hasattr(obj, 'lineEdit') and obj.lineEdit():
-                obj.lineEdit().clear()
-            elif hasattr(obj, 'clearEditText'):
-                obj.clearEditText()
+                obj.lineEdit().selectAll()
         except Exception:
             pass
 
 def enable_quick_add_auto_select(combo):
     """
-    Enables automatic text clearing on click and focus for an editable QComboBox.
+    Enables automatic text selection on focus for an editable QComboBox.
     """
     filter_obj = AutoSelectFilter(combo)
     combo.installEventFilter(filter_obj)
