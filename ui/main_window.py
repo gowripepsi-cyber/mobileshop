@@ -193,7 +193,13 @@ class MainWindow(QMainWindow):
 
         # Set default view
         self.apply_feature_settings()
-        self.switch_view(0)
+        default_index = 0
+        if 0 in self.nav_buttons and self.nav_buttons[0].isHidden():
+            for idx in sorted(self.nav_buttons.keys()):
+                if not self.nav_buttons[idx].isHidden():
+                    default_index = idx
+                    break
+        self.switch_view(default_index)
 
     def update_shop_name(self):
         from database import Session, Setting
@@ -209,7 +215,7 @@ class MainWindow(QMainWindow):
 
     def switch_view(self, index):
         # Prevent switching to hidden sidebar buttons (via shortcuts)
-        if index in self.nav_buttons and not self.nav_buttons[index].isVisible():
+        if index in self.nav_buttons and self.nav_buttons[index].isHidden():
             return
 
         # Check corresponding nav button

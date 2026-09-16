@@ -1,7 +1,7 @@
 import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel
 
 DATABASE_URL = "sqlite:///inventory.db"
 
@@ -284,7 +284,36 @@ def init_db():
                 session.add(Category(name=name))
             session.commit()
 
-        # 6. Backfill existing products without product_code
+        # 6. Seed default/existing brands if empty
+        brand_count = session.query(Brand).count()
+        if brand_count == 0:
+            existing_brands = {b[0].strip() for b in session.query(Product.brand).distinct() if b[0] and b[0].strip()}
+            default_brands = ["Apple", "Samsung", "Xiaomi", "Vivo", "Oppo", "Realme", "OnePlus"]
+            all_brands = sorted(list(existing_brands.union(default_brands)))
+            for b_name in all_brands:
+                session.add(Brand(name=b_name))
+            session.commit()
+
+        # 7. Seed default/existing models if empty
+        model_count = session.query(ProductModel).count()
+        if model_count == 0:
+            brand_map = {b.name.lower(): b for b in session.query(Brand).all()}
+            existing_models = session.query(Product.model, Product.brand).distinct().all()
+            added_model_names = set()
+            for m_tuple in existing_models:
+                m_name = m_tuple[0].strip() if m_tuple[0] else ""
+                b_name = m_tuple[1].strip() if m_tuple[1] else ""
+                if m_name and m_name.lower() not in added_model_names:
+                    brand_obj = brand_map.get(b_name.lower())
+                    session.add(ProductModel(
+                        name=m_name,
+                        brand_id=brand_obj.id if brand_obj else None,
+                        brand_name=brand_obj.name if brand_obj else (b_name or None)
+                    ))
+                    added_model_names.add(m_name.lower())
+            session.commit()
+
+        # 8. Backfill existing products without product_code
         prods_to_backfill = session.query(Product).filter((Product.product_code == None) | (Product.product_code == "")).all()
         for p in prods_to_backfill:
             p.product_code = generate_next_product_code(session, p.category)

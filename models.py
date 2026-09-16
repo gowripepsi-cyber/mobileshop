@@ -247,6 +247,23 @@ class Category(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
 
+class Brand(Base):
+    __tablename__ = 'brands'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+
+class ProductModel(Base):
+    __tablename__ = 'models'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    brand_id = Column(Integer, ForeignKey('brands.id'), nullable=True)
+    brand_name = Column(String, nullable=True)
+
+    brand = relationship("Brand")
+
+# Alias for backward compatibility and convenience
+Model = ProductModel
+
 class FundTransfer(Base):
     __tablename__ = 'fund_transfers'
     id = Column(Integer, primary_key=True)
