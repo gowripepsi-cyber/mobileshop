@@ -9,6 +9,7 @@ QWidget {
     font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, sans-serif;
     font-size: 13px;
     color: #e2e8f0;
+    outline: none;
 }
 
 /* Sidebar Styling */
@@ -165,6 +166,30 @@ QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QComboB
     border: 1px solid #6366f1;
 }
 
+/* Remove spin up/down arrows from all text boxes */
+QSpinBox::up-button, QSpinBox::down-button,
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
+QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: none;
+    width: 0px;
+    height: 0px;
+    border: none;
+    background: transparent;
+    margin: 0px;
+    padding: 0px;
+}
+
+QSpinBox::up-arrow, QSpinBox::down-arrow,
+QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow,
+QAbstractSpinBox::up-arrow, QAbstractSpinBox::down-arrow {
+    image: none;
+    width: 0px;
+    height: 0px;
+    border: none;
+    background: none;
+}
+
 QComboBox QLineEdit {
     border: none;
     background: transparent;
@@ -214,7 +239,7 @@ QComboBox QAbstractItemView::item:disabled, QListView::item:disabled {
 
 
 /* Standard Buttons */
-QPushButton {
+QPushButton, QToolButton {
     background-color: #6366f1;
     border: 1px solid transparent;
     color: #ffffff;
@@ -222,18 +247,20 @@ QPushButton {
     min-height: 28px;
     font-weight: bold;
     border-radius: 6px;
+    outline: none;
 }
 
-QPushButton:hover {
+QPushButton:hover, QToolButton:hover {
     background-color: #4f46e5;
 }
 
-QPushButton:focus {
-    border: 2px solid #a5b4fc;
+QPushButton:focus, QToolButton:focus {
     background-color: #4f46e5;
+    border: 1px solid #818cf8;
+    outline: none;
 }
 
-QPushButton:pressed {
+QPushButton:pressed, QToolButton:pressed {
     background-color: #4338ca;
 }
 
@@ -300,11 +327,18 @@ QTableWidget, QTableView {
     gridline-color: #20203e;
     selection-background-color: rgba(99, 102, 241, 0.2);
     selection-color: #ffffff;
+    outline: none;
 }
 
 QTableWidget::item, QTableView::item {
     padding: 10px;
     border-bottom: 1px solid #20203e;
+    outline: none;
+}
+
+QTableWidget::item:focus, QTableView::item:focus {
+    outline: none;
+    border: none;
 }
 
 QHeaderView::section {
@@ -384,6 +418,11 @@ QTabBar::tab {
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     margin-right: 4px;
+    outline: none;
+}
+
+QTabBar::tab:focus {
+    outline: none;
 }
 
 QTabBar::tab:selected {

@@ -233,7 +233,7 @@ class SalesView(QWidget):
         grid_layout.addWidget(self.qty_input, 1, 1)
 
         self.unit_combo = QComboBox()
-        self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+        self.load_units()
         grid_layout.addWidget(QLabel("Unit:"), 1, 2)
         grid_layout.addWidget(self.unit_combo, 1, 3)
 
@@ -522,6 +522,7 @@ class SalesView(QWidget):
             self.apply_gst_visibility()
 
             self.filter_products_by_category()
+            self.load_units()
             
             # Load History
             self.load_history()
@@ -535,6 +536,31 @@ class SalesView(QWidget):
             print(f"Error loading sales options: {e}")
         finally:
             session.close()
+
+    def load_units(self):
+        curr_text = self.unit_combo.currentText() if hasattr(self, 'unit_combo') else ""
+        if hasattr(self, 'unit_combo'):
+            self.unit_combo.blockSignals(True)
+            self.unit_combo.clear()
+            session = Session()
+            try:
+                from models import Unit
+                units = session.query(Unit).order_by(Unit.name.asc()).all()
+                for u in units:
+                    self.unit_combo.addItem(u.name)
+            except Exception:
+                pass
+            finally:
+                session.close()
+
+            if self.unit_combo.count() == 0:
+                self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+
+            if curr_text:
+                idx = self.unit_combo.findText(curr_text)
+                if idx >= 0:
+                    self.unit_combo.setCurrentIndex(idx)
+            self.unit_combo.blockSignals(False)
 
     def update_rate_on_product_change(self):
         prod_id = self.product_combo.currentData()

@@ -252,6 +252,12 @@ class Brand(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
 
+class Unit(Base):
+    __tablename__ = 'units'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    description = Column(String, nullable=True)
+
 class ProductModel(Base):
     __tablename__ = 'models'
     id = Column(Integer, primary_key=True)

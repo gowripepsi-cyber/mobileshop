@@ -1,12 +1,13 @@
 from PySide6.QtCore import QObject, QEvent, QTimer, Qt, QByteArray
 from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpinBox, 
                              QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter,
-                             QPushButton, QToolButton)
+                             QPushButton, QToolButton, QSpinBox, QDoubleSpinBox,
+                             QProxyStyle, QStyle)
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
 from PySide6.QtSvg import QSvgRenderer
 
 EYE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
   <circle cx="12" cy="12" r="3"></circle>
 </svg>"""
 
@@ -75,6 +76,18 @@ class EnterNavigationFilter(QObject):
     Also triggers click when focus is on a QPushButton or QToolButton.
     """
     def eventFilter(self, obj, event):
+        # Automatically remove spin up/down arrow buttons on all spin boxes
+        if event.type() in (QEvent.Show, QEvent.Polish) and isinstance(obj, (QSpinBox, QDoubleSpinBox)):
+            if obj.buttonSymbols() != QAbstractSpinBox.ButtonSymbols.NoButtons:
+                obj.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+
+        # Disable mouse wheel scrolling on all spin box / numeric text boxes
+        if event.type() == QEvent.Wheel:
+            parent = getattr(obj, 'parent', lambda: None)()
+            if isinstance(obj, QAbstractSpinBox) or isinstance(parent, QAbstractSpinBox):
+                event.ignore()
+                return True
+
         if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
             # Do not intercept if a popup (like QComboBox popup or QCompleter popup) is active
             if QApplication.activePopupWidget() is not None:
@@ -113,10 +126,22 @@ class EnterNavigationFilter(QObject):
             return True
         return False
 
+class NoFocusProxyStyle(QProxyStyle):
+    """
+    Suppresses native dotted focus rectangles (PE_FrameFocusRect) drawn on buttons,
+    tabs, and table cells across the application.
+    """
+    def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QStyle.PrimitiveElement.PE_FrameFocusRect:
+            return
+        super().drawPrimitive(element, option, painter, widget)
+
 def setup_global_enter_navigation(app):
     """
-    Installs global Enter key navigation filter on the QApplication instance.
+    Installs global Enter key navigation filter on the QApplication instance
+    and suppresses native dotted focus outlines on all controls.
     """
+    app.setStyle(NoFocusProxyStyle(app.style()))
     filter_obj = EnterNavigationFilter(app)
     app.installEventFilter(filter_obj)
     app._enter_nav_filter = filter_obj

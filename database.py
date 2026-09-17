@@ -1,7 +1,7 @@
 import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit
 
 DATABASE_URL = "sqlite:///inventory.db"
 
@@ -317,6 +317,24 @@ def init_db():
         prods_to_backfill = session.query(Product).filter((Product.product_code == None) | (Product.product_code == "")).all()
         for p in prods_to_backfill:
             p.product_code = generate_next_product_code(session, p.category)
+            session.commit()
+
+        # 9. Seed default units if empty
+        unit_count = session.query(Unit).count()
+        if unit_count == 0:
+            default_units = [
+                ("Pcs", "Pieces"),
+                ("Box", "Box"),
+                ("Kg", "Kilograms"),
+                ("Grams", "Grams"),
+                ("Ltr", "Litres"),
+                ("Mtr", "Meters"),
+                ("Nos", "Numbers"),
+                ("Pack", "Pack"),
+                ("Set", "Set")
+            ]
+            for u_name, u_desc in default_units:
+                session.add(Unit(name=u_name, description=u_desc))
             session.commit()
 
         session.commit()

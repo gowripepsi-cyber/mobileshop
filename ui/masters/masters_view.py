@@ -5,6 +5,7 @@ from ui.masters.products import ProductsView
 from ui.masters.customers import CustomersView
 from ui.masters.suppliers import SuppliersView
 from ui.masters.bank_accounts import BankAccountsView
+from ui.masters.units import UnitsView
 
 class MastersView(QWidget):
     def __init__(self, parent=None):
@@ -25,17 +26,20 @@ class MastersView(QWidget):
         self.customers_view = CustomersView(self)
         self.suppliers_view = SuppliersView(self)
         self.bank_accounts_view = BankAccountsView(self)
+        self.units_view = UnitsView(self)
 
         # Add tabs
         self.tabs.addTab(self.products_view, "📦 Products Master (Ctrl+Shift+P)")
         self.tabs.addTab(self.customers_view, "👤 Customers Master (Ctrl+Shift+C)")
         self.tabs.addTab(self.suppliers_view, "🚛 Suppliers Master (Ctrl+Shift+S)")
         self.tabs.addTab(self.bank_accounts_view, "🏦 Bank Accounts Master (Ctrl+Shift+B)")
+        self.tabs.addTab(self.units_view, "📏 Units Master (Ctrl+Shift+U)")
 
         self.tabs.setTabToolTip(0, "Products Master (Ctrl+Shift+P / Ctrl+Alt+1)")
         self.tabs.setTabToolTip(1, "Customers Master (Ctrl+Shift+C / Ctrl+Alt+2)")
         self.tabs.setTabToolTip(2, "Suppliers Master (Ctrl+Shift+S / Ctrl+Alt+3)")
         self.tabs.setTabToolTip(3, "Bank Accounts Master (Ctrl+Shift+B / Ctrl+Alt+4)")
+        self.tabs.setTabToolTip(4, "Units Master (Ctrl+Shift+U / Ctrl+Alt+5)")
 
         # Connect tab change signal
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -52,6 +56,8 @@ class MastersView(QWidget):
             self.suppliers_view.add_supplier()
         elif current_widget == self.bank_accounts_view:
             self.bank_accounts_view.add_account()
+        elif current_widget == self.units_view:
+            self.units_view.add_unit()
 
     def on_tab_changed(self, index):
         widget = self.tabs.widget(index)

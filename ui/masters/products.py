@@ -906,6 +906,48 @@ class ProductDialog(QDialog):
         if new_model:
             self.load_models(select_model=new_model, for_brand=brand_name)
 
+    def load_units(self, select_unit=None):
+        curr_text = select_unit or (self.unit_combo.currentText() if hasattr(self, 'unit_combo') else "")
+        if hasattr(self, 'unit_combo'):
+            self.unit_combo.blockSignals(True)
+            self.unit_combo.clear()
+            session = Session()
+            try:
+                from models import Unit
+                units = session.query(Unit).order_by(Unit.name.asc()).all()
+                for u in units:
+                    self.unit_combo.addItem(u.name)
+            except Exception:
+                pass
+            finally:
+                session.close()
+
+            if self.unit_combo.count() == 0:
+                self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+
+            if curr_text:
+                idx = self.unit_combo.findText(curr_text)
+                if idx >= 0:
+                    self.unit_combo.setCurrentIndex(idx)
+            self.unit_combo.blockSignals(False)
+
+    def handle_add_unit_click(self):
+        from ui.masters.units import UnitDialog
+        dlg = UnitDialog(parent=self)
+        if dlg.exec() == QDialog.Accepted:
+            self.load_units()
+            if dlg.saved_unit_id:
+                session = Session()
+                try:
+                    from models import Unit
+                    saved_u = session.query(Unit).get(dlg.saved_unit_id)
+                    if saved_u:
+                        idx = self.unit_combo.findText(saved_u.name)
+                        if idx >= 0:
+                            self.unit_combo.setCurrentIndex(idx)
+                finally:
+                    session.close()
+
     def init_ui(self):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
@@ -1007,8 +1049,22 @@ class ProductDialog(QDialog):
         self.add_model_btn.clicked.connect(self.handle_add_model_click)
         model_layout.addWidget(self.add_model_btn)
 
+        # Layout for unit combo and Add Unit (+) button
+        unit_layout = QHBoxLayout()
+        unit_layout.setContentsMargins(0, 0, 0, 0)
+        unit_layout.setSpacing(6)
         self.unit_combo = QComboBox()
-        self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+        self.load_units()
+        unit_layout.addWidget(self.unit_combo, 1)
+
+        self.add_unit_btn = QPushButton("+")
+        self.add_unit_btn.setToolTip("Add new unit")
+        self.add_unit_btn.setProperty("class", "btn-quick-add")
+        self.add_unit_btn.setFixedWidth(40)
+        self.add_unit_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_unit_btn.setCursor(Qt.PointingHandCursor)
+        self.add_unit_btn.clicked.connect(self.handle_add_unit_click)
+        unit_layout.addWidget(self.add_unit_btn)
 
         self.imei_input = QLineEdit()
         self.purchase_price_input = QLineEdit()
@@ -1026,7 +1082,7 @@ class ProductDialog(QDialog):
         form_layout.addRow("Product Code *:", self.product_code_input)
         form_layout.addRow("Product Name *:", self.name_input)
         form_layout.addRow("Category *:", cat_layout)
-        form_layout.addRow("Unit *:", self.unit_combo)
+        form_layout.addRow("Unit *:", unit_layout)
         form_layout.addRow("Brand *:", brand_layout)
         form_layout.addRow("Model *:", model_layout)
         if self.show_imei:
