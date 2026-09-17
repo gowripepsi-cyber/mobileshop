@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout,
                              QTabWidget, QDialog, QDialogButtonBox, QCompleter, QCheckBox)
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QTimer
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_purchase_pdf
@@ -768,6 +768,7 @@ class PurchaseView(QWidget):
                 item["model"] = model
                 item["category"] = category
                 self.update_table()
+                self.reset_item_inputs()
                 return
 
         self.bill_items.append({
@@ -787,6 +788,30 @@ class PurchaseView(QWidget):
         })
         
         self.update_table()
+        self.reset_item_inputs()
+
+    def reset_item_inputs(self):
+        self.product_code_input.clear()
+        self.product_combo.blockSignals(True)
+        self.product_combo.setCurrentIndex(-1)
+        if self.product_combo.lineEdit():
+            self.product_combo.lineEdit().clear()
+        self.product_combo.blockSignals(False)
+        self.qty_input.setValue(1)
+        self.rate_input.setValue(0.0)
+        if hasattr(self, 'selling_price_input'):
+            self.selling_price_input.setValue(0.0)
+        if hasattr(self, 'brand_input'):
+            self.brand_input.clear()
+        if hasattr(self, 'model_input'):
+            self.model_input.clear()
+        if hasattr(self, 'add_product_btn'):
+            self.add_product_btn.hide()
+        QTimer.singleShot(0, self._focus_product_code)
+
+    def _focus_product_code(self):
+        self.product_code_input.setFocus()
+        self.product_code_input.selectAll()
 
     def delete_item(self, row_idx):
         self.bill_items.pop(row_idx)

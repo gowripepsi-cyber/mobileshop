@@ -683,6 +683,7 @@ class SalesView(QWidget):
                 item["taxable_value"] = (item["qty"] * rate) - disc
                 item["tax_amount"] = item["taxable_value"] * (gst_rate / 100.0)
                 self.update_table()
+                self.reset_item_inputs()
                 return
 
         self.invoice_items.append({
@@ -699,6 +700,26 @@ class SalesView(QWidget):
         })
         
         self.update_table()
+        self.reset_item_inputs()
+
+    def reset_item_inputs(self):
+        self.product_code_input.clear()
+        self.product_combo.blockSignals(True)
+        self.product_combo.setCurrentIndex(-1)
+        if self.product_combo.lineEdit():
+            self.product_combo.lineEdit().clear()
+        self.product_combo.blockSignals(False)
+        self.qty_input.setValue(1)
+        self.rate_input.setValue(0.0)
+        if hasattr(self, 'discount_input'):
+            self.discount_input.setValue(0.0)
+        if hasattr(self, 'add_product_btn'):
+            self.add_product_btn.hide()
+        QTimer.singleShot(0, self._focus_product_code)
+
+    def _focus_product_code(self):
+        self.product_code_input.setFocus()
+        self.product_code_input.selectAll()
 
     def delete_item(self, row_idx):
         self.invoice_items.pop(row_idx)

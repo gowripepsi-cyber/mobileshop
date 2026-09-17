@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QDateEdit, QSpinBox, QDoubleSpinBox, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout, 
                              QDialog, QDialogButtonBox)
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QTimer
 from database import Session, Setting
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category, SalesReturnMaster, SalesReturnItem
 from utils.pdf_generator import generate_sales_return_pdf
@@ -410,6 +410,7 @@ class SalesReturnEntryWidget(QWidget):
                 item["qty"] += qty
                 item["rate"] = rate
                 self.update_table()
+                self.reset_item_inputs()
                 return
 
         self.return_items.append({
@@ -421,6 +422,22 @@ class SalesReturnEntryWidget(QWidget):
         })
         
         self.update_table()
+        self.reset_item_inputs()
+
+    def reset_item_inputs(self):
+        self.product_code_input.clear()
+        self.product_combo.blockSignals(True)
+        self.product_combo.setCurrentIndex(-1)
+        if self.product_combo.lineEdit():
+            self.product_combo.lineEdit().clear()
+        self.product_combo.blockSignals(False)
+        self.qty_input.setValue(1)
+        self.rate_input.setValue(0.0)
+        QTimer.singleShot(0, self._focus_product_code)
+
+    def _focus_product_code(self):
+        self.product_code_input.setFocus()
+        self.product_code_input.selectAll()
 
     def delete_item(self, row_idx):
         self.return_items.pop(row_idx)

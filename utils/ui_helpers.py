@@ -1,6 +1,7 @@
 from PySide6.QtCore import QObject, QEvent, QTimer, Qt, QByteArray
 from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpinBox, 
-                             QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter)
+                             QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter,
+                             QPushButton, QToolButton)
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
 from PySide6.QtSvg import QSvgRenderer
 
@@ -47,36 +48,18 @@ def setup_password_toggle(line_edit: QLineEdit):
     return action
 
 
-class AutoSelectFilter(QObject):
+def enable_quick_add_auto_select(combo: QComboBox):
     """
-    Event filter attached to editable QComboBox widgets and their inner QLineEdits.
-    Automatically selects existing text on focus (FocusIn) so users can immediately
-    type new values to replace existing text without manually deleting it first,
-    while preserving selections made from the dropdown popup.
+    Installs an event filter on the editable QComboBox lineEdit so that
+    whenever it receives focus, its text is automatically selected.
     """
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    class AutoSelectFilter(QObject):
+        def eventFilter(self, obj, event):
+            if event.type() == QEvent.FocusIn:
+                QTimer.singleShot(0, obj.selectAll)
+            return super().eventFilter(obj, event)
 
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.FocusIn:
-            QTimer.singleShot(0, lambda: self._do_select_all(obj))
-        return super().eventFilter(obj, event)
-
-    def _do_select_all(self, obj):
-        try:
-            if isinstance(obj, QLineEdit):
-                obj.selectAll()
-            elif hasattr(obj, 'lineEdit') and obj.lineEdit():
-                obj.lineEdit().selectAll()
-        except Exception:
-            pass
-
-def enable_quick_add_auto_select(combo):
-    """
-    Enables automatic text selection on focus for an editable QComboBox.
-    """
     filter_obj = AutoSelectFilter(combo)
-    combo.installEventFilter(filter_obj)
     line_edit = combo.lineEdit()
     if line_edit:
         line_edit.installEventFilter(filter_obj)
@@ -89,12 +72,23 @@ class EnterNavigationFilter(QObject):
     Global event filter installed on QApplication.
     Intercepts Return / Enter key presses on input fields (QLineEdit, QComboBox, QSpinBox, QDateEdit)
     and moves focus to the next child in the tab order (acting like the Tab key).
+    Also triggers click when focus is on a QPushButton or QToolButton.
     """
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
             # Do not intercept if a popup (like QComboBox popup or QCompleter popup) is active
             if QApplication.activePopupWidget() is not None:
                 return super().eventFilter(obj, event)
+
+            target = QApplication.focusWidget() or obj
+            button = target if isinstance(target, (QPushButton, QToolButton)) else None
+            if not button and target and isinstance(getattr(target, 'parent', lambda: None)(), (QPushButton, QToolButton)):
+                button = target.parent()
+
+            if button:
+                if button.isEnabled():
+                    button.click()
+                return True
 
             focus_widget = QApplication.focusWidget()
             if focus_widget and self._is_input_widget(focus_widget):
