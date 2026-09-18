@@ -267,9 +267,8 @@ class SalesReturnEntryWidget(QWidget):
         cat_name = self.category_combo.currentText()
         for prod_id, p in self.products_cache.items():
             if cat_name == "-- All Categories --" or p.category == cat_name:
-                display_txt = f"{p.name} ({p.brand} - {p.model})"
-                if p.imei:
-                    display_txt += f" [IMEI: {p.imei}]"
+                bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
+                display_txt = f"{p.name} ({bm})" if bm else p.name
                 self.product_combo.addItem(display_txt, p.id)
                 
         self.product_combo.blockSignals(False)
@@ -549,8 +548,8 @@ class SalesReturnEntryWidget(QWidget):
                 prod = session.query(Product).get(item["product_id"])
                 if prod:
                     prod.stock_qty += item["qty"]
-                    p_code = f"[{prod.product_code}] " if prod.product_code else ""
-                    p_name = f"{p_code}{prod.name} ({prod.brand} {prod.model})"
+                    bm = getattr(prod, 'brand_model', None) or getattr(prod, 'brand', '') or ''
+                    p_name = f"{prod.name} ({bm})" if bm else prod.name
                 else:
                     p_name = f"Unknown Product (ID: {item['product_id']})"
 
@@ -830,8 +829,11 @@ class SalesReturnHistoryWidget(QWidget):
             items = session.query(SalesReturnItem).filter_by(sales_return_id=return_id).all()
             items_table.setRowCount(len(items))
             for i, item in enumerate(items):
-                p_code = item.product.product_code if item.product and item.product.product_code else "-"
-                disp_name = f"{item.product.name} ({item.product.brand} {item.product.model})" if item.product else f"Product ID: {item.product_id}"
+                if item.product:
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    disp_name = f"{item.product.name} ({bm})" if bm else item.product.name
+                else:
+                    disp_name = f"Product ID: {item.product_id}"
                 items_table.setItem(i, 0, QTableWidgetItem(p_code))
                 items_table.setItem(i, 1, QTableWidgetItem(disp_name))
                 items_table.setItem(i, 2, QTableWidgetItem(str(item.qty)))
@@ -876,8 +878,8 @@ class SalesReturnHistoryWidget(QWidget):
             pdf_items = []
             for item in ret.items:
                 if item.product:
-                    p_code = f"[{item.product.product_code}] " if item.product.product_code else ""
-                    p_name = f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})"
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    p_name = f"{item.product.name} ({bm})" if bm else item.product.name
                 else:
                     p_name = f"Unknown Product (ID: {item.product_id})"
 

@@ -59,15 +59,21 @@ class Product(Base):
     id = Column(Integer, primary_key=True)
     product_code = Column(String, unique=True, nullable=True)
     name = Column(String, nullable=False)
-    category = Column(String, nullable=False, default='Phones')
-    brand = Column(String, nullable=False)
-    model = Column(String, nullable=False)
+    category = Column(String, nullable=True, default='General')
+    brand = Column(String, nullable=True, default='')  # Stores Brand / Model
+    model = Column(String, nullable=True, default='')
     imei = Column(String, unique=True, nullable=True)
     purchase_price = Column(Float, default=0.0)
     selling_price = Column(Float, default=0.0)
     stock_qty = Column(Integer, default=0)
     low_stock_limit = Column(Integer, default=5)
     unit = Column(String, nullable=True, default='Pcs')
+
+    @property
+    def brand_model(self):
+        if self.brand and self.model and self.brand != self.model:
+            return f"{self.brand} {self.model}".strip()
+        return (self.brand or self.model or "").strip()
 
 class BankAccount(Base):
     __tablename__ = 'bank_accounts'

@@ -599,9 +599,8 @@ class BillingDialog(QDialog):
         
         for p in products:
             self.products_cache[p.id] = p
-            display_txt = f"{p.name} ({p.brand} - {p.model}) [Stock: {p.stock_qty}]"
-            if p.imei:
-                display_txt += f" [IMEI: {p.imei}]"
+            bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
+            display_txt = f"{p.name} ({bm}) [Stock: {p.stock_qty}]" if bm else f"{p.name} [Stock: {p.stock_qty}]"
             self.part_product_combo.addItem(display_txt, p.id)
         
         for ep in existing_parts:

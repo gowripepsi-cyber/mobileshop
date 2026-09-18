@@ -842,8 +842,11 @@ class PurchaseReturnHistoryWidget(QWidget):
             items = session.query(PurchaseReturnItem).filter_by(purchase_return_id=return_id).all()
             items_table.setRowCount(len(items))
             for i, item in enumerate(items):
-                p_code = item.product.product_code if item.product and item.product.product_code else "-"
-                disp_name = f"{item.product.name} ({item.product.brand} {item.product.model})" if item.product else f"Product ID: {item.product_id}"
+                if item.product:
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    disp_name = f"{item.product.name} ({bm})" if bm else item.product.name
+                else:
+                    disp_name = f"Product ID: {item.product_id}"
                 items_table.setItem(i, 0, QTableWidgetItem(p_code))
                 items_table.setItem(i, 1, QTableWidgetItem(disp_name))
                 items_table.setItem(i, 2, QTableWidgetItem(str(item.qty)))
@@ -888,8 +891,8 @@ class PurchaseReturnHistoryWidget(QWidget):
             pdf_items = []
             for item in ret.items:
                 if item.product:
-                    p_code = f"[{item.product.product_code}] " if item.product.product_code else ""
-                    p_name = f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})"
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    p_name = f"{item.product.name} ({bm})" if bm else item.product.name
                 else:
                     p_name = f"Unknown Product (ID: {item.product_id})"
 

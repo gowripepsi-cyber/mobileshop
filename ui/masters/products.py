@@ -715,75 +715,8 @@ class ProductDialog(QDialog):
         self.product = product
         self.initial_name = initial_name
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        
-        # Check settings for IMEI visibility
-        from database import Setting
-        session = Session()
-        self.show_imei = True
-        try:
-            val = session.query(Setting).filter_by(key='enable_imei_tracking').first()
-            if val and val.value == 'false':
-                self.show_imei = False
-        except Exception:
-            pass
-        finally:
-            session.close()
-
-        if self.show_imei:
-            self.setFixedSize(450, 520)
-        else:
-            self.setFixedSize(450, 490)
-            
+        self.setFixedSize(420, 180)
         self.init_ui()
-
-    def suggest_product_code(self):
-        if self.product is None:
-            category_name = self.category_combo.currentText().strip()
-            if category_name:
-                session = Session()
-                try:
-                    from database import generate_next_product_code
-                    code = generate_next_product_code(session, category_name)
-                    self.product_code_input.setText(code)
-                except Exception as e:
-                    print(f"Error generating code: {e}")
-                finally:
-                    session.close()
-
-    def load_categories(self, select_category=None):
-        current_txt = select_category if select_category else (self.category_combo.currentText() if hasattr(self, 'category_combo') else "")
-        self.category_combo.blockSignals(True)
-        self.category_combo.clear()
-        session = Session()
-        try:
-            cats = session.query(Category).order_by(Category.name.asc()).all()
-            for c in cats:
-                self.category_combo.addItem(c.name)
-        except Exception as e:
-            print(f"Error loading categories in dialog: {e}")
-        finally:
-            session.close()
-        self.category_combo.blockSignals(False)
-
-        # Autocomplete configuration
-        completer = QCompleter(self.category_combo.model(), self.category_combo)
-        completer.setFilterMode(Qt.MatchContains)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        completer.setCompletionMode(QCompleter.PopupCompletion)
-        self.category_combo.setCompleter(completer)
-        completer.activated[str].connect(self._on_completer_activated)
-        
-        if current_txt:
-            idx = self.category_combo.findText(current_txt)
-            if idx >= 0:
-                self.category_combo.setCurrentIndex(idx)
-            else:
-                self.category_combo.setEditText(current_txt)
-        elif self.category_combo.count() > 0:
-            self.category_combo.setCurrentIndex(0)
-
-        if hasattr(self, 'add_category_btn'):
-            self.check_category_match()
 
     def load_brands(self, select_brand=None):
         current_txt = select_brand if select_brand else (self.brand_combo.currentText() if hasattr(self, 'brand_combo') else "")
@@ -791,11 +724,18 @@ class ProductDialog(QDialog):
         self.brand_combo.clear()
         session = Session()
         try:
-            brands = session.query(Brand).order_by(Brand.name.asc()).all()
-            for b in brands:
-                self.brand_combo.addItem(b.name)
+            # Load unique brands/models from Product and Brand tables
+            brand_set = set()
+            for b in session.query(Brand.name).all():
+                if b[0] and b[0].strip():
+                    brand_set.add(b[0].strip())
+            for p in session.query(Product.brand).distinct().all():
+                if p[0] and p[0].strip():
+                    brand_set.add(p[0].strip())
+            for bm in sorted(list(brand_set)):
+                self.brand_combo.addItem(bm)
         except Exception as e:
-            print(f"Error loading brands in dialog: {e}")
+            print(f"Error loading brands: {e}")
         finally:
             session.close()
         self.brand_combo.blockSignals(False)
@@ -815,438 +755,105 @@ class ProductDialog(QDialog):
         elif self.brand_combo.count() > 0:
             self.brand_combo.setCurrentIndex(0)
 
-    def load_models(self, select_model=None, for_brand=None):
-        current_txt = select_model if select_model else (self.model_combo.currentText() if hasattr(self, 'model_combo') else "")
-        self.model_combo.blockSignals(True)
-        self.model_combo.clear()
-        session = Session()
-        try:
-            q = session.query(ProductModel)
-            if for_brand and for_brand.strip():
-                b_name = for_brand.strip()
-                q = q.filter((ProductModel.brand_name.ilike(b_name)) | (ProductModel.brand_name == None) | (ProductModel.brand_name == ""))
-            models = q.order_by(ProductModel.name.asc()).all()
-            for m in models:
-                self.model_combo.addItem(m.name)
-        except Exception as e:
-            print(f"Error loading models in dialog: {e}")
-        finally:
-            session.close()
-        self.model_combo.blockSignals(False)
-
-        completer = QCompleter(self.model_combo.model(), self.model_combo)
-        completer.setFilterMode(Qt.MatchContains)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        completer.setCompletionMode(QCompleter.PopupCompletion)
-        self.model_combo.setCompleter(completer)
-
-        if current_txt:
-            idx = self.model_combo.findText(current_txt)
-            if idx >= 0:
-                self.model_combo.setCurrentIndex(idx)
-            else:
-                self.model_combo.setEditText(current_txt)
-
-    def on_brand_changed(self, text):
-        brand_name = self.brand_combo.currentText().strip()
-        curr_model = self.model_combo.currentText().strip()
-        self.load_models(select_model=curr_model, for_brand=brand_name)
-
-    def _on_completer_activated(self, text):
-        self.category_combo.setCurrentText(text)
-        self.suggest_product_code()
-        self.check_category_match()
-
-    def check_category_match(self):
-        text = self.category_combo.currentText().strip()
-        if not text:
-            self.add_category_btn.hide()
-            return
-        
-        matched = False
-        for i in range(self.category_combo.count()):
-            if self.category_combo.itemText(i).strip().lower() == text.lower():
-                matched = True
-                break
-        
-        if not matched:
-            self.add_category_btn.show()
-        else:
-            self.add_category_btn.hide()
-
-    def on_category_text_changed(self, text):
-        self.check_category_match()
-        if self.category_combo.hasFocus() and text:
-            completer = self.category_combo.completer()
-            if completer:
-                completer.setCompletionPrefix(text)
-                completer.complete()
-
-    def handle_add_category_click(self):
-        typed_text = self.category_combo.currentText().strip()
-        mgr = ItemAttributesManagerDialog(initial_tab=0, parent=self)
-        new_cat = mgr.add_category(initial_name=typed_text)
-        if new_cat:
-            self.load_categories(select_category=new_cat)
-            self.suggest_product_code()
-
-    def handle_add_brand_click(self):
-        typed_text = self.brand_combo.currentText().strip()
-        mgr = ItemAttributesManagerDialog(initial_tab=1, parent=self)
-        new_brand = mgr.add_brand(initial_name=typed_text)
-        if new_brand:
-            self.load_brands(select_brand=new_brand)
-            self.load_models(for_brand=new_brand)
-
-    def handle_add_model_click(self):
-        typed_text = self.model_combo.currentText().strip()
-        brand_name = self.brand_combo.currentText().strip()
-        mgr = ItemAttributesManagerDialog(initial_tab=2, parent=self)
-        new_model = mgr.add_model(initial_name=typed_text, default_brand=brand_name)
-        if new_model:
-            self.load_models(select_model=new_model, for_brand=brand_name)
-
-    def load_units(self, select_unit=None):
-        curr_text = select_unit or (self.unit_combo.currentText() if hasattr(self, 'unit_combo') else "")
-        if hasattr(self, 'unit_combo'):
-            self.unit_combo.blockSignals(True)
-            self.unit_combo.clear()
-            session = Session()
-            try:
-                from models import Unit
-                units = session.query(Unit).order_by(Unit.name.asc()).all()
-                for u in units:
-                    self.unit_combo.addItem(u.name)
-            except Exception:
-                pass
-            finally:
-                session.close()
-
-            if self.unit_combo.count() == 0:
-                self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
-
-            if curr_text:
-                idx = self.unit_combo.findText(curr_text)
-                if idx >= 0:
-                    self.unit_combo.setCurrentIndex(idx)
-            self.unit_combo.blockSignals(False)
-
-    def handle_add_unit_click(self):
-        from ui.masters.units import UnitDialog
-        dlg = UnitDialog(parent=self)
-        if dlg.exec() == QDialog.Accepted:
-            self.load_units()
-            if dlg.saved_unit_id:
-                session = Session()
-                try:
-                    from models import Unit
-                    saved_u = session.query(Unit).get(dlg.saved_unit_id)
-                    if saved_u:
-                        idx = self.unit_combo.findText(saved_u.name)
-                        if idx >= 0:
-                            self.unit_combo.setCurrentIndex(idx)
-                finally:
-                    session.close()
-
     def init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
         form_layout = QFormLayout()
-        
-        self.product_code_input = QLineEdit()
-        self.product_code_input.setPlaceholderText("Auto-generated")
-        
+        form_layout.setSpacing(10)
+
         self.name_input = QLineEdit()
-        self.category_combo = QComboBox()
-        self.category_combo.setEditable(True)
-        self.category_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.category_combo)
-        
-        self.load_categories()
+        self.name_input.setPlaceholderText("Enter product name")
 
         self.brand_combo = QComboBox()
         self.brand_combo.setEditable(True)
         self.brand_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.brand_combo.setPlaceholderText("Enter or select brand / model")
         enable_quick_add_auto_select(self.brand_combo)
         self.load_brands()
 
-        self.model_combo = QComboBox()
-        self.model_combo.setEditable(True)
-        self.model_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.model_combo)
-        self.load_models()
-
-        # Backward compatibility properties
         self.brand_input = self.brand_combo.lineEdit()
-        self.model_input = self.model_combo.lineEdit()
-
-        # Check if user is Admin, otherwise set read-only for manual code editing
-        self.is_authorized = True
-        try:
-            curr = self
-            while curr is not None:
-                if hasattr(curr, "user_data"):
-                    self.is_authorized = curr.user_data.get("role") == "Admin"
-                    break
-                curr = curr.parent()
-        except Exception:
-            pass
-            
-        if not self.is_authorized:
-            self.product_code_input.setReadOnly(True)
-            self.product_code_input.setToolTip("Only administrators can edit product codes manually.")
-
-        # Connect category changes
-        self.category_combo.currentTextChanged.connect(self.suggest_product_code)
-        self.category_combo.currentTextChanged.connect(self.check_category_match)
-        if self.category_combo.lineEdit():
-            self.category_combo.lineEdit().textChanged.connect(self.on_category_text_changed)
-
-        # Connect brand changes to filter model suggestions
-        self.brand_combo.currentTextChanged.connect(self.on_brand_changed)
-
-        # Layout for category combo and Add Category (+) button
-        cat_layout = QHBoxLayout()
-        cat_layout.setContentsMargins(0, 0, 0, 0)
-        cat_layout.setSpacing(6)
-        cat_layout.addWidget(self.category_combo, 1)
-        
-        self.add_category_btn = QPushButton("+")
-        self.add_category_btn.setToolTip("Add / Manage Categories")
-        self.add_category_btn.setProperty("class", "btn-quick-add")
-        self.add_category_btn.setFixedWidth(40)
-        self.add_category_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
-        self.add_category_btn.setCursor(Qt.PointingHandCursor)
-        self.add_category_btn.clicked.connect(self.handle_add_category_click)
-        cat_layout.addWidget(self.add_category_btn)
-        
-        # Layout for brand combo and Add Brand (+) button
-        brand_layout = QHBoxLayout()
-        brand_layout.setContentsMargins(0, 0, 0, 0)
-        brand_layout.setSpacing(6)
-        brand_layout.addWidget(self.brand_combo, 1)
-
-        self.add_brand_btn = QPushButton("+")
-        self.add_brand_btn.setToolTip("Add / Manage Brands")
-        self.add_brand_btn.setProperty("class", "btn-quick-add")
-        self.add_brand_btn.setFixedWidth(40)
-        self.add_brand_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
-        self.add_brand_btn.setCursor(Qt.PointingHandCursor)
-        self.add_brand_btn.clicked.connect(self.handle_add_brand_click)
-        brand_layout.addWidget(self.add_brand_btn)
-
-        # Layout for model combo and Add Model (+) button
-        model_layout = QHBoxLayout()
-        model_layout.setContentsMargins(0, 0, 0, 0)
-        model_layout.setSpacing(6)
-        model_layout.addWidget(self.model_combo, 1)
-
-        self.add_model_btn = QPushButton("+")
-        self.add_model_btn.setToolTip("Add / Manage Models")
-        self.add_model_btn.setProperty("class", "btn-quick-add")
-        self.add_model_btn.setFixedWidth(40)
-        self.add_model_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
-        self.add_model_btn.setCursor(Qt.PointingHandCursor)
-        self.add_model_btn.clicked.connect(self.handle_add_model_click)
-        model_layout.addWidget(self.add_model_btn)
-
-        # Layout for unit combo and Add Unit (+) button
-        unit_layout = QHBoxLayout()
-        unit_layout.setContentsMargins(0, 0, 0, 0)
-        unit_layout.setSpacing(6)
-        self.unit_combo = QComboBox()
-        self.load_units()
-        unit_layout.addWidget(self.unit_combo, 1)
-
-        self.add_unit_btn = QPushButton("+")
-        self.add_unit_btn.setToolTip("Add new unit")
-        self.add_unit_btn.setProperty("class", "btn-quick-add")
-        self.add_unit_btn.setFixedWidth(40)
-        self.add_unit_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
-        self.add_unit_btn.setCursor(Qt.PointingHandCursor)
-        self.add_unit_btn.clicked.connect(self.handle_add_unit_click)
-        unit_layout.addWidget(self.add_unit_btn)
-
-        self.imei_input = QLineEdit()
-        self.purchase_price_input = QLineEdit()
-        self.purchase_price_input.setText("0.00")
-        self.selling_price_input = QLineEdit()
-        self.selling_price_input.setText("0.00")
-        self.stock_qty_input = QLineEdit()
-        self.stock_qty_input.setText("0")
-        self.low_stock_limit_input = QLineEdit()
-        self.low_stock_limit_input.setText("5")
 
         if not self.product and self.initial_name:
             self.name_input.setText(self.initial_name)
 
-        form_layout.addRow("Product Code *:", self.product_code_input)
         form_layout.addRow("Product Name *:", self.name_input)
-        form_layout.addRow("Category *:", cat_layout)
-        form_layout.addRow("Unit *:", unit_layout)
-        form_layout.addRow("Brand *:", brand_layout)
-        form_layout.addRow("Model *:", model_layout)
-        if self.show_imei:
-            form_layout.addRow("IMEI Number:", self.imei_input)
-        form_layout.addRow("Purchase Price (₹) *:", self.purchase_price_input)
-        form_layout.addRow("Selling Price (₹) *:", self.selling_price_input)
-        form_layout.addRow("Initial Stock Qty *:", self.stock_qty_input)
-        form_layout.addRow("Low Stock Limit *:", self.low_stock_limit_input)
-        
-        layout.addLayout(form_layout)
+        form_layout.addRow("Brand / Model *:", self.brand_combo)
 
-        # Trigger initial code suggestion
-        if self.product is None:
-            self.suggest_product_code()
+        layout.addLayout(form_layout)
 
         # Buttons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         self.save_btn = QPushButton("Save")
         self.save_btn.clicked.connect(self.handle_save)
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setProperty("class", "btn-secondary")
         self.cancel_btn.clicked.connect(self.reject)
-        
+
         btn_layout.addWidget(self.save_btn)
         btn_layout.addWidget(self.cancel_btn)
         layout.addLayout(btn_layout)
 
         # Populate if editing
         if self.product:
-            self.product_code_input.setText(self.product.product_code or "")
             self.name_input.setText(self.product.name)
-            
-            cat = self.product.category or "Phones"
-            idx = self.category_combo.findText(cat)
-            if idx >= 0:
-                self.category_combo.setCurrentIndex(idx)
-            else:
-                self.category_combo.addItem(cat)
-                self.category_combo.setCurrentText(cat)
-
-            unit_val = getattr(self.product, 'unit', 'Pcs') or 'Pcs'
-            u_idx = self.unit_combo.findText(unit_val)
-            if u_idx >= 0:
-                self.unit_combo.setCurrentIndex(u_idx)
-
-            if self.product.brand:
-                b_idx = self.brand_combo.findText(self.product.brand)
+            brand_val = self.product.brand_model or self.product.brand or ""
+            if brand_val:
+                b_idx = self.brand_combo.findText(brand_val)
                 if b_idx >= 0:
                     self.brand_combo.setCurrentIndex(b_idx)
                 else:
-                    self.brand_combo.setEditText(self.product.brand)
-                self.load_models(for_brand=self.product.brand)
-
-            if self.product.model:
-                m_idx = self.model_combo.findText(self.product.model)
-                if m_idx >= 0:
-                    self.model_combo.setCurrentIndex(m_idx)
-                else:
-                    self.model_combo.setEditText(self.product.model)
-
-            self.imei_input.setText(self.product.imei or "")
-            self.purchase_price_input.setText(str(self.product.purchase_price))
-            self.selling_price_input.setText(str(self.product.selling_price))
-            self.stock_qty_input.setText(str(self.product.stock_qty))
-            self.low_stock_limit_input.setText(str(self.product.low_stock_limit))
+                    self.brand_combo.setEditText(brand_val)
 
     def handle_save(self):
         name = self.name_input.text().strip()
-        category = self.category_combo.currentText().strip() or "Phones"
-        brand = self.brand_input.text().strip()
-        model = self.model_input.text().strip()
-        imei = self.imei_input.text().strip() or None
-        product_code = self.product_code_input.text().strip()
-        
-        if not product_code:
-            QMessageBox.warning(self, "Validation Error", "Product Code is required.")
-            return
-            
-        if len(product_code) != 4 or not product_code.isdigit():
-            QMessageBox.warning(self, "Validation Error", "Product Code must be exactly 4 numeric digits.")
+        brand_model = self.brand_combo.currentText().strip()
+
+        if not name:
+            QMessageBox.warning(self, "Validation Error", "Product Name is required.")
+            self.name_input.setFocus()
             return
 
-        if not name or not brand or not model:
-            QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)")
-            return
-
-        unit = self.unit_combo.currentText().strip() or "Pcs"
-
-        try:
-            purchase_price = float(self.purchase_price_input.text())
-            selling_price = float(self.selling_price_input.text())
-            stock_qty = int(self.stock_qty_input.text())
-            low_stock_limit = int(self.low_stock_limit_input.text())
-            if purchase_price < 0 or selling_price < 0 or stock_qty < 0 or low_stock_limit < 0:
-                raise ValueError
-        except ValueError:
-            QMessageBox.warning(self, "Validation Error", "Please enter valid non-negative numbers for prices, stock, and low stock limit.")
+        if not brand_model:
+            QMessageBox.warning(self, "Validation Error", "Brand / Model is required.")
+            self.brand_combo.setFocus()
             return
 
         session = Session()
         try:
-            from database import get_category_code
-            cat_code = get_category_code(session, category)
-            if not product_code.startswith(cat_code):
-                QMessageBox.warning(self, "Validation Error", f"Product Code for category '{category}' must start with category code '{cat_code}'.")
-                session.close()
-                return
-
-            # Check product_code uniqueness
-            existing_code = session.query(Product).filter_by(product_code=product_code).first()
-            if existing_code and (not self.product or existing_code.id != self.product.id):
-                QMessageBox.warning(self, "Validation Error", f"Product Code '{product_code}' is already assigned to another product.")
-                session.close()
-                return
-
-            # Check IMEI uniqueness if provided
-            if imei:
-                existing = session.query(Product).filter_by(imei=imei).first()
-                if existing and (not self.product or existing.id != self.product.id):
-                    QMessageBox.warning(self, "Validation Error", f"A product with IMEI {imei} already exists.")
-                    session.close()
-                    return
-
             if self.product:
                 # Update
                 prod = session.query(Product).get(self.product.id)
-                prod.product_code = product_code
                 prod.name = name
-                prod.category = category
-                prod.brand = brand
-                prod.model = model
-                prod.imei = imei
-                prod.purchase_price = purchase_price
-                prod.selling_price = selling_price
-                prod.stock_qty = stock_qty
-                prod.low_stock_limit = low_stock_limit
-                prod.unit = unit
+                prod.brand = brand_model
+                prod.model = brand_model
                 self.saved_product_id = prod.id
                 self.saved_product_name = prod.name
             else:
                 # Add
                 new_prod = Product(
-                    product_code=product_code,
-                    name=name, category=category, brand=brand, model=model, imei=imei,
-                    purchase_price=purchase_price, selling_price=selling_price, stock_qty=stock_qty,
-                    low_stock_limit=low_stock_limit,
-                    unit=unit
+                    name=name,
+                    brand=brand_model,
+                    model=brand_model,
+                    category='General',
+                    unit='Pcs',
+                    purchase_price=0.0,
+                    selling_price=0.0,
+                    stock_qty=0,
+                    low_stock_limit=5
                 )
                 session.add(new_prod)
                 session.flush()
                 self.saved_product_id = new_prod.id
                 self.saved_product_name = new_prod.name
 
-            # Auto-register brand and model into master catalog if newly typed
-            if brand:
-                b_obj = session.query(Brand).filter(Brand.name.ilike(brand)).first()
+            # Auto-save brand into Brand table if new
+            if brand_model:
+                b_obj = session.query(Brand).filter(Brand.name.ilike(brand_model)).first()
                 if not b_obj:
-                    b_obj = Brand(name=brand)
-                    session.add(b_obj)
-                    session.flush()
-                if model:
-                    m_obj = session.query(ProductModel).filter(ProductModel.name.ilike(model)).first()
-                    if not m_obj:
-                        session.add(ProductModel(name=model, brand_id=b_obj.id, brand_name=b_obj.name))
+                    session.add(Brand(name=brand_model))
 
             session.commit()
             self.accept()
@@ -1269,9 +876,9 @@ class ProductsView(QWidget):
 
         # Top bar: Search and Buttons
         top_bar = QHBoxLayout()
-        
+
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search products by name, brand, model or IMEI...")
+        self.search_input.setPlaceholderText("Search products by name or brand/model...")
         self.search_input.textChanged.connect(self.refresh_data)
         top_bar.addWidget(self.search_input, 4)
 
@@ -1279,11 +886,6 @@ class ProductsView(QWidget):
         self.add_btn.setToolTip("Add new product (Ctrl+N)")
         self.add_btn.clicked.connect(self.add_product)
         top_bar.addWidget(self.add_btn, 1)
-
-        self.manage_cats_btn = QPushButton("Manage Category / Brand / Model")
-        self.manage_cats_btn.setToolTip("Manage Categories, Brands, and Models Master")
-        self.manage_cats_btn.clicked.connect(self.manage_attributes)
-        top_bar.addWidget(self.manage_cats_btn, 1)
 
         self.edit_btn = QPushButton("Edit Product")
         self.edit_btn.setProperty("class", "btn-secondary")
@@ -1299,13 +901,13 @@ class ProductsView(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(11)
+        self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Product Code", "Product Name", "Category", "Brand", "Model", "IMEI Number", 
-            "Purchase Price", "Selling Price", "Stock Qty", "Low Limit"
+            "ID", "Product Name", "Brand / Model", "Current Stock"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -1313,67 +915,32 @@ class ProductsView(QWidget):
         layout.addWidget(self.table)
 
     def refresh_data(self):
-        from database import Setting
-        session = Session()
-        show_imei = True
-        try:
-            val = session.query(Setting).filter_by(key='enable_imei_tracking').first()
-            if val and val.value == 'false':
-                show_imei = False
-        except Exception:
-            pass
-        finally:
-            session.close()
-
-        self.table.setColumnHidden(6, not show_imei)
-        if show_imei:
-            self.search_input.setPlaceholderText("Search products by code, name, brand, model or IMEI...")
-        else:
-            self.search_input.setPlaceholderText("Search products by code, name, brand, or model...")
-
         search_txt = self.search_input.text().strip()
         session = Session()
         try:
             query = session.query(Product)
             if search_txt:
-                if show_imei:
-                    query = query.filter(
-                        Product.product_code.like(f"%{search_txt}%") |
-                        Product.name.like(f"%{search_txt}%") |
-                        Product.brand.like(f"%{search_txt}%") |
-                        Product.model.like(f"%{search_txt}%") |
-                        Product.imei.like(f"%{search_txt}%")
-                    )
-                else:
-                    query = query.filter(
-                        Product.product_code.like(f"%{search_txt}%") |
-                        Product.name.like(f"%{search_txt}%") |
-                        Product.brand.like(f"%{search_txt}%") |
-                        Product.model.like(f"%{search_txt}%")
-                    )
-            products = query.all()
-            
+                query = query.filter(
+                    Product.name.like(f"%{search_txt}%") |
+                    Product.brand.like(f"%{search_txt}%") |
+                    Product.model.like(f"%{search_txt}%")
+                )
+            products = query.order_by(Product.name.asc()).all()
+
             self.table.setRowCount(len(products))
             for i, p in enumerate(products):
                 self.table.setItem(i, 0, QTableWidgetItem(str(p.id)))
-                self.table.setItem(i, 1, QTableWidgetItem(p.product_code or "-"))
-                self.table.setItem(i, 2, QTableWidgetItem(p.name))
-                self.table.setItem(i, 3, QTableWidgetItem(p.category or "Phones"))
-                self.table.setItem(i, 4, QTableWidgetItem(p.brand))
-                self.table.setItem(i, 5, QTableWidgetItem(p.model))
-                self.table.setItem(i, 6, QTableWidgetItem(p.imei or "-"))
-                self.table.setItem(i, 7, QTableWidgetItem(f"₹{p.purchase_price:,.2f}"))
-                self.table.setItem(i, 8, QTableWidgetItem(f"₹{p.selling_price:,.2f}"))
-                
+                self.table.setItem(i, 1, QTableWidgetItem(p.name))
+                self.table.setItem(i, 2, QTableWidgetItem(p.brand_model or p.brand or "-"))
+
                 stock_item = QTableWidgetItem(str(p.stock_qty))
+                stock_item.setTextAlignment(Qt.AlignCenter)
                 if p.stock_qty <= 0:
                     stock_item.setForeground(Qt.red)
                 elif p.stock_qty <= p.low_stock_limit:
                     stock_item.setForeground(Qt.yellow)
-                self.table.setItem(i, 9, stock_item)
-                
-                self.table.setItem(i, 10, QTableWidgetItem(str(p.low_stock_limit)))
-                
+                self.table.setItem(i, 3, stock_item)
+
         except Exception as e:
             print(f"Error loading products: {e}")
         finally:
@@ -1432,11 +999,3 @@ class ProductsView(QWidget):
                 QMessageBox.critical(self, "Error", f"Could not delete product (it may be linked to purchases or sales): {e}")
             finally:
                 session.close()
-
-    def manage_attributes(self, initial_tab=0):
-        dlg = ItemAttributesManagerDialog(initial_tab=initial_tab, parent=self)
-        dlg.exec()
-        self.refresh_data()
-
-    def manage_categories(self):
-        self.manage_attributes(0)

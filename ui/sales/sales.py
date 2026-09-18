@@ -1024,8 +1024,8 @@ class SalesView(QWidget):
                 prod = session.query(Product).get(item["product_id"])
                 if prod:
                     prod.stock_qty -= item["qty"]
-                    p_code = f"[{prod.product_code}] " if prod.product_code else ""
-                    p_name = f"{p_code}{prod.name} ({prod.brand} {prod.model})"
+                    bm = getattr(prod, 'brand_model', None) or getattr(prod, 'brand', '') or ''
+                    p_name = f"{prod.name} ({bm})" if bm else prod.name
                 else:
                     p_name = f"Unknown Product (ID: {item['product_id']})"
 
@@ -1274,7 +1274,8 @@ class SalesView(QWidget):
             for i, item in enumerate(items):
                 p_code = item.product.product_code if item.product else "-"
                 if item.product:
-                    display_name = f"{item.product.name} ({item.product.brand} {item.product.model})"
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    display_name = f"{item.product.name} ({bm})" if bm else item.product.name
                 else:
                     display_name = f"Unknown Product (ID: {item.product_id})"
                 items_table.setItem(i, 0, QTableWidgetItem(p_code))
@@ -1336,8 +1337,8 @@ class SalesView(QWidget):
             gst_active = getattr(sale, 'gst_enabled', False) or False
             for item in sale.items:
                 if item.product:
-                    p_code = f"[{item.product.product_code}] " if item.product.product_code else ""
-                    p_name = f"{p_code}{item.product.name} ({item.product.brand} {item.product.model})"
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    p_name = f"{item.product.name} ({bm})" if bm else item.product.name
                 else:
                     p_name = f"Unknown Product (ID: {item.product_id})"
 

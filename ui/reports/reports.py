@@ -2125,7 +2125,8 @@ class ProductDrillDownDialog(QDialog):
                 self.title_label.setText("Product Not Found")
                 return
 
-            self.title_label.setText(f"<b>{product.name} [{product.product_code or 'N/A'}]</b> - Category: {product.category} | Brand: {product.brand}")
+            bm = getattr(product, 'brand_model', None) or getattr(product, 'brand', '') or ''
+            self.title_label.setText(f"<b>{product.name}</b>" + (f" ({bm})" if bm else ""))
 
             # 1. FIFO calculations for this product to get summary statistics
             purchases = session.query(

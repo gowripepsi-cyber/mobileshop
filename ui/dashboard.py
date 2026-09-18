@@ -294,9 +294,8 @@ class DashboardView(QWidget):
             low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
             self.low_stock_table.setRowCount(len(low_stock_products))
             for i, p in enumerate(low_stock_products):
-                p_code = f"[{p.product_code}] " if p.product_code else ""
-                self.low_stock_table.setItem(i, 0, QTableWidgetItem(f"{p_code}{p.name}"))
-                self.low_stock_table.setItem(i, 1, QTableWidgetItem(f"{p.brand} / {p.model}"))
+                self.low_stock_table.setItem(i, 0, QTableWidgetItem(p.name))
+                self.low_stock_table.setItem(i, 1, QTableWidgetItem(p.brand_model or p.brand or "-"))
                 qty_item = QTableWidgetItem(str(p.stock_qty))
                 if p.stock_qty == 0:
                     qty_item.setForeground(Qt.red)

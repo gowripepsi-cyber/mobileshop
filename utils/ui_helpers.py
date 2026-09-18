@@ -231,9 +231,11 @@ class SearchableProductComboBox(SearchableComboBox):
         self.addItem("Select Product", None)
         
         for p in products:
-            display_txt = f"{p.product_code} | {p.name} ({p.brand} - {p.model}) [Stock: {p.stock_qty}]"
-            if p.imei:
-                display_txt += f" | IMEI: {p.imei}"
+            bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
+            if bm:
+                display_txt = f"{p.name} ({bm}) [Stock: {p.stock_qty}]"
+            else:
+                display_txt = f"{p.name} [Stock: {p.stock_qty}]"
             self.addItem(display_txt, p.id)
             
         self.setCurrentIndex(-1)
