@@ -6,6 +6,7 @@ import datetime
 import json
 from database import Session, User, get_hash
 from utils.permissions import MODULE_CATEGORIES, get_default_admin_permissions
+from utils.ui_helpers import setup_password_toggle
 
 from PySide6.QtGui import QFont, QColor, QBrush
 
@@ -25,8 +26,10 @@ class ResetPasswordDialog(QDialog):
         form_layout = QFormLayout()
         self.new_pass_input = QLineEdit()
         self.new_pass_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.new_pass_input)
         self.conf_pass_input = QLineEdit()
         self.conf_pass_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.conf_pass_input)
 
         form_layout.addRow("New Password *:", self.new_pass_input)
         form_layout.addRow("Confirm Password *:", self.conf_pass_input)
@@ -50,6 +53,7 @@ class ResetPasswordDialog(QDialog):
         if not new_pass:
             QMessageBox.warning(self, "Validation Error", "Password cannot be empty.")
             return
+
         if new_pass != conf_pass:
             QMessageBox.warning(self, "Validation Error", "Passwords do not match.")
             return
@@ -89,8 +93,10 @@ class UserEditDialog(QDialog):
         self.username_input = QLineEdit()
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.password_input)
         self.conf_password_input = QLineEdit()
         self.conf_password_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.conf_password_input)
 
         self.role_combo = QComboBox()
         self.role_combo.addItems(["Standard User", "Administrator"])

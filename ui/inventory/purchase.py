@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_purchase_pdf
-from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, SearchableComboBox
+from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox
 
 class PurchaseView(QWidget):
     def __init__(self, parent=None):
@@ -72,10 +72,7 @@ class PurchaseView(QWidget):
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
         
-        self.supplier_combo = QComboBox()
-        self.supplier_combo.setEditable(True)
-        self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.supplier_combo)
+        self.supplier_combo = AutoClearSearchableComboBox()
         self.supplier_combo.currentTextChanged.connect(self.check_supplier_match)
         if self.supplier_combo.lineEdit():
             self.supplier_combo.lineEdit().textChanged.connect(self.check_supplier_match)
@@ -98,6 +95,7 @@ class PurchaseView(QWidget):
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
+        self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
         
         self.bank_combo = QComboBox()
         self.bank_combo.setEnabled(False)
@@ -360,17 +358,15 @@ class PurchaseView(QWidget):
         finally:
             session.close()
 
-        # Re-attach completer model
-        completer = QCompleter(self.supplier_combo.model(), self.supplier_combo)
-        completer.setFilterMode(Qt.MatchContains)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.supplier_combo.setCompleter(completer)
+        self.supplier_combo.update_completer()
         self.supplier_combo.blockSignals(False)
 
         if curr_id is not None:
             idx = self.supplier_combo.findData(curr_id)
             if idx >= 0:
                 self.supplier_combo.setCurrentIndex(idx)
+        else:
+            self.supplier_combo.setCurrentIndex(0)
         if hasattr(self, 'add_supplier_btn'):
             self.check_supplier_match()
 
@@ -523,6 +519,7 @@ class PurchaseView(QWidget):
 
             self.filter_products_by_category()
             self.load_units()
+            self.toggle_bank_account()
 
             # Load History
             self.load_history()
@@ -649,7 +646,9 @@ class PurchaseView(QWidget):
         finally:
             session.close()
 
-    def toggle_bank_account(self, mode):
+    def toggle_bank_account(self, mode=None):
+        if mode is None:
+            mode = self.pay_mode_combo.currentText()
         self.bank_combo.setEnabled(mode == "Bank")
 
     def update_rate_on_product_change(self):
@@ -1158,6 +1157,8 @@ class PurchaseView(QWidget):
             self.bill_items.clear()
             self.update_table()
             self.invoice_input.clear()
+            self.pay_mode_combo.setCurrentText("Cash")
+            self.toggle_bank_account("Cash")
             self.paid_input.setValue(0.0)
             self.qty_input.setValue(1)
             self.rate_input.setValue(0.0)
@@ -1498,6 +1499,8 @@ class PurchaseView(QWidget):
         self.bill_items.clear()
         self.update_table()
         self.invoice_input.clear()
+        self.pay_mode_combo.setCurrentText("Cash")
+        self.toggle_bank_account("Cash")
         self.paid_input.setValue(0.0)
         self.qty_input.setValue(1)
         self.rate_input.setValue(0.0)

@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, PurchaseReturnMaster, PurchaseReturnItem
 from utils.pdf_generator import generate_purchase_return_pdf
-from utils.ui_helpers import enable_quick_add_auto_select
+from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, AutoClearSearchableComboBox
 
 class PurchaseReturnEntryWidget(QWidget):
     def __init__(self, parent=None, history_widget=None):
@@ -44,10 +44,7 @@ class PurchaseReturnEntryWidget(QWidget):
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
         
-        self.supplier_combo = QComboBox()
-        self.supplier_combo.setEditable(True)
-        self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.supplier_combo)
+        self.supplier_combo = AutoClearSearchableComboBox()
         self.supplier_combo.currentTextChanged.connect(self.check_supplier_match)
         if self.supplier_combo.lineEdit():
             self.supplier_combo.lineEdit().setPlaceholderText("Select or type supplier name")
@@ -74,6 +71,7 @@ class PurchaseReturnEntryWidget(QWidget):
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
+        self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
         
         self.bank_combo = QComboBox()
         self.bank_combo.setEnabled(False)
@@ -204,7 +202,9 @@ class PurchaseReturnEntryWidget(QWidget):
 
         main_layout.addWidget(right_panel, 2)
 
-    def toggle_bank_account(self, mode):
+    def toggle_bank_account(self, mode=None):
+        if mode is None:
+            mode = self.pay_mode_combo.currentText()
         self.bank_combo.setEnabled(mode == "Bank")
 
     def check_supplier_match(self):
@@ -357,6 +357,7 @@ class PurchaseReturnEntryWidget(QWidget):
             suppliers = session.query(Supplier).all()
             for s in suppliers:
                 self.supplier_combo.addItem(s.name, s.id)
+            self.supplier_combo.update_completer()
 
             # Load Categories
             self.category_combo.clear()

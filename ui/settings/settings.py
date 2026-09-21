@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
 from PySide6.QtCore import Qt
 from database import Session, Setting, User, get_hash, engine, init_db
 from utils.db_backup import backup_db, restore_db
+from utils.ui_helpers import setup_password_toggle
 from ui.settings.user_management import UserManagementView
 
 class SettingsView(QWidget):
@@ -98,10 +99,13 @@ class SettingsView(QWidget):
 
         self.old_pass_input = QLineEdit()
         self.old_pass_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.old_pass_input)
         self.new_pass_input = QLineEdit()
         self.new_pass_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.new_pass_input)
         self.conf_pass_input = QLineEdit()
         self.conf_pass_input.setEchoMode(QLineEdit.Password)
+        setup_password_toggle(self.conf_pass_input)
 
         form_layout.addRow("Current Password *:", self.old_pass_input)
         form_layout.addRow("New Password *:", self.new_pass_input)

@@ -10,7 +10,7 @@ from PySide6.QtGui import QStandardItemModel, QStandardItem
 from database import Session, Setting
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_sales_pdf
-from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, SearchableComboBox
+from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox
 
 
 class SalesView(QWidget):
@@ -75,10 +75,7 @@ class SalesView(QWidget):
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
         
-        self.customer_combo = QComboBox()
-        self.customer_combo.setEditable(True)
-        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.customer_combo)
+        self.customer_combo = AutoClearSearchableComboBox()
         self.customer_combo.currentTextChanged.connect(self.check_customer_match)
         if self.customer_combo.lineEdit():
             self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)
@@ -101,6 +98,7 @@ class SalesView(QWidget):
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
+        self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
         
         self.bank_combo = QComboBox()
         self.bank_combo.setEnabled(False)
@@ -371,17 +369,15 @@ class SalesView(QWidget):
         finally:
             session.close()
 
-        # Re-attach completer model
-        completer = QCompleter(self.customer_combo.model(), self.customer_combo)
-        completer.setFilterMode(Qt.MatchContains)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.customer_combo.setCompleter(completer)
+        self.customer_combo.update_completer()
         self.customer_combo.blockSignals(False)
 
         if curr_id is not None:
             idx = self.customer_combo.findData(curr_id)
             if idx >= 0:
                 self.customer_combo.setCurrentIndex(idx)
+        else:
+            self.customer_combo.setCurrentIndex(0)
         if hasattr(self, 'add_customer_btn'):
             self.check_customer_match()
 
@@ -523,6 +519,7 @@ class SalesView(QWidget):
 
             self.filter_products_by_category()
             self.load_units()
+            self.toggle_bank_account()
             
             # Load History
             self.load_history()
@@ -606,7 +603,9 @@ class SalesView(QWidget):
             self.product_code_input.selectAll()
             self.product_code_input.setFocus()
 
-    def toggle_bank_account(self, mode):
+    def toggle_bank_account(self, mode=None):
+        if mode is None:
+            mode = self.pay_mode_combo.currentText()
         self.bank_combo.setEnabled(mode == "Bank")
 
     def on_gst_checkbox_changed(self):
@@ -1138,6 +1137,8 @@ class SalesView(QWidget):
             self.invoice_items.clear()
             self.update_table()
             self.invoice_input.clear()
+            self.pay_mode_combo.setCurrentText("Cash")
+            self.toggle_bank_account("Cash")
             self.paid_input.setValue(0.0)
             self.qty_input.setValue(1)
             self.discount_input.setValue(0.0)
@@ -1559,6 +1560,8 @@ class SalesView(QWidget):
         self.invoice_items.clear()
         self.update_table()
         self.invoice_input.clear()
+        self.pay_mode_combo.setCurrentText("Cash")
+        self.toggle_bank_account("Cash")
         self.paid_input.setValue(0.0)
         self.qty_input.setValue(1)
         self.discount_input.setValue(0.0)

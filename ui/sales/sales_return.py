@@ -7,8 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 from PySide6.QtCore import Qt, QDate, QTimer
 from database import Session, Setting
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category, SalesReturnMaster, SalesReturnItem
-from utils.pdf_generator import generate_sales_return_pdf
-from utils.ui_helpers import enable_quick_add_auto_select
+from utils.ui_helpers import enable_quick_add_auto_select, AutoClearSearchableComboBox
 
 class SalesReturnEntryWidget(QWidget):
     def __init__(self, parent=None, history_widget=None):
@@ -44,10 +43,7 @@ class SalesReturnEntryWidget(QWidget):
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
         
-        self.customer_combo = QComboBox()
-        self.customer_combo.setEditable(True)
-        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.customer_combo)
+        self.customer_combo = AutoClearSearchableComboBox()
         self.customer_combo.currentTextChanged.connect(self.check_customer_match)
         if self.customer_combo.lineEdit():
             self.customer_combo.lineEdit().setPlaceholderText("Select or type customer name")
@@ -74,6 +70,7 @@ class SalesReturnEntryWidget(QWidget):
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
+        self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
         
         self.bank_combo = QComboBox()
         self.bank_combo.setEnabled(False)
@@ -204,7 +201,9 @@ class SalesReturnEntryWidget(QWidget):
 
         main_layout.addWidget(right_panel, 2)
 
-    def toggle_bank_account(self, mode):
+    def toggle_bank_account(self, mode=None):
+        if mode is None:
+            mode = self.pay_mode_combo.currentText()
         self.bank_combo.setEnabled(mode == "Bank")
 
     def check_customer_match(self):
@@ -358,6 +357,7 @@ class SalesReturnEntryWidget(QWidget):
             customers = session.query(Customer).all()
             for c in customers:
                 self.customer_combo.addItem(c.name, c.id)
+            self.customer_combo.update_completer()
 
             # Load Categories
             self.category_combo.clear()

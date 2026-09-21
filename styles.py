@@ -166,6 +166,17 @@ QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QComboB
     border: 1px solid #6366f1;
 }
 
+QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QDateEdit:disabled {
+    background-color: #0d0d1a;
+    border: 1px solid #1a1a30;
+    color: #64748b;
+}
+
+QComboBox:disabled::drop-down {
+    border: none;
+    opacity: 0.4;
+}
+
 /* Remove spin up/down arrows from all text boxes */
 QSpinBox::up-button, QSpinBox::down-button,
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
