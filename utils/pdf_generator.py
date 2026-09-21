@@ -135,7 +135,6 @@ def generate_sales_pdf(invoice_data, file_path):
     story.append(Spacer(1, 20))
 
     # 3. Items Table
-    # Table Widths: Item Name (240), Qty (40), Rate (90), Discount (80), Total (90) = 540
     item_header_style = ParagraphStyle(
         'ItemHeader',
         fontName='Helvetica-Bold',
@@ -143,26 +142,52 @@ def generate_sales_pdf(invoice_data, file_path):
         textColor=colors.white
     )
     
-    table_data = [
-        [
-            Paragraph("Item Description", item_header_style),
-            Paragraph("Qty", item_header_style),
-            Paragraph("Rate (Rs.)", item_header_style),
-            Paragraph("Discount (Rs.)", item_header_style),
-            Paragraph("Total (Rs.)", item_header_style)
+    is_gst = bool(invoice_data.get('gst_enabled'))
+    if is_gst:
+        # Table Widths: Item Name (200), Qty (40), Rate (75), GST % (55), Tax (80), Total (90) = 540
+        table_data = [
+            [
+                Paragraph("Item Description", item_header_style),
+                Paragraph("Qty", item_header_style),
+                Paragraph("Rate (Rs.)", item_header_style),
+                Paragraph("GST %", item_header_style),
+                Paragraph("Tax (Rs.)", item_header_style),
+                Paragraph("Total (Rs.)", item_header_style)
+            ]
         ]
-    ]
+        for item in invoice_data['items']:
+            g_rate = float(item.get('gst_rate', 0.0) or 0.0)
+            t_amt = float(item.get('tax_amount', 0.0) or 0.0)
+            table_data.append([
+                Paragraph(item['name'], style_sub),
+                Paragraph(str(item['qty']), style_sub),
+                Paragraph(f"{item['rate']:,.2f}", style_sub),
+                Paragraph(f"{g_rate:.0f}%", style_sub),
+                Paragraph(f"{t_amt:,.2f}", style_sub),
+                Paragraph(f"{item['total']:,.2f}", style_bold)
+            ])
+        items_table = Table(table_data, colWidths=[200, 40, 75, 55, 80, 90])
+    else:
+        # Table Widths: Item Name (240), Qty (40), Rate (90), Discount (80), Total (90) = 540
+        table_data = [
+            [
+                Paragraph("Item Description", item_header_style),
+                Paragraph("Qty", item_header_style),
+                Paragraph("Rate (Rs.)", item_header_style),
+                Paragraph("Discount (Rs.)", item_header_style),
+                Paragraph("Total (Rs.)", item_header_style)
+            ]
+        ]
+        for item in invoice_data['items']:
+            table_data.append([
+                Paragraph(item['name'], style_sub),
+                Paragraph(str(item['qty']), style_sub),
+                Paragraph(f"{item['rate']:,.2f}", style_sub),
+                Paragraph(f"{item.get('discount', 0.0):,.2f}", style_sub),
+                Paragraph(f"{item['total']:,.2f}", style_bold)
+            ])
+        items_table = Table(table_data, colWidths=[240, 40, 90, 80, 90])
 
-    for item in invoice_data['items']:
-        table_data.append([
-            Paragraph(item['name'], style_sub),
-            Paragraph(str(item['qty']), style_sub),
-            Paragraph(f"{item['rate']:,.2f}", style_sub),
-            Paragraph(f"{item['discount']:,.2f}", style_sub),
-            Paragraph(f"{item['total']:,.2f}", style_bold)
-        ])
-
-    items_table = Table(table_data, colWidths=[240, 40, 90, 80, 90])
     items_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e1b4b')),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
@@ -342,7 +367,6 @@ def generate_purchase_pdf(purchase_data, file_path):
     story.append(Spacer(1, 20))
 
     # 3. Items Table
-    # Table Widths: Item Description (320), Qty (50), Rate (80), Total (90) = 540
     item_header_style = ParagraphStyle(
         'ItemHeaderPurchase',
         fontName='Helvetica-Bold',
@@ -350,24 +374,50 @@ def generate_purchase_pdf(purchase_data, file_path):
         textColor=colors.white
     )
     
-    table_data = [
-        [
-            Paragraph("Item Description", item_header_style),
-            Paragraph("Qty", item_header_style),
-            Paragraph("Rate (Rs.)", item_header_style),
-            Paragraph("Total (Rs.)", item_header_style)
+    is_gst = bool(purchase_data.get('gst_enabled'))
+    if is_gst:
+        # Table Widths: Item Description (200), Qty (40), Rate (75), GST % (55), Tax (80), Total (90) = 540
+        table_data = [
+            [
+                Paragraph("Item Description", item_header_style),
+                Paragraph("Qty", item_header_style),
+                Paragraph("Rate (Rs.)", item_header_style),
+                Paragraph("GST %", item_header_style),
+                Paragraph("Tax (Rs.)", item_header_style),
+                Paragraph("Total (Rs.)", item_header_style)
+            ]
         ]
-    ]
+        for item in purchase_data['items']:
+            g_rate = float(item.get('gst_rate', 0.0) or 0.0)
+            t_amt = float(item.get('tax_amount', 0.0) or 0.0)
+            table_data.append([
+                Paragraph(item['name'], style_sub),
+                Paragraph(str(item['qty']), style_sub),
+                Paragraph(f"{item['rate']:,.2f}", style_sub),
+                Paragraph(f"{g_rate:.0f}%", style_sub),
+                Paragraph(f"{t_amt:,.2f}", style_sub),
+                Paragraph(f"{item['total']:,.2f}", style_bold)
+            ])
+        items_table = Table(table_data, colWidths=[200, 40, 75, 55, 80, 90])
+    else:
+        # Table Widths: Item Description (320), Qty (50), Rate (80), Total (90) = 540
+        table_data = [
+            [
+                Paragraph("Item Description", item_header_style),
+                Paragraph("Qty", item_header_style),
+                Paragraph("Rate (Rs.)", item_header_style),
+                Paragraph("Total (Rs.)", item_header_style)
+            ]
+        ]
+        for item in purchase_data['items']:
+            table_data.append([
+                Paragraph(item['name'], style_sub),
+                Paragraph(str(item['qty']), style_sub),
+                Paragraph(f"{item['rate']:,.2f}", style_sub),
+                Paragraph(f"{item['total']:,.2f}", style_bold)
+            ])
+        items_table = Table(table_data, colWidths=[320, 50, 80, 90])
 
-    for item in purchase_data['items']:
-        table_data.append([
-            Paragraph(item['name'], style_sub),
-            Paragraph(str(item['qty']), style_sub),
-            Paragraph(f"{item['rate']:,.2f}", style_sub),
-            Paragraph(f"{item['total']:,.2f}", style_bold)
-        ])
-
-    items_table = Table(table_data, colWidths=[320, 50, 80, 90])
     items_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e1b4b')),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),

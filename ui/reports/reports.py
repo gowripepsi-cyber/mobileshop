@@ -1,6 +1,5 @@
 import datetime
 import os
-import pandas as pd
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QPushButton, QCheckBox, 
                              QMessageBox, QFileDialog, QTabWidget, QFrame, QFormLayout,
@@ -523,6 +522,7 @@ class ReportsView(QWidget):
                     ]
                 }
                 
+                import pandas as pd
                 with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                     pd.DataFrame(data).to_excel(writer, sheet_name="Detailed Profit Analysis", index=False)
                     pd.DataFrame(summary_data).to_excel(writer, sheet_name="Summary Stats", index=False)
@@ -985,6 +985,7 @@ class ReportsView(QWidget):
 
         session = Session()
         try:
+            import pandas as pd
             with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                 # 1. Stock
                 if self.chk_stock.isChecked():
@@ -1782,9 +1783,23 @@ class ReportsView(QWidget):
 
         main_layout.addLayout(summary_grid)
 
-        # 3. Sub-tabs for GSTR-1 and GSTR-2 tables
+        # 3. Sub-tabs for Slab-wise Summary, GSTR-1 and GSTR-2 tables
         self.gstr_subtabs = QTabWidget()
         
+        # Slab-Wise Summary Tab
+        slabs_tab = QWidget()
+        slabs_layout = QVBoxLayout(slabs_tab)
+        self.gst_slabs_table = QTableWidget()
+        self.gst_slabs_table.setColumnCount(12)
+        self.gst_slabs_table.setHorizontalHeaderLabels([
+            "GST Slab", "Sales Taxable (₹)", "Output CGST (₹)", "Output SGST (₹)", "Output IGST (₹)", "Total Output GST (₹)",
+            "Purchase Taxable (₹)", "Input CGST (₹)", "Input SGST (₹)", "Input IGST (₹)", "Total Input ITC (₹)", "Net Position (₹)"
+        ])
+        self.gst_slabs_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.gst_slabs_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        slabs_layout.addWidget(self.gst_slabs_table)
+        self.gstr_subtabs.addTab(slabs_tab, "📊 GST Slab Breakdown (0%, 5%, 12%, 18%, 28%)")
+
         # GSTR-1 Tab
         gstr1_tab = QWidget()
         gstr1_layout = QVBoxLayout(gstr1_tab)
@@ -1796,7 +1811,7 @@ class ReportsView(QWidget):
         ])
         self.gstr1_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         gstr1_layout.addWidget(self.gstr1_table)
-        self.gstr_subtabs.addTab(gstr1_tab, "GSTR-1 (Sales Output Tax)")
+        self.gstr_subtabs.addTab(gstr1_tab, "📄 GSTR-1 (Sales Output Tax)")
 
         # GSTR-2 Tab
         gstr2_tab = QWidget()
@@ -1809,7 +1824,7 @@ class ReportsView(QWidget):
         ])
         self.gstr2_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         gstr2_layout.addWidget(self.gstr2_table)
-        self.gstr_subtabs.addTab(gstr2_tab, "GSTR-2 (Purchases ITC)")
+        self.gstr_subtabs.addTab(gstr2_tab, "📑 GSTR-2 (Purchases ITC)")
 
         main_layout.addWidget(self.gstr_subtabs)
 
@@ -1819,19 +1834,37 @@ class ReportsView(QWidget):
 
         session = Session()
         try:
-            # Query Sales (GSTR-1)
-            sales = session.query(SalesMaster).options(joinedload(SalesMaster.customer)).filter(
+            # Query Sales (GSTR-1) with items
+            sales = session.query(SalesMaster).options(
+                joinedload(SalesMaster.customer),
+                joinedload(SalesMaster.items)
+            ).filter(
                 SalesMaster.date >= from_dt,
                 SalesMaster.date <= to_dt,
                 SalesMaster.gst_enabled == True
             ).order_by(SalesMaster.date.desc()).all()
 
-            # Query Purchases (GSTR-2)
-            purchases = session.query(PurchaseMaster).options(joinedload(PurchaseMaster.supplier)).filter(
+            # Query Purchases (GSTR-2) with items
+            purchases = session.query(PurchaseMaster).options(
+                joinedload(PurchaseMaster.supplier),
+                joinedload(PurchaseMaster.items)
+            ).filter(
                 PurchaseMaster.date >= from_dt,
                 PurchaseMaster.date <= to_dt,
                 PurchaseMaster.gst_enabled == True
             ).order_by(PurchaseMaster.date.desc()).all()
+
+            # Initialize GST Slab structures for 0%, 5%, 12%, 18%, 28%
+            slabs = [0.0, 5.0, 12.0, 18.0, 28.0]
+            slab_labels = {
+                0.0: "0% (Exempt/Nil)",
+                5.0: "5% Slab",
+                12.0: "12% Slab",
+                18.0: "18% Slab",
+                28.0: "28% Slab"
+            }
+            sales_slab_data = {r: {"taxable": 0.0, "cgst": 0.0, "sgst": 0.0, "igst": 0.0, "total_gst": 0.0} for r in slabs}
+            purch_slab_data = {r: {"taxable": 0.0, "cgst": 0.0, "sgst": 0.0, "igst": 0.0, "total_gst": 0.0} for r in slabs}
 
             # Process Sales
             total_taxable_sales = 0.0
@@ -1849,6 +1882,34 @@ class ReportsView(QWidget):
 
                 total_taxable_sales += taxable
                 total_output_tax += gst
+
+                # Aggregate by item GST slab
+                gst_type = getattr(s, 'gst_type', 'CGST+SGST')
+                if s.items:
+                    for item in s.items:
+                        r_raw = float(getattr(item, 'gst_rate', 0.0) or 0.0)
+                        # Match to closest standard slab
+                        r_match = min(slabs, key=lambda x: abs(x - r_raw))
+                        i_taxable = getattr(item, 'taxable_value', 0.0) or ((item.qty * item.rate) - getattr(item, 'discount', 0.0))
+                        if i_taxable < 0:
+                            i_taxable = 0.0
+                        i_tax = getattr(item, 'tax_amount', 0.0) or (i_taxable * (r_match / 100.0))
+                        i_cgst = getattr(item, 'cgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                        i_sgst = getattr(item, 'sgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                        i_igst = getattr(item, 'igst_amount', 0.0) or (i_tax if gst_type != 'CGST+SGST' else 0.0)
+
+                        sales_slab_data[r_match]["taxable"] += i_taxable
+                        sales_slab_data[r_match]["cgst"] += i_cgst
+                        sales_slab_data[r_match]["sgst"] += i_sgst
+                        sales_slab_data[r_match]["igst"] += i_igst
+                        sales_slab_data[r_match]["total_gst"] += i_tax
+                else:
+                    # Fallback to default 18% slab if no item records
+                    sales_slab_data[18.0]["taxable"] += taxable
+                    sales_slab_data[18.0]["cgst"] += cgst
+                    sales_slab_data[18.0]["sgst"] += sgst
+                    sales_slab_data[18.0]["igst"] += igst
+                    sales_slab_data[18.0]["total_gst"] += gst
 
                 self.gstr1_table.setItem(i, 0, QTableWidgetItem(s.invoice_number))
                 self.gstr1_table.setItem(i, 1, QTableWidgetItem(s.date.strftime("%Y-%m-%d")))
@@ -1878,6 +1939,32 @@ class ReportsView(QWidget):
                 total_taxable_purchases += taxable
                 total_input_tax += gst
 
+                # Aggregate by purchase item GST slab
+                gst_type = getattr(p, 'gst_type', 'CGST+SGST')
+                if p.items:
+                    for item in p.items:
+                        r_raw = float(getattr(item, 'gst_rate', 0.0) or 0.0)
+                        r_match = min(slabs, key=lambda x: abs(x - r_raw))
+                        i_taxable = getattr(item, 'taxable_value', 0.0) or (item.qty * item.rate)
+                        if i_taxable < 0:
+                            i_taxable = 0.0
+                        i_tax = getattr(item, 'tax_amount', 0.0) or (i_taxable * (r_match / 100.0))
+                        i_cgst = getattr(item, 'cgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                        i_sgst = getattr(item, 'sgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                        i_igst = getattr(item, 'igst_amount', 0.0) or (i_tax if gst_type != 'CGST+SGST' else 0.0)
+
+                        purch_slab_data[r_match]["taxable"] += i_taxable
+                        purch_slab_data[r_match]["cgst"] += i_cgst
+                        purch_slab_data[r_match]["sgst"] += i_sgst
+                        purch_slab_data[r_match]["igst"] += i_igst
+                        purch_slab_data[r_match]["total_gst"] += i_tax
+                else:
+                    purch_slab_data[18.0]["taxable"] += taxable
+                    purch_slab_data[18.0]["cgst"] += cgst
+                    purch_slab_data[18.0]["sgst"] += sgst
+                    purch_slab_data[18.0]["igst"] += igst
+                    purch_slab_data[18.0]["total_gst"] += gst
+
                 self.gstr2_table.setItem(i, 0, QTableWidgetItem(p.invoice_number))
                 self.gstr2_table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
                 self.gstr2_table.setItem(i, 2, QTableWidgetItem(supp_name))
@@ -1889,7 +1976,72 @@ class ReportsView(QWidget):
                 self.gstr2_table.setItem(i, 8, QTableWidgetItem(f"{gst:.2f}"))
                 self.gstr2_table.setItem(i, 9, QTableWidgetItem(f"{total_bill:.2f}"))
 
-            # Update summary labels
+            # Populate GST Slab Breakdown Table (5 slab rows + 1 total row)
+            self.gst_slabs_table.setRowCount(len(slabs) + 1)
+            tot_s_taxable = 0.0
+            tot_s_cgst = 0.0
+            tot_s_sgst = 0.0
+            tot_s_igst = 0.0
+            tot_s_gst = 0.0
+            tot_p_taxable = 0.0
+            tot_p_cgst = 0.0
+            tot_p_sgst = 0.0
+            tot_p_igst = 0.0
+            tot_p_gst = 0.0
+            tot_net = 0.0
+
+            for row_idx, r in enumerate(slabs):
+                s_d = sales_slab_data[r]
+                p_d = purch_slab_data[r]
+                net_pos = s_d["total_gst"] - p_d["total_gst"]
+
+                tot_s_taxable += s_d["taxable"]
+                tot_s_cgst += s_d["cgst"]
+                tot_s_sgst += s_d["sgst"]
+                tot_s_igst += s_d["igst"]
+                tot_s_gst += s_d["total_gst"]
+
+                tot_p_taxable += p_d["taxable"]
+                tot_p_cgst += p_d["cgst"]
+                tot_p_sgst += p_d["sgst"]
+                tot_p_igst += p_d["igst"]
+                tot_p_gst += p_d["total_gst"]
+                tot_net += net_pos
+
+                self.gst_slabs_table.setItem(row_idx, 0, QTableWidgetItem(slab_labels[r]))
+                self.gst_slabs_table.setItem(row_idx, 1, QTableWidgetItem(f"{s_d['taxable']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 2, QTableWidgetItem(f"{s_d['cgst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 3, QTableWidgetItem(f"{s_d['sgst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 4, QTableWidgetItem(f"{s_d['igst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 5, QTableWidgetItem(f"{s_d['total_gst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 6, QTableWidgetItem(f"{p_d['taxable']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 7, QTableWidgetItem(f"{p_d['cgst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 8, QTableWidgetItem(f"{p_d['sgst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 9, QTableWidgetItem(f"{p_d['igst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 10, QTableWidgetItem(f"{p_d['total_gst']:,.2f}"))
+                
+                net_txt = f"₹{net_pos:,.2f} (Payable)" if net_pos >= 0 else f"₹{abs(net_pos):,.2f} (ITC)"
+                net_item = QTableWidgetItem(net_txt)
+                self.gst_slabs_table.setItem(row_idx, 11, net_item)
+
+            # Summary Total Row
+            tot_row = len(slabs)
+            self.gst_slabs_table.setItem(tot_row, 0, QTableWidgetItem("TOTAL ALL SLABS"))
+            self.gst_slabs_table.setItem(tot_row, 1, QTableWidgetItem(f"{tot_s_taxable:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 2, QTableWidgetItem(f"{tot_s_cgst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 3, QTableWidgetItem(f"{tot_s_sgst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 4, QTableWidgetItem(f"{tot_s_igst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 5, QTableWidgetItem(f"{tot_s_gst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 6, QTableWidgetItem(f"{tot_p_taxable:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 7, QTableWidgetItem(f"{tot_p_cgst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 8, QTableWidgetItem(f"{tot_p_sgst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 9, QTableWidgetItem(f"{tot_p_igst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 10, QTableWidgetItem(f"{tot_p_gst:,.2f}"))
+            
+            net_tot_txt = f"₹{tot_net:,.2f} (Payable)" if tot_net >= 0 else f"₹{abs(tot_net):,.2f} (ITC)"
+            self.gst_slabs_table.setItem(tot_row, 11, QTableWidgetItem(net_tot_txt))
+
+            # Update summary header cards
             self.lbl_taxable_sales.setText(f"₹{total_taxable_sales:,.2f}")
             self.lbl_output_tax.setText(f"₹{total_output_tax:,.2f}")
 
@@ -1919,17 +2071,24 @@ class ReportsView(QWidget):
 
         session = Session()
         try:
+            import pandas as pd
             from_dt = self.gst_from_date.date().toPython()
             to_dt = self.gst_to_date.date().toPython()
 
-            # Query GSTR-1 and GSTR-2 datasets
-            sales = session.query(SalesMaster).options(joinedload(SalesMaster.customer)).filter(
+            # Query GSTR-1 and GSTR-2 datasets with items
+            sales = session.query(SalesMaster).options(
+                joinedload(SalesMaster.customer),
+                joinedload(SalesMaster.items)
+            ).filter(
                 SalesMaster.date >= from_dt,
                 SalesMaster.date <= to_dt,
                 SalesMaster.gst_enabled == True
             ).all()
 
-            purchases = session.query(PurchaseMaster).options(joinedload(PurchaseMaster.supplier)).filter(
+            purchases = session.query(PurchaseMaster).options(
+                joinedload(PurchaseMaster.supplier),
+                joinedload(PurchaseMaster.items)
+            ).filter(
                 PurchaseMaster.date >= from_dt,
                 PurchaseMaster.date <= to_dt,
                 PurchaseMaster.gst_enabled == True
@@ -1969,6 +2128,71 @@ class ReportsView(QWidget):
                 })
             df_gstr2 = pd.DataFrame(gstr2_list)
 
+            # Compute Slab-wise breakdown for 0%, 5%, 12%, 18%, 28%
+            slabs = [0.0, 5.0, 12.0, 18.0, 28.0]
+            slab_labels = {0.0: "0% (Exempt/Nil)", 5.0: "5%", 12.0: "12%", 18.0: "18%", 28.0: "28%"}
+            sales_slab = {r: {"taxable": 0.0, "cgst": 0.0, "sgst": 0.0, "igst": 0.0, "total_gst": 0.0} for r in slabs}
+            purch_slab = {r: {"taxable": 0.0, "cgst": 0.0, "sgst": 0.0, "igst": 0.0, "total_gst": 0.0} for r in slabs}
+
+            for s in sales:
+                gst_type = getattr(s, 'gst_type', 'CGST+SGST')
+                for item in s.items:
+                    r_raw = float(getattr(item, 'gst_rate', 0.0) or 0.0)
+                    r_match = min(slabs, key=lambda x: abs(x - r_raw))
+                    i_taxable = getattr(item, 'taxable_value', 0.0) or ((item.qty * item.rate) - getattr(item, 'discount', 0.0))
+                    if i_taxable < 0:
+                        i_taxable = 0.0
+                    i_tax = getattr(item, 'tax_amount', 0.0) or (i_taxable * (r_match / 100.0))
+                    i_cgst = getattr(item, 'cgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                    i_sgst = getattr(item, 'sgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                    i_igst = getattr(item, 'igst_amount', 0.0) or (i_tax if gst_type != 'CGST+SGST' else 0.0)
+
+                    sales_slab[r_match]["taxable"] += i_taxable
+                    sales_slab[r_match]["cgst"] += i_cgst
+                    sales_slab[r_match]["sgst"] += i_sgst
+                    sales_slab[r_match]["igst"] += i_igst
+                    sales_slab[r_match]["total_gst"] += i_tax
+
+            for p in purchases:
+                gst_type = getattr(p, 'gst_type', 'CGST+SGST')
+                for item in p.items:
+                    r_raw = float(getattr(item, 'gst_rate', 0.0) or 0.0)
+                    r_match = min(slabs, key=lambda x: abs(x - r_raw))
+                    i_taxable = getattr(item, 'taxable_value', 0.0) or (item.qty * item.rate)
+                    if i_taxable < 0:
+                        i_taxable = 0.0
+                    i_tax = getattr(item, 'tax_amount', 0.0) or (i_taxable * (r_match / 100.0))
+                    i_cgst = getattr(item, 'cgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                    i_sgst = getattr(item, 'sgst_amount', 0.0) or (i_tax / 2.0 if gst_type == 'CGST+SGST' else 0.0)
+                    i_igst = getattr(item, 'igst_amount', 0.0) or (i_tax if gst_type != 'CGST+SGST' else 0.0)
+
+                    purch_slab[r_match]["taxable"] += i_taxable
+                    purch_slab[r_match]["cgst"] += i_cgst
+                    purch_slab[r_match]["sgst"] += i_sgst
+                    purch_slab[r_match]["igst"] += i_igst
+                    purch_slab[r_match]["total_gst"] += i_tax
+
+            slab_list = []
+            for r in slabs:
+                s_d = sales_slab[r]
+                p_d = purch_slab[r]
+                net_p = s_d["total_gst"] - p_d["total_gst"]
+                slab_list.append({
+                    "GST Slab": slab_labels[r],
+                    "Sales Taxable (₹)": s_d["taxable"],
+                    "Output CGST (₹)": s_d["cgst"],
+                    "Output SGST (₹)": s_d["sgst"],
+                    "Output IGST (₹)": s_d["igst"],
+                    "Total Output Tax (₹)": s_d["total_gst"],
+                    "Purchase Taxable (₹)": p_d["taxable"],
+                    "Input CGST (₹)": p_d["cgst"],
+                    "Input SGST (₹)": p_d["sgst"],
+                    "Input IGST (₹)": p_d["igst"],
+                    "Total Input ITC (₹)": p_d["total_gst"],
+                    "Net GST Position (₹)": net_p
+                })
+            df_slabs = pd.DataFrame(slab_list)
+
             # Consolidated Summary
             total_taxable_s = sum(x["Taxable Value"] for x in gstr1_list) if gstr1_list else 0.0
             total_gst_s = sum(x["Total GST"] for x in gstr1_list) if gstr1_list else 0.0
@@ -1988,6 +2212,7 @@ class ReportsView(QWidget):
             # Write to Excel Sheets
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
                 df_summary.to_excel(writer, sheet_name="Consolidated Summary", index=False)
+                df_slabs.to_excel(writer, sheet_name="GST Slabs (0-28%)", index=False)
                 df_gstr1.to_excel(writer, sheet_name="GSTR-1 (Sales)", index=False)
                 df_gstr2.to_excel(writer, sheet_name="GSTR-2 (Purchases)", index=False)
 

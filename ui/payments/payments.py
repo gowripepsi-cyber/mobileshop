@@ -8,7 +8,7 @@ from database import Session, Setting
 from sqlalchemy import func
 from models import Payment, Customer, Supplier, BankAccount, CashTransaction, BankTransaction, FundTransfer, DirectTransaction
 from utils.pdf_generator import generate_payment_pdf
-from utils.ui_helpers import enable_quick_add_auto_select
+from utils.ui_helpers import enable_quick_add_auto_select, AutoClearSearchableComboBox
 
 class PaymentsView(QWidget):
     def __init__(self, parent=None):
@@ -67,10 +67,7 @@ class PaymentsView(QWidget):
         lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
         form_layout.addRow(lbl)
 
-        self.c_customer_combo = QComboBox()
-        self.c_customer_combo.setEditable(True)
-        self.c_customer_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.c_customer_combo)
+        self.c_customer_combo = AutoClearSearchableComboBox()
         self.c_customer_combo.currentTextChanged.connect(self.check_c_customer_match)
         if self.c_customer_combo.lineEdit():
             self.c_customer_combo.lineEdit().setPlaceholderText("Select or type customer name")
@@ -170,10 +167,7 @@ class PaymentsView(QWidget):
         lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
         form_layout.addRow(lbl)
 
-        self.s_supplier_combo = QComboBox()
-        self.s_supplier_combo.setEditable(True)
-        self.s_supplier_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.s_supplier_combo)
+        self.s_supplier_combo = AutoClearSearchableComboBox()
         self.s_supplier_combo.currentTextChanged.connect(self.check_s_supplier_match)
         if self.s_supplier_combo.lineEdit():
             self.s_supplier_combo.lineEdit().setPlaceholderText("Select or type supplier name")
@@ -799,6 +793,7 @@ class PaymentsView(QWidget):
             for c in customers:
                 self.customers_cache[c.id] = c
                 self.c_customer_combo.addItem(c.name, c.id)
+            self.c_customer_combo.update_completer()
             self.c_customer_combo.blockSignals(False)
             self.update_cust_outstanding_lbl()
             self.check_c_customer_match()
@@ -812,6 +807,7 @@ class PaymentsView(QWidget):
             for s in suppliers:
                 self.suppliers_cache[s.id] = s
                 self.s_supplier_combo.addItem(s.name, s.id)
+            self.s_supplier_combo.update_completer()
             self.s_supplier_combo.blockSignals(False)
             self.update_supp_outstanding_lbl()
             self.check_s_supplier_match()

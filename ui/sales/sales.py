@@ -113,18 +113,12 @@ class SalesView(QWidget):
         self.gst_enabled_checkbox = QCheckBox("Tax Invoice (GST)")
         self.gst_enabled_checkbox.stateChanged.connect(self.on_gst_checkbox_changed)
         
-        self.gst_type_combo = QComboBox()
-        self.gst_type_combo.addItems(["Local (CGST+SGST)", "Inter-State (IGST)"])
-        self.gst_type_combo.currentIndexChanged.connect(self.update_summary)
-        
         self.gst_enabled_label = QLabel("Tax Invoice:")
-        self.gst_type_label = QLabel("GST Type:")
 
         form_layout.addRow("Invoice Number *:", self.invoice_input)
         form_layout.addRow("Invoice Date:", self.date_input)
         form_layout.addRow("Customer:", cust_layout)
         form_layout.addRow(self.gst_enabled_label, self.gst_enabled_checkbox)
-        form_layout.addRow(self.gst_type_label, self.gst_type_combo)
         form_layout.addRow("Payment Mode:", self.pay_mode_combo)
         form_layout.addRow("Select Bank A/c:", self.bank_combo)
         form_layout.addRow("Paid Amount (₹):", self.paid_input)
@@ -620,9 +614,6 @@ class SalesView(QWidget):
         
         gst_active = globally_enabled and self.gst_enabled_checkbox.isChecked()
         
-        self.gst_type_label.setVisible(gst_active)
-        self.gst_type_combo.setVisible(gst_active)
-        
         self.gst_rate_label.setVisible(gst_active)
         self.gst_rate_combo.setVisible(gst_active)
         
@@ -838,9 +829,9 @@ class SalesView(QWidget):
             QMessageBox.warning(self, "Validation Error", "Please add at least one product to the invoice.")
             return
 
-        # Determine if GST is active for this invoice
+        # Determine if GST is active for this invoice (defaults to Local CGST+SGST)
         gst_active = self.gst_globally_enabled and self.gst_enabled_checkbox.isChecked()
-        gst_type = self.gst_type_combo.currentText()
+        gst_type = "CGST+SGST"
         
         taxable_amount = 0.0
         total_cgst = 0.0
@@ -858,12 +849,8 @@ class SalesView(QWidget):
                 
                 taxable_amount += taxable
                 total_gst += tax_amt
-                
-                if gst_type == "Local (CGST+SGST)":
-                    total_cgst += tax_amt / 2.0
-                    total_sgst += tax_amt / 2.0
-                else:
-                    total_igst += tax_amt
+                total_cgst += tax_amt / 2.0
+                total_sgst += tax_amt / 2.0
             total = taxable_amount + total_gst
         else:
             total = sum((item["qty"] * item["rate"]) - item.get("discount", 0.0) for item in self.invoice_items)
@@ -943,11 +930,11 @@ class SalesView(QWidget):
                 sale.paid_amount = paid
                 sale.balance_receivable = balance
                 sale.gst_enabled = gst_active
-                sale.gst_type = "CGST+SGST" if gst_type == "Local (CGST+SGST)" else "IGST"
+                sale.gst_type = "CGST+SGST"
                 sale.taxable_amount = taxable_amount
                 sale.total_cgst = total_cgst
                 sale.total_sgst = total_sgst
-                sale.total_igst = total_igst
+                sale.total_igst = 0.0
                 sale.total_gst = total_gst
 
             else:
@@ -975,11 +962,11 @@ class SalesView(QWidget):
                     paid_amount=paid,
                     balance_receivable=balance,
                     gst_enabled=gst_active,
-                    gst_type="CGST+SGST" if gst_type == "Local (CGST+SGST)" else "IGST",
+                    gst_type="CGST+SGST",
                     taxable_amount=taxable_amount,
                     total_cgst=total_cgst,
                     total_sgst=total_sgst,
-                    total_igst=total_igst,
+                    total_igst=0.0,
                     total_gst=total_gst
                 )
                 session.add(sale)
@@ -998,11 +985,8 @@ class SalesView(QWidget):
                 sgst_amt = 0.0
                 igst_amt = 0.0
                 if gst_active:
-                    if gst_type == "Local (CGST+SGST)":
-                        cgst_amt = tax_amt / 2.0
-                        sgst_amt = tax_amt / 2.0
-                    else:
-                        igst_amt = tax_amt
+                    cgst_amt = tax_amt / 2.0
+                    sgst_amt = tax_amt / 2.0
 
                 s_item = SalesItem(
                     sales_id=sale.id,
@@ -1097,7 +1081,7 @@ class SalesView(QWidget):
                 "paid_amount": paid,
                 "balance": balance,
                 "gst_enabled": gst_active,
-                "gst_type": "CGST+SGST" if gst_type == "Local (CGST+SGST)" else "IGST",
+                "gst_type": "CGST+SGST",
                 "taxable_amount": taxable_amount,
                 "total_cgst": total_cgst,
                 "total_sgst": total_sgst,
@@ -1520,8 +1504,6 @@ class SalesView(QWidget):
             # Load GST settings
             is_gst = getattr(sale, 'gst_enabled', False) or False
             self.gst_enabled_checkbox.setChecked(is_gst)
-            gst_type_val = getattr(sale, 'gst_type', 'CGST+SGST')
-            self.gst_type_combo.setCurrentText("Local (CGST+SGST)" if gst_type_val == "CGST+SGST" else "Inter-State (IGST)")
 
             # Load items
             self.invoice_items = []
