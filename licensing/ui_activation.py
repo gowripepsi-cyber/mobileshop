@@ -181,7 +181,8 @@ class ActivationDialog(BaseLicensedDialog):
         title.setStyleSheet(f"font-size: 20px; font-weight: bold; color: {color}; letter-spacing: 1px;")
         layout.addWidget(title)
 
-        desc = QLabel(self.block_msg if self.is_blocked else "Your trial has expired. Please enter an activation key to continue using the application.")
+        desc_text = self.block_msg if self.block_msg else "Please enter an activation key to continue using the application."
+        desc = QLabel(desc_text)
         desc.setWordWrap(True)
         desc.setAlignment(Qt.AlignCenter)
         desc.setStyleSheet("font-size: 13px; color: #e2e8f0;")

@@ -8,6 +8,9 @@ from datetime import datetime, date
 
 from licensing import crypto_utils
 
+# When False, the 30-day free trial is disabled and software requires mandatory activation on launch
+ALLOW_TRIAL = False
+
 def _run_cmd(cmd: str) -> str:
     try:
         out = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL, timeout=3)
@@ -160,7 +163,16 @@ def check_license_status() -> dict:
                 "message": "Software is permanently activated."
             }
     
-    # 2. Check Trial File
+    # 2. Check Trial / Activation requirement
+    if not ALLOW_TRIAL:
+        return {
+            "status": "unactivated",
+            "days_remaining": 0,
+            "machine_id": machine_id,
+            "message": "Software activation is required to use this application. Please enter your activation key."
+        }
+
+    # 3. Check Trial File
     trial = load_trial_data(machine_id)
     
     if trial is None:

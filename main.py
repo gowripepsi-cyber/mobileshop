@@ -47,8 +47,8 @@ def main():
         dlg = ActivationDialog(is_blocked=True, block_msg=lic_status["message"])
         dlg.exec()
         sys.exit(0)
-    elif status == "expired":
-        # Trial expired - require activation
+    elif status in ("expired", "unactivated"):
+        # Activation required
         dlg = ActivationDialog(is_blocked=False, block_msg=lic_status["message"])
         if dlg.exec() != QDialog.Accepted:
             sys.exit(0)
