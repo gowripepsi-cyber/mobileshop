@@ -1,3 +1,4 @@
+import os
 import sys
 import builtins
 
@@ -5,6 +6,7 @@ import builtins
 _original_import = builtins.__import__
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
 
 # Restore original import function
 builtins.__import__ = _original_import
@@ -16,10 +18,19 @@ from ui.main_window import MainWindow
 from utils.ui_helpers import setup_global_enter_navigation
 
 def main():
+    # Ensure current working directory is the application directory when running as an executable
+    if getattr(sys, 'frozen', False):
+        os.chdir(os.path.dirname(sys.executable))
+
     # 1. Run GUI App
     app = QApplication(sys.argv)
     setup_global_enter_navigation(app)
     
+    # Set application icon (supports PyInstaller onefile temp dir and local dev)
+    icon_path = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))), "icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
     # Apply modern custom stylesheet globally
     app.setStyleSheet(GLOBAL_STYLE)
 

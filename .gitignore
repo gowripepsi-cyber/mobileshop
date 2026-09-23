@@ -27,3 +27,5 @@ scratch_invoices/
 # Reports/Excel
 *.xlsx
 
+# PyInstaller Build Cache
+build/
