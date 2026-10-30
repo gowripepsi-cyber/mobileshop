@@ -710,13 +710,59 @@ class CategoryManagerDialog(ItemAttributesManagerDialog):
 
 
 class ProductDialog(QDialog):
-    def __init__(self, product=None, initial_name="", parent=None):
+    def __init__(self, product=None, initial_name="", default_category=None, parent=None):
         super().__init__(parent)
         self.product = product
         self.initial_name = initial_name
+        self.default_category = default_category
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        self.setFixedSize(420, 180)
+        self.setFixedSize(450, 240)
         self.init_ui()
+
+    def load_categories(self, select_category=None):
+        current_txt = select_category if select_category else (self.category_combo.currentText() if hasattr(self, 'category_combo') else "")
+        self.category_combo.blockSignals(True)
+        self.category_combo.clear()
+        session = Session()
+        try:
+            cats = session.query(Category).order_by(Category.name.asc()).all()
+            for c in cats:
+                self.category_combo.addItem(c.name)
+        except Exception as e:
+            print(f"Error loading categories in dialog: {e}")
+        finally:
+            session.close()
+        self.category_combo.blockSignals(False)
+
+        completer = QCompleter(self.category_combo.model(), self.category_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.category_combo.setCompleter(completer)
+
+        if current_txt:
+            idx = self.category_combo.findText(current_txt)
+            if idx >= 0:
+                self.category_combo.setCurrentIndex(idx)
+            else:
+                self.category_combo.setEditText(current_txt)
+        elif self.default_category:
+            idx = self.category_combo.findText(self.default_category)
+            if idx >= 0:
+                self.category_combo.setCurrentIndex(idx)
+        elif self.category_combo.count() > 0:
+            # Default to Accessories if available, else first item
+            acc_idx = self.category_combo.findText("Accessories")
+            if acc_idx >= 0:
+                self.category_combo.setCurrentIndex(acc_idx)
+            else:
+                self.category_combo.setCurrentIndex(0)
+
+    def quick_add_category(self):
+        from ui.masters.categories import CategoryDialog
+        dlg = CategoryDialog(parent=self)
+        if dlg.exec() == QDialog.Accepted and getattr(dlg, 'saved_category_name', None):
+            self.load_categories(select_category=dlg.saved_category_name)
 
     def load_brands(self, select_brand=None):
         current_txt = select_brand if select_brand else (self.brand_combo.currentText() if hasattr(self, 'brand_combo') else "")
@@ -724,7 +770,6 @@ class ProductDialog(QDialog):
         self.brand_combo.clear()
         session = Session()
         try:
-            # Load unique brands/models from Product and Brand tables
             brand_set = set()
             for b in session.query(Brand.name).all():
                 if b[0] and b[0].strip():
@@ -766,6 +811,29 @@ class ProductDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Enter product name")
 
+        # Category combo with quick add button
+        cat_layout = QHBoxLayout()
+        cat_layout.setContentsMargins(0, 0, 0, 0)
+        cat_layout.setSpacing(6)
+
+        self.category_combo = QComboBox()
+        self.category_combo.setEditable(True)
+        self.category_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.category_combo.setPlaceholderText("Select or enter category")
+        enable_quick_add_auto_select(self.category_combo)
+
+        self.add_category_btn = QPushButton("+")
+        self.add_category_btn.setToolTip("Add new category")
+        self.add_category_btn.setProperty("class", "btn-quick-add")
+        self.add_category_btn.setFixedSize(36, 36)
+        self.add_category_btn.clicked.connect(self.quick_add_category)
+
+        cat_layout.addWidget(self.category_combo, 1)
+        cat_layout.addWidget(self.add_category_btn)
+
+        init_cat = self.product.category if self.product else self.default_category
+        self.load_categories(select_category=init_cat)
+
         self.brand_combo = QComboBox()
         self.brand_combo.setEditable(True)
         self.brand_combo.setInsertPolicy(QComboBox.NoInsert)
@@ -779,6 +847,7 @@ class ProductDialog(QDialog):
             self.name_input.setText(self.initial_name)
 
         form_layout.addRow("Product Name *:", self.name_input)
+        form_layout.addRow("Category *:", cat_layout)
         form_layout.addRow("Brand / Model *:", self.brand_combo)
 
         layout.addLayout(form_layout)
@@ -809,6 +878,7 @@ class ProductDialog(QDialog):
 
     def handle_save(self):
         name = self.name_input.text().strip()
+        category = self.category_combo.currentText().strip() or "General"
         brand_model = self.brand_combo.currentText().strip()
 
         if not name:
@@ -823,10 +893,13 @@ class ProductDialog(QDialog):
 
         session = Session()
         try:
+            from database import generate_next_product_code
+
             if self.product:
                 # Update
                 prod = session.query(Product).get(self.product.id)
                 prod.name = name
+                prod.category = category
                 prod.brand = brand_model
                 prod.model = brand_model
                 self.saved_product_id = prod.id
@@ -835,9 +908,9 @@ class ProductDialog(QDialog):
                 # Add
                 new_prod = Product(
                     name=name,
+                    category=category,
                     brand=brand_model,
                     model=brand_model,
-                    category='General',
                     unit='Pcs',
                     purchase_price=0.0,
                     selling_price=0.0,
@@ -846,8 +919,15 @@ class ProductDialog(QDialog):
                 )
                 session.add(new_prod)
                 session.flush()
+                new_prod.product_code = generate_next_product_code(session, category)
                 self.saved_product_id = new_prod.id
                 self.saved_product_name = new_prod.name
+
+            # Auto-save category into Category table if new
+            if category:
+                cat_obj = session.query(Category).filter(Category.name.ilike(category)).first()
+                if not cat_obj:
+                    session.add(Category(name=category))
 
             # Auto-save brand into Brand table if new
             if brand_model:
@@ -874,64 +954,121 @@ class ProductsView(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # Top bar: Search and Buttons
+        # Top bar: Search, Category Filter, and Action Buttons
         top_bar = QHBoxLayout()
+        top_bar.setSpacing(10)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search products by name or brand/model...")
+        self.search_input.setPlaceholderText("Search products by name, category or brand...")
         self.search_input.textChanged.connect(self.refresh_data)
-        top_bar.addWidget(self.search_input, 4)
+        top_bar.addWidget(self.search_input, 3)
+
+        self.cat_filter_combo = QComboBox()
+        self.cat_filter_combo.setFixedHeight(38)
+        self.cat_filter_combo.setMinimumWidth(160)
+        self.cat_filter_combo.currentIndexChanged.connect(self.refresh_data)
+        top_bar.addWidget(self.cat_filter_combo, 2)
 
         self.add_btn = QPushButton("Add Product (Ctrl+N)")
         self.add_btn.setToolTip("Add new product (Ctrl+N)")
+        self.add_btn.setFixedHeight(38)
         self.add_btn.clicked.connect(self.add_product)
         top_bar.addWidget(self.add_btn, 1)
 
         self.edit_btn = QPushButton("Edit Product")
         self.edit_btn.setProperty("class", "btn-secondary")
+        self.edit_btn.setFixedHeight(38)
         self.edit_btn.clicked.connect(self.edit_product)
         top_bar.addWidget(self.edit_btn, 1)
 
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setProperty("class", "btn-danger")
+        self.delete_btn.setFixedHeight(38)
         self.delete_btn.clicked.connect(self.delete_product)
         top_bar.addWidget(self.delete_btn, 1)
+
+        self.categories_btn = QPushButton("📁 Categories")
+        self.categories_btn.setToolTip("Manage Item Categories (Ctrl+Shift+K)")
+        self.categories_btn.setProperty("class", "btn-secondary")
+        self.categories_btn.setFixedHeight(38)
+        self.categories_btn.clicked.connect(self.open_categories)
+        top_bar.addWidget(self.categories_btn, 1)
 
         layout.addLayout(top_bar)
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Product Name", "Brand / Model", "Current Stock"
+            "ID", "Product Name", "Category", "Brand / Model", "Current Stock"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.doubleClicked.connect(self.edit_product)
         layout.addWidget(self.table)
 
+    def open_categories(self):
+        parent_widget = self.parent()
+        if hasattr(parent_widget, 'categories_view'):
+            parent_widget.tabs.setCurrentWidget(parent_widget.categories_view)
+        elif hasattr(self.window(), 'open_master_tab'):
+            self.window().open_master_tab(1)
+        else:
+            from ui.masters.categories import CategoryManagerDialog
+            dlg = CategoryManagerDialog(parent=self)
+            dlg.exec()
+            self.refresh_data()
+
+    def update_category_filter(self, session):
+        current = self.cat_filter_combo.currentText()
+        self.cat_filter_combo.blockSignals(True)
+        self.cat_filter_combo.clear()
+        self.cat_filter_combo.addItem("-- All Categories --")
+        cats = session.query(Category).order_by(Category.name.asc()).all()
+        for c in cats:
+            self.cat_filter_combo.addItem(c.name)
+        idx = self.cat_filter_combo.findText(current)
+        if idx >= 0:
+            self.cat_filter_combo.setCurrentIndex(idx)
+        else:
+            self.cat_filter_combo.setCurrentIndex(0)
+        self.cat_filter_combo.blockSignals(False)
+
     def refresh_data(self):
         search_txt = self.search_input.text().strip()
         session = Session()
         try:
+            self.update_category_filter(session)
+            selected_cat = self.cat_filter_combo.currentText()
+
             query = session.query(Product)
             if search_txt:
                 query = query.filter(
                     Product.name.like(f"%{search_txt}%") |
+                    Product.category.like(f"%{search_txt}%") |
                     Product.brand.like(f"%{search_txt}%") |
                     Product.model.like(f"%{search_txt}%")
                 )
+            if selected_cat and selected_cat != "-- All Categories --":
+                query = query.filter(Product.category == selected_cat)
+
             products = query.order_by(Product.name.asc()).all()
 
             self.table.setRowCount(len(products))
             for i, p in enumerate(products):
                 self.table.setItem(i, 0, QTableWidgetItem(str(p.id)))
                 self.table.setItem(i, 1, QTableWidgetItem(p.name))
-                self.table.setItem(i, 2, QTableWidgetItem(p.brand_model or p.brand or "-"))
+
+                cat_item = QTableWidgetItem(p.category or "General")
+                cat_item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(i, 2, cat_item)
+
+                self.table.setItem(i, 3, QTableWidgetItem(p.brand_model or p.brand or "-"))
 
                 stock_item = QTableWidgetItem(str(p.stock_qty))
                 stock_item.setTextAlignment(Qt.AlignCenter)
@@ -939,7 +1076,7 @@ class ProductsView(QWidget):
                     stock_item.setForeground(Qt.red)
                 elif p.stock_qty <= p.low_stock_limit:
                     stock_item.setForeground(Qt.yellow)
-                self.table.setItem(i, 3, stock_item)
+                self.table.setItem(i, 4, stock_item)
 
         except Exception as e:
             print(f"Error loading products: {e}")
@@ -950,11 +1087,12 @@ class ProductsView(QWidget):
         selected = self.table.selectedItems()
         if not selected:
             return None
-        # The first column is ID
         return int(self.table.item(selected[0].row(), 0).text())
 
     def add_product(self):
-        dlg = ProductDialog(parent=self)
+        selected_cat = self.cat_filter_combo.currentText()
+        def_cat = selected_cat if (selected_cat and selected_cat != "-- All Categories --") else None
+        dlg = ProductDialog(default_category=def_cat, parent=self)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_data()
 

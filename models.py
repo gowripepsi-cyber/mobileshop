@@ -168,7 +168,7 @@ class ServiceJob(Base):
     customer_name = Column(String, nullable=False)
     mobile = Column(String, nullable=False)
     device_model = Column(String, nullable=False)
-    imei = Column(String, nullable=False)
+    imei = Column(String, nullable=True)
     complaint = Column(Text)
     technician = Column(String)
     status = Column(String, default='Received')  # Received, Under Repair, Ready, Delivered
@@ -252,6 +252,7 @@ class Category(Base):
     __tablename__ = 'categories'
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
+    description = Column(String, nullable=True)
 
 class Brand(Base):
     __tablename__ = 'brands'

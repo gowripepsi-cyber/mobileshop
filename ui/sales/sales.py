@@ -436,7 +436,9 @@ class SalesView(QWidget):
         typed_text = self.product_combo.currentText().strip()
         if typed_text == "Select Product":
             typed_text = ""
-        dlg = ProductDialog(initial_name=typed_text, parent=self)
+        current_cat = self.category_combo.currentText().strip()
+        def_cat = current_cat if (current_cat and current_cat != "-- All Categories --") else None
+        dlg = ProductDialog(initial_name=typed_text, default_category=def_cat, parent=self)
         if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_product_id'):
             self.refresh_data()
             self.product_combo.select_product_id(dlg.saved_product_id)

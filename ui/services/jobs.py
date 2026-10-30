@@ -4,11 +4,34 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                              QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, 
                              QFrame, QFormLayout, QDialog, QTextEdit, QDoubleSpinBox, QSpacerItem, QSizePolicy,
                              QApplication, QScrollArea, QSpinBox, QDialogButtonBox)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, QEvent, QTimer
+from PySide6.QtWidgets import QCompleter
 from database import Session, Setting
 from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product
 from utils.pdf_generator import generate_service_pdf
 from utils.ui_helpers import enable_quick_add_auto_select
+
+class CustomerNameClickFilter(QObject):
+    def __init__(self, combo, is_new=True):
+        super().__init__(combo)
+        self.combo = combo
+        self.is_new = is_new
+        self._user_typed = False
+
+    def eventFilter(self, obj, event):
+        if event.type() in (QEvent.MouseButtonPress, QEvent.FocusIn):
+            txt = self.combo.currentText().strip()
+            if txt == "-- Select or Type Customer --" or (self.is_new and not self._user_typed):
+                if self.combo.lineEdit():
+                    self.combo.lineEdit().clear()
+                self.combo.setEditText("")
+                self.combo.setCurrentIndex(-1)
+                if self.combo.lineEdit():
+                    QTimer.singleShot(0, lambda: self.combo.lineEdit().setCursorPosition(0))
+        elif event.type() == QEvent.KeyPress:
+            self._user_typed = True
+        return super().eventFilter(obj, event)
+
 
 class JobCardDialog(QDialog):
     def __init__(self, job=None, parent=None):
@@ -46,12 +69,18 @@ class JobCardDialog(QDialog):
         self.cust_name_combo = QComboBox()
         self.cust_name_combo.setEditable(True)
         self.cust_name_combo.setInsertPolicy(QComboBox.NoInsert)
-        enable_quick_add_auto_select(self.cust_name_combo)
         self.cust_name_combo.currentTextChanged.connect(self.check_customer_match)
         if self.cust_name_combo.lineEdit():
             self.cust_name_combo.lineEdit().setPlaceholderText("Select or type customer name")
+            self.cust_name_combo.lineEdit().setClearButtonEnabled(True)
             self.cust_name_combo.lineEdit().textChanged.connect(self.check_customer_match)
         self.cust_name_combo.currentIndexChanged.connect(self.on_customer_selected)
+
+        # Install click-to-clear filter on customer name input
+        self.cust_click_filter = CustomerNameClickFilter(self.cust_name_combo, is_new=(self.job is None))
+        if self.cust_name_combo.lineEdit():
+            self.cust_name_combo.lineEdit().installEventFilter(self.cust_click_filter)
+        self.cust_name_combo.installEventFilter(self.cust_click_filter)
 
         cust_layout = QHBoxLayout()
         cust_layout.setContentsMargins(0, 0, 0, 0)
@@ -73,7 +102,9 @@ class JobCardDialog(QDialog):
         self.cust_mobile_input.textChanged.connect(self.lookup_customer_by_mobile)
 
         self.device_model_input = QLineEdit()
+        self.device_model_input.setPlaceholderText("Enter device detail (e.g. Model, Specs)")
         self.imei_input = QLineEdit()
+        self.imei_input.setPlaceholderText("Enter device ID / Serial / IMEI (optional)")
         
         self.complaint_input = QTextEdit()
         self.complaint_input.setFixedHeight(80)
@@ -86,11 +117,8 @@ class JobCardDialog(QDialog):
         form_layout.addRow("Job Number *:", self.job_num_input)
         form_layout.addRow("Customer Name *:", cust_layout)
         form_layout.addRow("Customer Mobile *:", self.cust_mobile_input)
-        form_layout.addRow("Device Model *:", self.device_model_input)
-        if self.show_imei:
-            form_layout.addRow("Device IMEI/Serial *:", self.imei_input)
-        else:
-            form_layout.addRow("Device Serial (Optional):", self.imei_input)
+        form_layout.addRow("Device Detail *:", self.device_model_input)
+        form_layout.addRow("Device ID:", self.imei_input)
         form_layout.addRow("Complaint details:", self.complaint_input)
         form_layout.addRow("Assigned Technician:", self.technician_input)
         form_layout.addRow("Job Status:", self.status_combo)
@@ -136,12 +164,28 @@ class JobCardDialog(QDialog):
         try:
             self.cust_name_combo.blockSignals(True)
             self.cust_name_combo.clear()
-            self.cust_name_combo.addItem("-- Select or Type Customer --", None)
-            customers = session.query(Customer).all()
+            customers = session.query(Customer).order_by(Customer.name.asc()).all()
             for c in customers:
                 self.cust_name_combo.addItem(c.name, {"mobile": c.mobile})
+            
+            # Setup completer for fast autocomplete
+            completer = QCompleter(self.cust_name_combo.model(), self.cust_name_combo)
+            completer.setFilterMode(Qt.MatchContains)
+            completer.setCaseSensitivity(Qt.CaseInsensitive)
+            completer.setCompletionMode(QCompleter.PopupCompletion)
+            self.cust_name_combo.setCompleter(completer)
+
             if select_customer_name:
                 self.cust_name_combo.setCurrentText(select_customer_name)
+                if hasattr(self, 'cust_click_filter'):
+                    self.cust_click_filter._user_typed = True
+            else:
+                self.cust_name_combo.setCurrentIndex(-1)
+                if self.cust_name_combo.lineEdit():
+                    self.cust_name_combo.lineEdit().clear()
+                    self.cust_name_combo.lineEdit().setPlaceholderText("Select or type customer name")
+                if hasattr(self, 'cust_click_filter'):
+                    self.cust_click_filter._user_typed = False
             self.cust_name_combo.blockSignals(False)
             self.check_customer_match()
         except Exception:
@@ -171,6 +215,8 @@ class JobCardDialog(QDialog):
         data = self.cust_name_combo.currentData()
         if data and isinstance(data, dict) and data.get("mobile"):
             self.cust_mobile_input.setText(data["mobile"])
+        if hasattr(self, 'cust_click_filter') and index >= 0:
+            self.cust_click_filter._user_typed = True
 
     def handle_add_customer_click(self):
         from ui.masters.customers import CustomerDialog
@@ -197,6 +243,8 @@ class JobCardDialog(QDialog):
             cust = session.query(Customer).filter_by(mobile=text.strip()).first()
             if cust:
                 self.cust_name_combo.setCurrentText(cust.name)
+                if hasattr(self, 'cust_click_filter'):
+                    self.cust_click_filter._user_typed = True
             session.close()
 
     def handle_save(self):
@@ -211,9 +259,9 @@ class JobCardDialog(QDialog):
         tech = self.technician_input.text().strip()
         status = self.status_combo.currentText()
 
-        is_invalid = not job_num or not mobile or not name or not model or (self.show_imei and not imei)
+        is_invalid = not job_num or not mobile or not name or not model
         if is_invalid:
-            QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)")
+            QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)\n(Customer Name, Mobile, and Device Detail are required)")
             return
 
         session = Session()
@@ -342,8 +390,8 @@ class BillingDialog(QDialog):
         cust_info.setWordWrap(True)
         
         device_info = QLabel(
-            f"<b>Device:</b> {self.job.device_model}<br/>"
-            f"<b>IMEI:</b> {self.job.imei or '-'}"
+            f"<b>Device Detail:</b> {self.job.device_model}<br/>"
+            f"<b>Device ID:</b> {self.job.imei or '-'}"
         )
         device_info.setStyleSheet("color: #e2e8f0; font-size: 12px; line-height: 1.3;")
         device_info.setWordWrap(True)
@@ -593,7 +641,7 @@ class BillingDialog(QDialog):
         self.part_product_combo.addItem("-- Custom / Non-Inventory Part --", None)
         existing_prod_ids = [ep.product_id for ep in existing_parts if ep.product_id]
         products = session.query(Product).filter(
-            (Product.category == 'Spare Parts') |
+            (Product.category.in_(['Spare Parts', 'Spares', 'spares', 'spare parts'])) |
             (Product.id.in_(existing_prod_ids))
         ).all()
         
@@ -876,7 +924,7 @@ class ServicesView(QWidget):
         # Top bar
         top_bar = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search job cards by Job #, Customer, Mobile, or Model...")
+        self.search_input.setPlaceholderText("Search job cards by Job #, Customer, Mobile, or Device Detail...")
         self.search_input.textChanged.connect(self.refresh_data)
         top_bar.addWidget(self.search_input, 4)
 
@@ -895,7 +943,7 @@ class ServicesView(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
-            "Job #", "Customer", "Mobile", "Device Model", 
+            "Job #", "Customer", "Mobile", "Device Detail", 
             "Status", "Labor (₹)", "Total (₹)", "Balance (₹)", "Actions"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -952,6 +1000,7 @@ class ServicesView(QWidget):
                     ServiceJob.customer_name.like(f"%{search_txt}%") |
                     ServiceJob.mobile.like(f"%{search_txt}%") |
                     ServiceJob.device_model.like(f"%{search_txt}%") |
+                    ServiceJob.imei.like(f"%{search_txt}%") |
                     ServiceJob.status.like(f"%{search_txt}%")
                 )
             if selected_status != "All Statuses":
@@ -1102,8 +1151,8 @@ class ServicesView(QWidget):
             info_layout.addRow("Date Created:", QLabel(job.created_at.strftime("%Y-%m-%d %H:%M")))
             info_layout.addRow("Customer Name:", QLabel(job.customer_name))
             info_layout.addRow("Customer Contact:", QLabel(job.mobile))
-            info_layout.addRow("Device Model:", QLabel(job.device_model))
-            info_layout.addRow("IMEI / Serial:", QLabel(job.imei))
+            info_layout.addRow("Device Detail:", QLabel(job.device_model))
+            info_layout.addRow("Device ID:", QLabel(job.imei or "-"))
             info_layout.addRow("Complaint details:", QLabel(job.complaint or "-"))
             info_layout.addRow("Technician:", QLabel(job.technician or "-"))
             info_layout.addRow("Job Status:", QLabel(job.status))

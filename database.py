@@ -57,6 +57,12 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE service_parts ADD COLUMN qty INTEGER DEFAULT 1"))
 
+    # Schema migration: check and add description column to categories table
+    cat_columns = [c['name'] for c in inspector.get_columns('categories')]
+    if 'description' not in cat_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE categories ADD COLUMN description TEXT"))
+
     # Schema migration: check and add category column to products table
     prod_columns = [c['name'] for c in inspector.get_columns('products')]
     if 'category' not in prod_columns:
@@ -277,12 +283,20 @@ def init_db():
         if not enable_gst:
             session.add(Setting(key='enable_gst', value='false'))
 
-        # 5. Seed default categories if empty
-        cat_count = session.query(Category).count()
-        if cat_count == 0:
-            for name in ["General Inventory", "Electronics", "Supplies"]:
-                session.add(Category(name=name))
-            session.commit()
+        # 5. Seed default categories if empty or missing requested standard categories
+        default_categories = [
+            ("Accessories", "Mobile and computer accessories"),
+            ("Spares", "Spare parts and replacement components"),
+            ("Sellables", "Retail items, handsets and merchandise"),
+            ("General", "General inventory items")
+        ]
+        existing_cats = {c.name.lower(): c for c in session.query(Category).all()}
+        for cat_name, cat_desc in default_categories:
+            if cat_name.lower() not in existing_cats:
+                session.add(Category(name=cat_name, description=cat_desc))
+            elif not existing_cats[cat_name.lower()].description and cat_desc:
+                existing_cats[cat_name.lower()].description = cat_desc
+        session.commit()
 
         # 6. Seed default/existing brands if empty
         brand_count = session.query(Brand).count()

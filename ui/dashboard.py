@@ -389,7 +389,8 @@ class DashboardView(QWidget):
                 (ServiceJob.job_number.ilike(f"%{query_text}%")) |
                 (ServiceJob.customer_name.ilike(f"%{query_text}%")) |
                 (ServiceJob.mobile.ilike(f"%{query_text}%")) |
-                (ServiceJob.device_model.ilike(f"%{query_text}%"))
+                (ServiceJob.device_model.ilike(f"%{query_text}%")) |
+                (ServiceJob.imei.ilike(f"%{query_text}%"))
             ).limit(10).all()
             for j in jobs:
                 results.append({

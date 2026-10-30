@@ -187,9 +187,13 @@ class PurchaseView(QWidget):
         grid_layout.addWidget(QLabel("Product Code:"), 0, 0)
         grid_layout.addWidget(self.product_code_input, 0, 1)
         
-        self.category_combo = SearchableComboBox()
+        self.category_combo = AutoClearSearchableComboBox()
         self.category_combo.setPlaceholderText("Select Category")
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
+        self.category_combo.currentTextChanged.connect(self.filter_products_by_category)
+        self.category_combo.activated.connect(self.filter_products_by_category)
+        if self.category_combo.lineEdit():
+            self.category_combo.lineEdit().textChanged.connect(self.filter_products_by_category)
         grid_layout.addWidget(QLabel("Category:"), 0, 2)
         grid_layout.addWidget(self.category_combo, 0, 3)
         
@@ -425,18 +429,43 @@ class PurchaseView(QWidget):
         typed_text = self.product_combo.currentText().strip()
         if typed_text == "Select Product":
             typed_text = ""
-        dlg = ProductDialog(initial_name=typed_text, parent=self)
+        current_cat = self.category_combo.currentText().strip()
+        def_cat = current_cat if (current_cat and current_cat != "-- All Categories --") else None
+        dlg = ProductDialog(initial_name=typed_text, default_category=def_cat, parent=self)
         if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_product_id'):
             self.refresh_data()
             self.product_combo.select_product_id(dlg.saved_product_id)
 
-    def filter_products_by_category(self):
+    def filter_products_by_category(self, *args):
+        if not hasattr(self, 'products_cache') or not self.products_cache:
+            return
+            
         cat_name = self.category_combo.currentText().strip()
+        cat_lower = cat_name.lower()
+        
+        is_all = not cat_lower or cat_lower in ("-- all categories --", "select category", "all")
+        
         filtered_products = []
-        for prod_id, p in self.products_cache.items():
-            if not cat_name or cat_name == "-- All Categories --" or p.category == cat_name:
-                filtered_products.append(p)
+        if is_all:
+            filtered_products = list(self.products_cache.values())
+            placeholder = "Select Product"
+        else:
+            for prod_id, p in self.products_cache.items():
+                p_cat = (p.category or "").strip().lower()
+                if p_cat == cat_lower:
+                    filtered_products.append(p)
+                elif "spare" in cat_lower and "spare" in p_cat:
+                    filtered_products.append(p)
+                elif cat_lower and (cat_lower in p_cat or p_cat in cat_lower):
+                    filtered_products.append(p)
+            
+            placeholder = f"Select {cat_name} Item..."
+
         self.product_combo.set_products(filtered_products)
+        self.product_combo.setPlaceholderText(placeholder)
+        if self.product_combo.lineEdit():
+            self.product_combo.lineEdit().setPlaceholderText(placeholder)
+            
         self.update_rate_on_product_change()
         if hasattr(self, 'add_product_btn'):
             self.check_product_match()
@@ -468,9 +497,14 @@ class PurchaseView(QWidget):
             completer.activated.connect(lambda text: self.handle_product_code_entry())
             self.product_code_input.setCompleter(completer)
 
+            # Save previous category selection if any
+            prev_cat = self.category_combo.currentText().strip()
+
             # 2. Block combo box signals during update
             self.supplier_combo.blockSignals(True)
             self.category_combo.blockSignals(True)
+            if self.category_combo.lineEdit():
+                self.category_combo.lineEdit().blockSignals(True)
             self.bank_combo.blockSignals(True)
 
             # Load Suppliers
@@ -482,7 +516,20 @@ class PurchaseView(QWidget):
             categories = session.query(Category).all()
             for c in categories:
                 self.category_combo.addItem(c.name)
-            self.category_combo.setCurrentIndex(-1)
+            
+            if prev_cat and prev_cat != "-- All Categories --":
+                cat_idx = -1
+                for i in range(self.category_combo.count()):
+                    if self.category_combo.itemText(i).strip().lower() == prev_cat.lower():
+                        cat_idx = i
+                        break
+                if cat_idx >= 0:
+                    self.category_combo.setCurrentIndex(cat_idx)
+                else:
+                    self.category_combo.setCurrentIndex(-1)
+            else:
+                self.category_combo.setCurrentIndex(-1)
+                
             self.category_combo.update_completer()
 
             # Load Bank Accounts
@@ -502,6 +549,8 @@ class PurchaseView(QWidget):
             # 3. Unblock signals and filter/load
             self.supplier_combo.blockSignals(False)
             self.category_combo.blockSignals(False)
+            if self.category_combo.lineEdit():
+                self.category_combo.lineEdit().blockSignals(False)
             self.bank_combo.blockSignals(False)
 
             # Load global GST setting
@@ -692,11 +741,18 @@ class PurchaseView(QWidget):
                 break
         if found_product:
             self.product_code_input.setText(found_product.product_code)
-            cat_idx = self.category_combo.findText(found_product.category)
-            if cat_idx >= 0:
-                self.category_combo.blockSignals(True)
-                self.category_combo.setCurrentIndex(cat_idx)
-                self.category_combo.blockSignals(False)
+            if found_product.category:
+                p_cat_lower = found_product.category.strip().lower()
+                for c_i in range(self.category_combo.count()):
+                    if self.category_combo.itemText(c_i).strip().lower() == p_cat_lower:
+                        self.category_combo.blockSignals(True)
+                        if self.category_combo.lineEdit():
+                            self.category_combo.lineEdit().blockSignals(True)
+                        self.category_combo.setCurrentIndex(c_i)
+                        self.category_combo.blockSignals(False)
+                        if self.category_combo.lineEdit():
+                            self.category_combo.lineEdit().blockSignals(False)
+                        break
             self.filter_products_by_category()
             self.product_combo.select_product_id(found_product.id)
             self.qty_input.setFocus()

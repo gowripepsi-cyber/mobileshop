@@ -580,11 +580,11 @@ def generate_service_pdf(service_data, file_path):
         ],
         [
             Paragraph(f"Name: {service_data['customer_name']}", style_sub),
-            Paragraph(f"Model: {service_data['device_model']}", style_sub)
+            Paragraph(f"Device Detail: {service_data['device_model']}", style_sub)
         ],
         [
             Paragraph(f"Mobile: {service_data['customer_mobile']}", style_sub),
-            Paragraph(f"IMEI/Serial: {service_data['imei']}", style_sub)
+            Paragraph(f"Device ID: {service_data.get('imei') or '-'}", style_sub)
         ],
         [
             Paragraph("", style_sub),

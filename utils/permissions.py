@@ -6,6 +6,7 @@ MODULE_CATEGORIES = {
     ],
     "Master Data": [
         ("products", "Products Master", ["view", "add", "edit", "delete"]),
+        ("categories", "Item Categories Master", ["view", "add", "edit", "delete"]),
         ("customers", "Customers Master", ["view", "add", "edit", "delete"]),
         ("suppliers", "Suppliers Master", ["view", "add", "edit", "delete"]),
         ("bank_accounts", "Bank Accounts Master", ["view", "add", "edit", "delete"])
@@ -76,7 +77,7 @@ def enforce_ui_permissions(main_window):
     # Nav indices: 0: Dashboard, 1: Masters, 2: Purchase, 3: Sales, 4: Services, 5: Payments, 6: Reports, 7: Settings, 8: Money Transfer
     nav_permission_map = {
         0: [("dashboard", "view")],
-        1: [("products", "view"), ("customers", "view"), ("suppliers", "view"), ("bank_accounts", "view")],
+        1: [("products", "view"), ("categories", "view"), ("customers", "view"), ("suppliers", "view"), ("bank_accounts", "view")],
         2: [("purchase", "view")],
         3: [("sales", "view")],
         4: [("services", "view")],
@@ -100,9 +101,12 @@ def enforce_ui_permissions(main_window):
         mv = main_window.masters_view
         if hasattr(mv, 'tabs'):
             mv.tabs.setTabVisible(0, is_admin or has_permission(user, "products", "view"))
-            mv.tabs.setTabVisible(1, is_admin or has_permission(user, "customers", "view"))
-            mv.tabs.setTabVisible(2, is_admin or has_permission(user, "suppliers", "view"))
-            mv.tabs.setTabVisible(3, is_admin or has_permission(user, "bank_accounts", "view"))
+            mv.tabs.setTabVisible(1, is_admin or has_permission(user, "categories", "view") or has_permission(user, "products", "view"))
+            mv.tabs.setTabVisible(2, is_admin or has_permission(user, "customers", "view"))
+            mv.tabs.setTabVisible(3, is_admin or has_permission(user, "suppliers", "view"))
+            mv.tabs.setTabVisible(4, is_admin or has_permission(user, "bank_accounts", "view"))
+            if mv.tabs.count() > 5:
+                mv.tabs.setTabVisible(5, is_admin or has_permission(user, "products", "view"))
 
     # 3. Settings Sub-tabs
     if hasattr(main_window, 'settings_view'):
@@ -139,6 +143,7 @@ def enforce_ui_permissions(main_window):
     if hasattr(main_window, 'masters_view'):
         mv = main_window.masters_view
         enforce_crud_buttons(getattr(mv, 'products_view', None), "products")
+        enforce_crud_buttons(getattr(mv, 'categories_view', None), "categories")
         enforce_crud_buttons(getattr(mv, 'customers_view', None), "customers")
         enforce_crud_buttons(getattr(mv, 'suppliers_view', None), "suppliers")
         enforce_crud_buttons(getattr(mv, 'bank_accounts_view', None), "bank_accounts")

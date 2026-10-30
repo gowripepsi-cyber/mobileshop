@@ -275,6 +275,19 @@ class SearchableComboBox(QComboBox):
         completer.activated[str].connect(self._on_completer_activated)
         self.setCompleter(completer)
 
+    def showPopup(self):
+        completer = self.completer()
+        if completer:
+            if self.lineEdit():
+                self.lineEdit().setFocus()
+                if isinstance(self.lineEdit(), AutoClearLineEdit):
+                    self.lineEdit().clear()
+                    self.lineEdit()._cleared_on_focus = True
+            completer.setCompletionPrefix("")
+            completer.complete()
+        else:
+            super().showPopup()
+
     def _on_completer_activated(self, text):
         self._suppress_popup = True
         le = self.lineEdit()
@@ -283,7 +296,12 @@ class SearchableComboBox(QComboBox):
             le.setText(text)
         idx = self.findText(text)
         if idx >= 0:
-            self.setCurrentIndex(idx)
+            if self.currentIndex() != idx:
+                self.setCurrentIndex(idx)
+            else:
+                self.currentIndexChanged.emit(idx)
+                self.currentTextChanged.emit(text)
+            self.activated.emit(idx)
         if self.completer() and self.completer().popup():
             self.completer().popup().hide()
         if le:
@@ -389,7 +407,12 @@ class SearchableComboBox(QComboBox):
                     le.setText(selected_text)
                 idx = self.findText(selected_text)
                 if idx >= 0:
-                    self.setCurrentIndex(idx)
+                    if self.currentIndex() != idx:
+                        self.setCurrentIndex(idx)
+                    else:
+                        self.currentIndexChanged.emit(idx)
+                        self.currentTextChanged.emit(selected_text)
+                    self.activated.emit(idx)
             popup.hide()
             if le:
                 le._suppress_clear = False
@@ -437,12 +460,16 @@ class SearchableComboBox(QComboBox):
                 if self.lineEdit():
                     self.lineEdit().setText(self.itemText(match_idx))
         
-        self.blockSignals(True)
         if match_idx >= 0:
-            self.setCurrentIndex(match_idx)
+            if self.currentIndex() != match_idx:
+                self.setCurrentIndex(match_idx)
+            else:
+                self.currentIndexChanged.emit(match_idx)
+                self.currentTextChanged.emit(self.itemText(match_idx))
+            self.activated.emit(match_idx)
         else:
-            self.setCurrentIndex(-1)
-        self.blockSignals(False)
+            if self.currentIndex() != -1:
+                self.setCurrentIndex(-1)
 
     def on_focus_out_validation(self):
         pass
@@ -472,13 +499,15 @@ class AutoClearLineEdit(QLineEdit):
         if not self._cleared_on_focus:
             self.clear()
             self._cleared_on_focus = True
-            QTimer.singleShot(0, self._open_dropdown)
+        QTimer.singleShot(0, self._open_dropdown)
 
     def _open_dropdown(self):
-        if not (self.hasFocus() and self.isVisible()):
+        if not self.isVisible():
             return
         if getattr(self, '_suppress_clear', False) or getattr(self.combo, '_suppress_popup', False):
             return
+        if not self.hasFocus():
+            self.setFocus()
         completer = self.combo.completer()
         if completer:
             completer.setCompletionPrefix("")
@@ -507,7 +536,7 @@ class AutoClearSearchableComboBox(SearchableComboBox):
         self.lineEdit().textChanged.connect(self.on_text_changed)
 
 
-class SearchableProductComboBox(SearchableComboBox):
+class SearchableProductComboBox(AutoClearSearchableComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.currentIndexChanged.connect(self.on_index_changed)
@@ -534,6 +563,10 @@ class SearchableProductComboBox(SearchableComboBox):
             self.addItem(display_txt, p.id)
             
         self.setCurrentIndex(-1)
+        if self.lineEdit():
+            self.lineEdit().clear()
+            self.lineEdit().setPlaceholderText("Select Product")
+        self.setEditText("")
         self.blockSignals(False)
         self.update_completer()
 
