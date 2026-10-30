@@ -176,8 +176,6 @@ class PurchaseView(QWidget):
         self.brand_input.hide()
         self.model_input = QLineEdit()
         self.model_input.hide()
-        self.selling_price_input = QDoubleSpinBox()
-        self.selling_price_input.hide()
 
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
@@ -250,6 +248,14 @@ class PurchaseView(QWidget):
         self.rate_label = QLabel("Rate (per unit):")
         grid_layout.addWidget(self.rate_label, 2, 0)
         grid_layout.addWidget(self.rate_input, 2, 1)
+
+        self.selling_price_label = QLabel("Selling Price:")
+        self.selling_price_input = QDoubleSpinBox()
+        self.selling_price_input.setRange(0.0, 9999999.0)
+        self.selling_price_input.setValue(0.0)
+        self.selling_price_input.setDecimals(2)
+        grid_layout.addWidget(self.selling_price_label, 2, 2)
+        grid_layout.addWidget(self.selling_price_input, 2, 3)
 
         self.add_item_btn = QPushButton("Add Item")
         self.add_item_btn.clicked.connect(self.add_item_to_list)
