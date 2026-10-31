@@ -121,7 +121,8 @@ class MoneyTransferView(QWidget):
         row2_layout.setSpacing(10)
 
         self.t_amount = QDoubleSpinBox()
-        self.t_amount.setRange(0.01, 9999999.0)
+        self.t_amount.setRange(0.0, 9999999.0)
+        self.t_amount.setValue(0.0)
         self.t_amount.setDecimals(2)
         t_amount_grp = self.create_field_group("Amount (₹) *:", self.t_amount)
         t_amount_grp.setMaximumWidth(130)

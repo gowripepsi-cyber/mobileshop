@@ -84,7 +84,8 @@ def enforce_ui_permissions(main_window):
         5: [("payments", "view")],
         6: [("reports", "view")],
         7: [("settings", "view"), ("system_configuration", "view"), ("user_management", "view"), ("backup_restore", "view"), ("database_maintenance", "view")],
-        8: [("bank_accounts", "view"), ("payments", "view")]
+        8: [("bank_accounts", "view"), ("payments", "view")],
+        9: [("bank_accounts", "view"), ("payments", "view")]
     }
 
     if hasattr(main_window, 'nav_buttons'):
@@ -128,6 +129,14 @@ def enforce_ui_permissions(main_window):
                 idx = sv.tabs.indexOf(sv.feature_tab)
                 if idx >= 0:
                     sv.tabs.setTabVisible(idx, is_admin or has_permission(user, "database_maintenance", "view"))
+            if hasattr(sv, 'license_tab'):
+                idx = sv.tabs.indexOf(sv.license_tab)
+                if idx >= 0:
+                    sv.tabs.setTabVisible(idx, is_admin)
+            if hasattr(sv, 'lang_dict_tab'):
+                idx = sv.tabs.indexOf(sv.lang_dict_tab)
+                if idx >= 0:
+                    sv.tabs.setTabVisible(idx, is_admin or has_permission(user, "system_configuration", "view"))
 
     # 4. Action Buttons inside Master Views
     def enforce_crud_buttons(view, module_key):

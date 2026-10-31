@@ -70,9 +70,16 @@ def main():
     if login.exec() == LoginWindow.Accepted:
         # Successful login, spin up dashboard main window
         user_data = login.user_data
-        window = MainWindow(user_data=user_data)
-        window.showMaximized()
-        sys.exit(app.exec())
+        try:
+            window = MainWindow(user_data=user_data)
+            window.showMaximized()
+            sys.exit(app.exec())
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "Application Startup Error", f"An unexpected error occurred while loading the main window:\n\n{e}")
+            sys.exit(1)
     else:
         # User closed login dialog
         sys.exit(0)

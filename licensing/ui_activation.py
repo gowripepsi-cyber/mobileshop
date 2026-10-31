@@ -6,7 +6,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
     QMessageBox, QWidget, QTableWidget, QTableWidgetItem, QHeaderView, 
-    QApplication, QFrame, QCheckBox
+    QApplication, QFrame, QCheckBox, QTextEdit, QFileDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QClipboard
@@ -434,6 +434,12 @@ class VendorGeneratorDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
 
+        btn_revoke_lic = QPushButton("Revoke Active License")
+        btn_revoke_lic.setFixedHeight(38)
+        btn_revoke_lic.setStyleSheet("background-color: #dc2626; color: #ffffff; font-weight: bold;")
+        btn_revoke_lic.clicked.connect(self.handle_revoke_license)
+        btn_layout.addWidget(btn_revoke_lic)
+
         btn_reset_trial = QPushButton("Reset Trial Period")
         btn_reset_trial.setFixedHeight(38)
         btn_reset_trial.setStyleSheet("background-color: #ef4444; color: #ffffff;")
@@ -571,3 +577,275 @@ class VendorGeneratorDialog(QDialog):
                 self.accept()
             else:
                 QMessageBox.critical(self, "Error", "Failed to reset trial period.")
+
+    def handle_revoke_license(self):
+        confirm = QMessageBox.question(
+            self, "Confirm Revocation",
+            "Are you sure you want to REVOKE the active license on this machine?\n\n"
+            "The software will immediately revert to an unactivated state and require activation on next launch.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm == QMessageBox.Yes:
+            if manager.deactivate_software():
+                QMessageBox.information(
+                    self, "License Revoked",
+                    "The license has been successfully revoked from this machine.\n"
+                    "The application will now require activation."
+                )
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Notice", "No active license file was found to revoke.")
+
+
+class TransferSuccessDialog(QDialog):
+    """Dialog displayed after a successful license transfer showing the new key & certificate."""
+    def __init__(self, transfer_data: dict, parent=None):
+        super().__init__(parent)
+        self.transfer_data = transfer_data
+        self.setWindowTitle("License Transfer Completed Successfully")
+        self.setFixedSize(650, 520)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(15)
+
+        title = QLabel("LICENSE TRANSFERRED SUCCESSFULLY")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 17px; font-weight: bold; color: #10b981; letter-spacing: 1px;")
+        layout.addWidget(title)
+
+        info_box = QFrame()
+        info_box.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px; padding: 12px;")
+        info_layout = QVBoxLayout(info_box)
+        info_layout.setSpacing(8)
+
+        lbl_desc = QLabel(
+            "The license on <b>THIS computer has been deactivated</b>.<br>"
+            "A new activation key has been cryptographically generated for the target computer."
+        )
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet("color: #e2e8f0; font-size: 13px;")
+        info_layout.addWidget(lbl_desc)
+
+        lbl_mid = QLabel(f"<b>Target Machine ID:</b> <code style='color:#38bdf8;'>{self.transfer_data.get('to_machine_id')}</code>")
+        lbl_mid.setStyleSheet("color: #cbd5e1; font-size: 13px;")
+        info_layout.addWidget(lbl_mid)
+
+        layout.addWidget(info_box)
+
+        # Key Section
+        lbl_key_title = QLabel("New Activation Key (Copy & Paste on New PC):")
+        lbl_key_title.setStyleSheet("font-weight: bold; color: #f59e0b; font-size: 12px;")
+        layout.addWidget(lbl_key_title)
+
+        self.key_edit = QTextEdit()
+        self.key_edit.setPlainText(self.transfer_data.get("new_activation_key", ""))
+        self.key_edit.setReadOnly(True)
+        self.key_edit.setFixedHeight(75)
+        self.key_edit.setStyleSheet("font-family: monospace; font-size: 12px; background-color: #141426; color: #10b981; border: 1px solid #28284e; padding: 6px;")
+        layout.addWidget(self.key_edit)
+
+        # Action buttons for certificate and copying
+        tools_layout = QHBoxLayout()
+        btn_copy_key = QPushButton("📋 Copy Activation Key")
+        btn_copy_key.setFixedHeight(38)
+        btn_copy_key.setStyleSheet("background-color: #6366f1; color: #ffffff; font-weight: bold;")
+        btn_copy_key.clicked.connect(self.copy_key)
+        tools_layout.addWidget(btn_copy_key)
+
+        btn_save_cert = QPushButton("💾 Save Certificate (.txt)")
+        btn_save_cert.setFixedHeight(38)
+        btn_save_cert.setStyleSheet("background-color: #334155; color: #ffffff;")
+        btn_save_cert.clicked.connect(self.save_certificate)
+        tools_layout.addWidget(btn_save_cert)
+        layout.addLayout(tools_layout)
+
+        # Instructions
+        inst_lbl = QLabel(
+            "<b>Next Steps:</b><br>"
+            "1. Launch the application on the <b>New PC</b>.<br>"
+            "2. When prompted with 'Activation Required', paste this key and click <b>Activate Now</b>.<br>"
+            "<i>Note: A backup copy of this certificate was also saved on this computer at:<br>"
+            f"<code style='color:#94a3b8;'>{self.transfer_data.get('cert_path', '')}</code></i>"
+        )
+        inst_lbl.setWordWrap(True)
+        inst_lbl.setStyleSheet("color: #94a3b8; font-size: 12px; margin-top: 5px;")
+        layout.addWidget(inst_lbl)
+
+        layout.addStretch()
+
+        # Exit application button
+        btn_exit = QPushButton("Close and Exit Application")
+        btn_exit.setFixedHeight(42)
+        btn_exit.setStyleSheet("background-color: #ef4444; color: #ffffff; font-weight: bold;")
+        btn_exit.clicked.connect(self.handle_exit)
+        layout.addWidget(btn_exit)
+
+    def copy_key(self):
+        key = self.key_edit.toPlainText().strip()
+        QApplication.clipboard().setText(key)
+        QMessageBox.information(self, "Copied", "New Activation Key has been copied to your clipboard!")
+
+    def save_certificate(self):
+        cert_text = self.transfer_data.get("certificate_text", "")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Transfer Certificate",
+            os.path.join(os.path.expanduser("~"), "Desktop", "License_Transfer_Certificate.txt"),
+            "Text Files (*.txt);;All Files (*)"
+        )
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(cert_text)
+                QMessageBox.information(self, "Saved", f"Transfer certificate saved successfully to:\n{path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Save Error", f"Could not save certificate: {e}")
+
+    def handle_exit(self):
+        self.accept()
+        QApplication.quit()
+
+
+class TransferLicenseDialog(QDialog):
+    """Dialog allowing users to self-service transfer their active license to a new PC."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Self-Service License Transfer")
+        self.setFixedSize(580, 500)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(14)
+
+        title = QLabel("TRANSFER LICENSE TO ANOTHER PC")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #6366f1; letter-spacing: 1px;")
+        layout.addWidget(title)
+
+        # Instructions Frame
+        guide_box = QFrame()
+        guide_box.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px; padding: 12px;")
+        guide_layout = QVBoxLayout(guide_box)
+        guide_layout.setSpacing(6)
+
+        step_lbl = QLabel(
+            "<b>How to transfer your license:</b><br>"
+            "1. Install and launch this software on your <b>New Computer</b>.<br>"
+            "2. On the New Computer's activation screen, copy its <b>Machine ID</b>.<br>"
+            "3. Paste the New Machine ID below and click <b>Transfer & Deactivate</b>."
+        )
+        step_lbl.setWordWrap(True)
+        step_lbl.setStyleSheet("color: #e2e8f0; font-size: 12px;")
+        guide_layout.addWidget(step_lbl)
+        layout.addWidget(guide_box)
+
+        # Current Machine ID
+        cur_mid = manager.generate_machine_id()
+        cur_layout = QHBoxLayout()
+        lbl_cur = QLabel("This PC Machine ID:")
+        lbl_cur.setFixedWidth(160)
+        lbl_cur.setStyleSheet("font-weight: bold; color: #94a3b8;")
+        self.cur_mid_edit = QLineEdit(cur_mid)
+        self.cur_mid_edit.setReadOnly(True)
+        self.cur_mid_edit.setFixedHeight(35)
+        self.cur_mid_edit.setStyleSheet("background-color: #141426; color: #38bdf8; font-family: monospace; font-size: 13px; border: 1px solid #28284e; padding: 4px;")
+        cur_layout.addWidget(lbl_cur)
+        cur_layout.addWidget(self.cur_mid_edit)
+        layout.addLayout(cur_layout)
+
+        # Target Machine ID Input
+        tgt_layout = QHBoxLayout()
+        lbl_tgt = QLabel("New PC Machine ID *:")
+        lbl_tgt.setFixedWidth(160)
+        lbl_tgt.setStyleSheet("font-weight: bold; color: #ffffff;")
+        self.tgt_mid_edit = QLineEdit()
+        self.tgt_mid_edit.setPlaceholderText("XXXX-XXXX-XXXX-XXXX")
+        self.tgt_mid_edit.setFixedHeight(38)
+        self.tgt_mid_edit.setStyleSheet("font-family: monospace; font-size: 14px; padding: 5px; border: 1px solid #6366f1;")
+        tgt_layout.addWidget(lbl_tgt)
+        tgt_layout.addWidget(self.tgt_mid_edit)
+        layout.addLayout(tgt_layout)
+
+        # Warning Card
+        warn_box = QFrame()
+        warn_box.setStyleSheet("background-color: #2a1515; border: 1px solid #7f1d1d; border-radius: 6px; padding: 10px;")
+        warn_layout = QVBoxLayout(warn_box)
+        warn_text = QLabel(
+            "⚠️ <b>WARNING - PERMANENT ACTION:</b><br>"
+            "This will immediately <b>REVOKE and deactivate</b> the license on THIS computer.<br>"
+            "You will not be able to run the software on this machine without a new license key."
+        )
+        warn_text.setWordWrap(True)
+        warn_text.setStyleSheet("color: #fca5a5; font-size: 12px;")
+        warn_layout.addWidget(warn_text)
+        layout.addWidget(warn_box)
+
+        layout.addStretch()
+
+        # Action Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        self.btn_transfer = QPushButton("Transfer & Deactivate This PC")
+        self.btn_transfer.setFixedHeight(42)
+        self.btn_transfer.setStyleSheet("background-color: #f59e0b; color: #000000; font-weight: bold; font-size: 13px;")
+        self.btn_transfer.clicked.connect(self.handle_transfer)
+        btn_layout.addWidget(self.btn_transfer)
+
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setFixedHeight(42)
+        btn_cancel.setStyleSheet("background-color: #334155; color: #ffffff;")
+        btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancel)
+
+        layout.addLayout(btn_layout)
+
+    def handle_transfer(self):
+        target_mid = self.tgt_mid_edit.text().strip().upper()
+        if not target_mid:
+            QMessageBox.warning(self, "Validation Error", "Please enter the Target Machine ID from the new computer.")
+            return
+
+        clean = target_mid.replace("-", "").replace(" ", "")
+        if len(clean) != 16 or not clean.isalnum():
+            QMessageBox.warning(
+                self, "Invalid Machine ID",
+                "Machine ID must consist of 16 characters in format XXXX-XXXX-XXXX-XXXX."
+            )
+            return
+
+        cur_mid = manager.generate_machine_id()
+        formatted_target = f"{clean[0:4]}-{clean[4:8]}-{clean[8:12]}-{clean[12:16]}"
+        if formatted_target == cur_mid:
+            QMessageBox.warning(
+                self, "Invalid Target",
+                "The target Machine ID cannot be the same as this computer's Machine ID."
+            )
+            return
+
+        confirm = QMessageBox.question(
+            self, "Confirm Permanent License Transfer",
+            f"Are you sure you want to transfer your license to:\n\n"
+            f"Target Machine ID: {formatted_target}\n\n"
+            "This computer will be immediately DEACTIVATED and closed.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        result = manager.transfer_license(formatted_target)
+        if not result.get("success"):
+            QMessageBox.critical(self, "Transfer Failed", result.get("error", "An error occurred during transfer."))
+            return
+
+        self.hide()
+        success_dlg = TransferSuccessDialog(result, self.parent())
+        success_dlg.exec()
+        self.accept()
+

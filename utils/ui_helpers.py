@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpin
                              QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter,
                              QPushButton, QToolButton, QSpinBox, QDoubleSpinBox,
                              QProxyStyle, QStyle)
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QDoubleValidator, QIntValidator
 from PySide6.QtSvg import QSvgRenderer
 
 EYE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e2e8f0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -198,6 +198,11 @@ class EnterNavigationFilter(QObject):
                 event.ignore()
                 return True
 
+        # Universal smart amount & numeric entry behavior
+        target_line = self._get_amount_line_edit(obj)
+        if target_line:
+            self._handle_amount_event(target_line, event)
+
         if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
             # Do not intercept if a popup (like QComboBox popup or QCompleter popup) is active
             if QApplication.activePopupWidget() is not None:
@@ -235,6 +240,89 @@ class EnterNavigationFilter(QObject):
         if isinstance(widget, (QLineEdit, QComboBox, QAbstractSpinBox, QDateTimeEdit)):
             return True
         return False
+
+    def _get_amount_line_edit(self, obj):
+        if isinstance(obj, QAbstractSpinBox):
+            return obj.lineEdit()
+        if isinstance(obj, QLineEdit):
+            return obj
+        return None
+
+    def _is_amount_or_numeric_field(self, line_edit):
+        if not isinstance(line_edit, QLineEdit):
+            return False
+        if line_edit.echoMode() != QLineEdit.Normal or line_edit.isReadOnly():
+            return False
+        parent = getattr(line_edit, 'parent', lambda: None)()
+        if isinstance(parent, QComboBox):
+            return False
+        if isinstance(parent, QAbstractSpinBox):
+            return True
+        if type(line_edit).__name__ == 'AmountLineEdit':
+            return True
+        val = line_edit.validator()
+        if val is not None and isinstance(val, (QDoubleValidator, QIntValidator)):
+            return True
+        if line_edit.property('is_amount') or (parent and parent.property('is_amount')):
+            return True
+        if getattr(line_edit, '_is_amount', False) or (parent and getattr(parent, '_is_amount', False)):
+            return True
+        ph = (line_edit.placeholderText() or '').strip()
+        if ph in ('0.00', '0.0', '0'):
+            return True
+        raw = line_edit.text().strip()
+        clean = raw.replace('₹', '').replace('$', '').replace(',', '').strip()
+        if clean in ('0', '0.0', '0.00', '0.01'):
+            return True
+        if '₹' in raw:
+            return True
+        obj_name = (line_edit.objectName() or '').lower()
+        if any(k in obj_name for k in ['amount', 'price', 'rate', 'cost', 'charge', 'balance', 'discount', 'paid', 'refund']):
+            return True
+        if clean != '' and clean.replace('.', '', 1).isdigit() and not any(ch.isalpha() for ch in raw):
+            return True
+        return False
+
+    def _handle_amount_event(self, target, event):
+        if not self._is_amount_or_numeric_field(target):
+            return
+
+        parent = getattr(target, 'parent', lambda: None)()
+        is_spin = isinstance(parent, QAbstractSpinBox)
+        raw = target.text().strip()
+        clean = raw.replace('₹', '').replace('$', '').replace(',', '').strip()
+
+        if event.type() == QEvent.FocusIn:
+            target._focus_by_mouse = False
+            if clean in ('0', '0.0', '0.00', '0.01'):
+                if is_spin and hasattr(parent, 'setMinimum') and parent.minimum() > 0:
+                    parent.setMinimum(0.0)
+                QTimer.singleShot(0, target.clear)
+            elif clean != '':
+                QTimer.singleShot(0, target.selectAll)
+
+        elif event.type() == QEvent.MouseButtonPress:
+            if not target.hasFocus():
+                target._focus_by_mouse = True
+
+        elif event.type() == QEvent.MouseButtonRelease:
+            if clean in ('0', '0.0', '0.00', '0.01'):
+                if is_spin and hasattr(parent, 'setMinimum') and parent.minimum() > 0:
+                    parent.setMinimum(0.0)
+                QTimer.singleShot(0, target.clear)
+            elif getattr(target, '_focus_by_mouse', False):
+                target._focus_by_mouse = False
+                if clean != '':
+                    QTimer.singleShot(0, target.selectAll)
+
+        elif event.type() == QEvent.FocusOut:
+            if target.text().strip() == '':
+                if is_spin:
+                    parent.setValue(0.0)
+                    dec = parent.decimals() if hasattr(parent, 'decimals') else (0 if isinstance(parent, QSpinBox) else 2)
+                    target.setText(f'{0.0:.{dec}f}' if dec > 0 else '0')
+                elif target.placeholderText() != '0.00':
+                    target.setText('0.00')
 
 class NoFocusProxyStyle(QProxyStyle):
     """

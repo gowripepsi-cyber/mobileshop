@@ -22,6 +22,7 @@ class CustomerDialog(QDialog):
         self.address_input = QLineEdit()
         self.gst_input = QLineEdit()
         self.outstanding_input = QLineEdit()
+        self.outstanding_input.setProperty("is_amount", True)
         self.outstanding_input.setText("0.00")
 
         if not self.customer and self.initial_name:

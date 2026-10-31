@@ -771,8 +771,10 @@ class BillingDialog(QDialog):
                 btn_layout.setSpacing(0)
                 btn_layout.setAlignment(Qt.AlignCenter)
 
-                del_btn = QPushButton("Remove")
-                del_btn.setProperty("class", "btn-action-delete")
+                del_btn = QPushButton("🗑️")
+                del_btn.setToolTip("Remove Part")
+                del_btn.setCursor(Qt.PointingHandCursor)
+                del_btn.setProperty("class", "btn-action-icon-delete")
                 del_btn.clicked.connect(lambda checked, idx=i: self.delete_part(idx))
                 btn_layout.addWidget(del_btn)
                 self.parts_table.setCellWidget(i, 4, btn_container)
@@ -941,25 +943,26 @@ class ServicesView(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels([
-            "Job #", "Customer", "Mobile", "Device Detail", 
+            "Job #", "Created Date", "Customer", "Mobile", "Device Detail", 
             "Status", "Labor (₹)", "Total (₹)", "Balance (₹)", "Actions"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         
-        # Reduce width of Labor, Total, and Balance columns by ~10%
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 80)
+        # Reduce width of Labor, Total, and Balance columns
         self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
-        self.table.setColumnWidth(6, 90)
+        self.table.setColumnWidth(6, 80)
         self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
         self.table.setColumnWidth(7, 90)
-        
-        # Reallocate freed space to Actions column
         self.table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
-        self.table.setColumnWidth(8, 380)
+        self.table.setColumnWidth(8, 90)
+        
+        # Actions column with compact logo buttons
+        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
+        self.table.setColumnWidth(9, 180)
         
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
@@ -1016,9 +1019,19 @@ class ServicesView(QWidget):
             for offset_idx, j in enumerate(jobs):
                 i = start_row + offset_idx
                 self.table.setItem(i, 0, QTableWidgetItem(j.job_number))
-                self.table.setItem(i, 1, QTableWidgetItem(j.customer_name))
-                self.table.setItem(i, 2, QTableWidgetItem(j.mobile))
-                self.table.setItem(i, 3, QTableWidgetItem(j.device_model))
+
+                # Column 1: Created Date (2nd Column)
+                if j.created_at:
+                    date_str = j.created_at.strftime("%Y-%m-%d %H:%M") if hasattr(j.created_at, 'strftime') else str(j.created_at)
+                else:
+                    date_str = ""
+                date_item = QTableWidgetItem(date_str)
+                date_item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(i, 1, date_item)
+
+                self.table.setItem(i, 2, QTableWidgetItem(j.customer_name))
+                self.table.setItem(i, 3, QTableWidgetItem(j.mobile))
+                self.table.setItem(i, 4, QTableWidgetItem(j.device_model))
                 
                 status_item = QTableWidgetItem(j.status)
                 # Color status tags
@@ -1030,44 +1043,52 @@ class ServicesView(QWidget):
                     status_item.setForeground(Qt.green)
                 elif j.status == "Delivered":
                     status_item.setForeground(Qt.gray)
-                self.table.setItem(i, 4, status_item)
+                self.table.setItem(i, 5, status_item)
 
-                self.table.setItem(i, 5, QTableWidgetItem(f"₹{j.service_charge:,.2f}"))
-                self.table.setItem(i, 6, QTableWidgetItem(f"₹{j.total_amount:,.2f}"))
+                self.table.setItem(i, 6, QTableWidgetItem(f"₹{j.service_charge:,.2f}"))
+                self.table.setItem(i, 7, QTableWidgetItem(f"₹{j.total_amount:,.2f}"))
                 
                 bal_item = QTableWidgetItem(f"₹{j.balance:,.2f}")
                 if j.balance > 0:
                     bal_item.setForeground(Qt.red)
-                self.table.setItem(i, 7, bal_item)
+                self.table.setItem(i, 8, bal_item)
 
-                # Action Buttons
+                # Action Buttons (Logos)
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 4, 6, 4)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(6)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
-                view_btn = QPushButton("View")
-                view_btn.setProperty("class", "btn-action-view")
+                view_btn = QPushButton("👁")
+                view_btn.setToolTip("View Job Card Details")
+                view_btn.setCursor(Qt.PointingHandCursor)
+                view_btn.setProperty("class", "btn-action-icon-view")
                 view_btn.clicked.connect(lambda checked, jnum=j.job_number: self.view_job_details(jnum))
                 actions_layout.addWidget(view_btn)
                 
-                bill_btn = QPushButton("Bill")
-                bill_btn.setProperty("class", "btn-action-success")
+                bill_btn = QPushButton("🧾")
+                bill_btn.setToolTip("Generate Bill / Invoice")
+                bill_btn.setCursor(Qt.PointingHandCursor)
+                bill_btn.setProperty("class", "btn-action-icon-success")
                 bill_btn.clicked.connect(lambda checked, jnum=j.job_number: self.bill_job(job_number=jnum))
                 actions_layout.addWidget(bill_btn)
                 
-                edit_btn = QPushButton("Edit")
-                edit_btn.setProperty("class", "btn-action-edit")
+                edit_btn = QPushButton("✏️")
+                edit_btn.setToolTip("Edit Job Card")
+                edit_btn.setCursor(Qt.PointingHandCursor)
+                edit_btn.setProperty("class", "btn-action-icon-edit")
                 edit_btn.clicked.connect(lambda checked, jnum=j.job_number: self.edit_job(job_number=jnum))
                 actions_layout.addWidget(edit_btn)
                 
-                del_btn = QPushButton("Delete")
-                del_btn.setProperty("class", "btn-action-delete")
+                del_btn = QPushButton("🗑️")
+                del_btn.setToolTip("Delete Job Card")
+                del_btn.setCursor(Qt.PointingHandCursor)
+                del_btn.setProperty("class", "btn-action-icon-delete")
                 del_btn.clicked.connect(lambda checked, jnum=j.job_number: self.delete_job_invoice(jnum))
                 actions_layout.addWidget(del_btn)
                 
-                self.table.setCellWidget(i, 8, actions_widget)
+                self.table.setCellWidget(i, 9, actions_widget)
 
         except Exception as e:
             print(f"Error loading service jobs: {e}")

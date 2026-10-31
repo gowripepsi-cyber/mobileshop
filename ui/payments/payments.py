@@ -100,7 +100,8 @@ class PaymentsView(QWidget):
         self.c_date.setDate(QDate.currentDate())
 
         self.c_amount = QDoubleSpinBox()
-        self.c_amount.setRange(0.01, 9999999.0)
+        self.c_amount.setRange(0.0, 9999999.0)
+        self.c_amount.setValue(0.0)
         self.c_amount.setDecimals(2)
 
         self.c_mode = QComboBox()
@@ -200,7 +201,8 @@ class PaymentsView(QWidget):
         self.s_date.setDate(QDate.currentDate())
 
         self.s_amount = QDoubleSpinBox()
-        self.s_amount.setRange(0.01, 9999999.0)
+        self.s_amount.setRange(0.0, 9999999.0)
+        self.s_amount.setValue(0.0)
         self.s_amount.setDecimals(2)
 
         self.s_mode = QComboBox()
@@ -315,7 +317,8 @@ class PaymentsView(QWidget):
         self.t_from.currentIndexChanged.connect(self.handle_transfer_source_change)
 
         self.t_amount = QDoubleSpinBox()
-        self.t_amount.setRange(0.01, 9999999.0)
+        self.t_amount.setRange(0.0, 9999999.0)
+        self.t_amount.setValue(0.0)
         self.t_amount.setDecimals(2)
 
         self.t_remarks = QLineEdit()
@@ -571,7 +574,8 @@ class PaymentsView(QWidget):
         self.d_bank.setEnabled(False)
 
         self.d_amount = QDoubleSpinBox()
-        self.d_amount.setRange(0.01, 9999999.0)
+        self.d_amount.setRange(0.0, 9999999.0)
+        self.d_amount.setValue(0.0)
         self.d_amount.setDecimals(2)
 
         self.d_desc = QLineEdit()
@@ -1261,6 +1265,10 @@ class PaymentsView(QWidget):
             QMessageBox.warning(self, "Validation Error", "Please select a Customer.")
             return
 
+        if amount <= 0:
+            QMessageBox.warning(self, "Validation Error", "Please enter an amount greater than zero.")
+            return
+
         date_q = self.c_date.date()
         tx_date = datetime.date(date_q.year(), date_q.month(), date_q.day())
 
@@ -1340,6 +1348,10 @@ class PaymentsView(QWidget):
 
         if not supp_id:
             QMessageBox.warning(self, "Validation Error", "Please select a Supplier.")
+            return
+
+        if amount <= 0:
+            QMessageBox.warning(self, "Validation Error", "Please enter an amount greater than zero.")
             return
 
         date_q = self.s_date.date()

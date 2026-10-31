@@ -13,6 +13,8 @@ from ui.payments.payments import PaymentsView
 from ui.reports.reports import ReportsView
 from ui.settings.settings import SettingsView
 from ui.money_transfer import MoneyTransferView
+from ui.banking.bank_cash_view import BankCashView
+from utils.translator import tr, get_current_language, set_current_language
 
 class MainWindow(QMainWindow):
     def __init__(self, user_data, parent=None):
@@ -53,6 +55,7 @@ class MainWindow(QMainWindow):
             ("Sales Invoice", 3),
             ("Service Cards", 4),
             ("Payments", 5),
+            ("Bank & Cash", 9),
             ("Reports", 6),
             ("Settings", 7),
             ("UPI / Money Transfer", 8),
@@ -68,7 +71,8 @@ class MainWindow(QMainWindow):
             5: "Ctrl+6",
             6: "Ctrl+7",
             7: "Ctrl+,",
-            8: "Ctrl+Shift+M"
+            8: "Ctrl+Shift+M",
+            9: "Ctrl+8"
         }
 
         for text, index in nav_items:
@@ -82,10 +86,12 @@ class MainWindow(QMainWindow):
             btn_layout.setSpacing(8)
             
             # Title Label (left side)
-            lbl_text = QLabel(text)
+            lbl_text = QLabel(tr(text))
             lbl_text.setObjectName("btn_label")
             lbl_text.setAttribute(Qt.WA_TransparentForMouseEvents)
             btn_layout.addWidget(lbl_text)
+            btn.label = lbl_text
+            btn.orig_text = text
             
             # Stretch spacer to push shortcut label to the right
             btn_layout.addStretch()
@@ -108,7 +114,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
         # Logout Button
-        self.logout_btn = QPushButton("Log Out")
+        self.logout_btn = QPushButton(tr("Log Out"))
         self.logout_btn.setObjectName("logout_btn")
         self.logout_btn.setStyleSheet("color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); margin-bottom: 20px;")
         self.logout_btn.clicked.connect(self.handle_logout)
@@ -133,9 +139,25 @@ class MainWindow(QMainWindow):
 
         header_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        user_info = QLabel(f"Welcome, {self.user_data['username']} ({self.user_data['role']})")
+        user_info = QLabel(f"{tr('Welcome')}, {self.user_data['username']} ({self.user_data['role']})")
         user_info.setStyleSheet("color: #94a3b8; font-size: 13px; font-weight: 500;")
         header_layout.addWidget(user_info)
+        self.user_info_label = user_info
+
+        header_layout.addSpacing(15)
+
+        # Language Toggle Button (English ⇄ தமிழ்)
+        curr_lang = get_current_language()
+        self.lang_btn = QPushButton("🌐 தமிழ்" if curr_lang == 'en' else "🌐 English")
+        self.lang_btn.setToolTip("Switch Language / மொழி மாற்றம் (English ⇄ தமிழ்)")
+        self.lang_btn.setCursor(Qt.PointingHandCursor)
+        self.lang_btn.setFixedHeight(30)
+        self.lang_btn.setStyleSheet(
+            "background-color: #1e1b4b; color: #a5b4fc; border: 1px solid #4338ca; "
+            "border-radius: 6px; padding: 2px 12px; font-weight: bold; font-size: 11px;"
+        )
+        self.lang_btn.clicked.connect(self.toggle_language)
+        header_layout.addWidget(self.lang_btn)
 
         content_wrapper_layout.addWidget(header)
 
@@ -159,17 +181,19 @@ class MainWindow(QMainWindow):
         self.reports_view = ReportsView(self)
         self.settings_view = SettingsView(self)
         self.money_transfer_view = MoneyTransferView(self)
+        self.bank_cash_view = BankCashView(self)
 
         # Add Views to Stacked Widget in order
-        self.stacked_widget.addWidget(self.dashboard_view)      # 0
-        self.stacked_widget.addWidget(self.masters_view)        # 1
-        self.stacked_widget.addWidget(self.purchase_view)       # 2
-        self.stacked_widget.addWidget(self.sales_view)          # 3
-        self.stacked_widget.addWidget(self.services_view)       # 4
-        self.stacked_widget.addWidget(self.payments_view)       # 5
-        self.stacked_widget.addWidget(self.reports_view)        # 6
-        self.stacked_widget.addWidget(self.settings_view)       # 7
-        self.stacked_widget.addWidget(self.money_transfer_view)  # 8
+        self.stacked_widget.addWidget(self.dashboard_view)       # 0
+        self.stacked_widget.addWidget(self.masters_view)         # 1
+        self.stacked_widget.addWidget(self.purchase_view)        # 2
+        self.stacked_widget.addWidget(self.sales_view)           # 3
+        self.stacked_widget.addWidget(self.services_view)        # 4
+        self.stacked_widget.addWidget(self.payments_view)        # 5
+        self.stacked_widget.addWidget(self.reports_view)         # 6
+        self.stacked_widget.addWidget(self.settings_view)        # 7
+        self.stacked_widget.addWidget(self.money_transfer_view)   # 8
+        self.stacked_widget.addWidget(self.bank_cash_view)        # 9
 
         content_wrapper_layout.addWidget(self.stacked_widget)
         main_layout.addWidget(content_wrapper)
@@ -205,6 +229,7 @@ class MainWindow(QMainWindow):
                 if not self.nav_buttons[idx].isHidden():
                     default_index = idx
                     break
+        self.apply_language_change()
         self.switch_view(default_index)
 
     def update_shop_name(self):
@@ -231,6 +256,17 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(index)
         
         # Update Header Title
+        self.update_header_title_for_index(index)
+
+        # Refresh the view data when selected
+        widget = self.stacked_widget.widget(index)
+        if hasattr(widget, "refresh_data"):
+            widget.refresh_data()
+
+        from utils.permissions import enforce_ui_permissions
+        enforce_ui_permissions(self)
+
+    def update_header_title_for_index(self, index):
         title_map = {
             0: "Dashboard",
             1: "Master Records",
@@ -240,17 +276,48 @@ class MainWindow(QMainWindow):
             5: "Payments Ledger",
             6: "Reports & Financial Analysis",
             7: "System Settings & Database Admin",
-            8: "UPI / Money Transfer"
+            8: "UPI / Money Transfer",
+            9: "Bank Accounts & Cash Drawer Management"
         }
-        self.header_title.setText(title_map.get(index, "Inventory & Accounting"))
+        raw_title = title_map.get(index, "Inventory & Accounting")
+        self.header_title.setText(tr(raw_title))
 
-        # Refresh the view data when selected
-        widget = self.stacked_widget.widget(index)
-        if hasattr(widget, "refresh_data"):
-            widget.refresh_data()
+    def toggle_language(self):
+        curr = get_current_language()
+        new_lang = "ta" if curr == "en" else "en"
+        set_current_language(new_lang)
+        self.apply_language_change()
 
-        from utils.permissions import enforce_ui_permissions
-        enforce_ui_permissions(self)
+    def apply_language_change(self):
+        curr = get_current_language()
+        
+        # 1. Update language button text
+        if hasattr(self, 'lang_btn'):
+            self.lang_btn.setText("🌐 தமிழ்" if curr == 'en' else "🌐 English")
+
+        # 2. Update sidebar buttons
+        if hasattr(self, 'nav_buttons'):
+            for idx, btn in self.nav_buttons.items():
+                if hasattr(btn, 'label') and hasattr(btn, 'orig_text'):
+                    btn.label.setText(tr(btn.orig_text))
+
+        # 3. Update logout button
+        if hasattr(self, 'logout_btn'):
+            self.logout_btn.setText(tr("Log Out"))
+
+        # 4. Update user welcome label
+        if hasattr(self, 'user_info_label'):
+            self.user_info_label.setText(f"{tr('Welcome')}, {self.user_data['username']} ({self.user_data['role']})")
+
+        # 5. Update header title
+        curr_idx = self.stacked_widget.currentIndex()
+        self.update_header_title_for_index(curr_idx)
+
+        # 6. Retranslate views if supported
+        for idx in range(self.stacked_widget.count()):
+            w = self.stacked_widget.widget(idx)
+            if hasattr(w, 'retranslate_ui'):
+                w.retranslate_ui()
 
     def open_master_tab(self, tab_index):
         self.switch_view(1)

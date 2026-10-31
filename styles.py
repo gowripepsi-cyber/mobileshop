@@ -656,6 +656,88 @@ QPushButton[class="btn-action-success"]:pressed {
     background-color: #047857;
 }
 
+/* Compact Table Action Icon Buttons (Logos) */
+QPushButton[class="btn-action-icon-view"] {
+    background-color: #3b82f6;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 6px;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border: none;
+    padding: 0px !important;
+}
+QPushButton[class="btn-action-icon-view"]:hover {
+    background-color: #2563eb;
+}
+QPushButton[class="btn-action-icon-view"]:pressed {
+    background-color: #1d4ed8;
+}
+
+QPushButton[class="btn-action-icon-success"] {
+    background-color: #10b981;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 6px;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border: none;
+    padding: 0px !important;
+}
+QPushButton[class="btn-action-icon-success"]:hover {
+    background-color: #059669;
+}
+QPushButton[class="btn-action-icon-success"]:pressed {
+    background-color: #047857;
+}
+
+QPushButton[class="btn-action-icon-edit"] {
+    background-color: #f59e0b;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 6px;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border: none;
+    padding: 0px !important;
+}
+QPushButton[class="btn-action-icon-edit"]:hover {
+    background-color: #d97706;
+}
+QPushButton[class="btn-action-icon-edit"]:pressed {
+    background-color: #b45309;
+}
+
+QPushButton[class="btn-action-icon-delete"] {
+    background-color: #ef4444;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 6px;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border: none;
+    padding: 0px !important;
+}
+QPushButton[class="btn-action-icon-delete"]:hover {
+    background-color: #dc2626;
+}
+QPushButton[class="btn-action-icon-delete"]:pressed {
+    background-color: #b91c1c;
+}
+
+
 /* GroupBox Styling */
 QGroupBox {
     font-weight: bold;

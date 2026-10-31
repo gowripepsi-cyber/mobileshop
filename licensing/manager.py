@@ -258,3 +258,118 @@ def reset_trial() -> bool:
             return False
     return True
 
+def get_license_info() -> dict:
+    """Returns detailed license status and machine information for UI display."""
+    status_dict = check_license_status()
+    machine_id = generate_machine_id()
+    lic_path = get_license_file_path()
+    has_file = os.path.exists(lic_path)
+    
+    return {
+        "status": status_dict.get("status", "unactivated"),
+        "machine_id": machine_id,
+        "message": status_dict.get("message", ""),
+        "days_remaining": status_dict.get("days_remaining", 0),
+        "license_file": lic_path,
+        "is_active": status_dict.get("status") == "active",
+        "has_license_file": has_file
+    }
+
+def transfer_license(target_machine_id: str) -> dict:
+    """Transfers the active license from this machine to target_machine_id.
+    
+    1. Validates target machine ID format.
+    2. Validates this machine has an active valid license.
+    3. Signs an activation key for target_machine_id.
+    4. Generates a signed deactivation certificate.
+    5. Saves certificate to local storage.
+    6. Deactivates local license (removes license.lic).
+    """
+    current_mid = generate_machine_id()
+    clean_target = target_machine_id.strip().upper().replace("-", "").replace(" ", "")
+    
+    if len(clean_target) != 16 or not clean_target.isalnum():
+        return {
+            "success": False,
+            "error": "Invalid Target Machine ID format. Must be 16 alphanumeric characters (XXXX-XXXX-XXXX-XXXX)."
+        }
+        
+    formatted_target = f"{clean_target[0:4]}-{clean_target[4:8]}-{clean_target[8:12]}-{clean_target[12:16]}"
+    
+    if formatted_target == current_mid:
+        return {
+            "success": False,
+            "error": "Target Machine ID cannot be the same as this machine's ID."
+        }
+        
+    status = check_license_status()
+    if status.get("status") != "active":
+        return {
+            "success": False,
+            "error": "Cannot transfer license: This machine does not currently have an active, valid license."
+        }
+        
+    lic_data = load_license(current_mid)
+    orig_key = lic_data.get("activation_key", "") if lic_data else ""
+    
+    # Generate cryptographic activation key for target machine
+    new_activation_key = crypto_utils.sign_data(
+        crypto_utils.DEFAULT_PRIVATE_KEY,
+        formatted_target.encode('utf-8')
+    )
+    
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    transfer_hash = hashlib.sha256(f"{current_mid}:{formatted_target}:{now_str}".encode('utf-8')).hexdigest().upper()
+    cert_code = f"XFER-{transfer_hash[0:4]}-{transfer_hash[4:8]}-{transfer_hash[8:12]}-{transfer_hash[12:16]}"
+    
+    certificate_text = (
+        "======================================================================\n"
+        "                OFFICIAL LICENSE TRANSFER CERTIFICATE                 \n"
+        "======================================================================\n"
+        f"Certificate ID        : {cert_code}\n"
+        f"Deactivation Time     : {now_str}\n"
+        f"Source Machine (Old)  : {current_mid}\n"
+        f"Target Machine (New)  : {formatted_target}\n"
+        "----------------------------------------------------------------------\n"
+        f"NEW TARGET ACTIVATION KEY:\n"
+        f"{new_activation_key}\n"
+        "----------------------------------------------------------------------\n"
+        "TRANSFER VERIFICATION & STATUS:\n"
+        "- License on Source Machine (Old PC) has been permanently revoked.\n"
+        "- This new activation key is cryptographically bound to the Target PC.\n"
+        "\n"
+        "NEXT STEPS:\n"
+        "1. Open the application on the Target PC.\n"
+        "2. When prompted with 'Activation Required', paste the NEW ACTIVATION KEY.\n"
+        "3. Click 'Activate Now' to complete your transfer.\n"
+        "======================================================================\n"
+    )
+    
+    cert_path = os.path.join(get_storage_dir(), "last_transfer_certificate.txt")
+    try:
+        with open(cert_path, "w", encoding="utf-8") as f:
+            f.write(certificate_text)
+    except Exception as e:
+        print(f"Warning: could not write certificate file: {e}")
+        
+    # Also record in vendor history db if accessible
+    try:
+        from licensing.ui_activation import add_history_entry
+        add_history_entry(formatted_target, f"[TRANSFERRED from {current_mid}] {new_activation_key}")
+    except Exception:
+        pass
+        
+    # Revoke license on this machine
+    deactivate_software()
+    
+    return {
+        "success": True,
+        "cert_code": cert_code,
+        "from_machine_id": current_mid,
+        "to_machine_id": formatted_target,
+        "new_activation_key": new_activation_key,
+        "certificate_text": certificate_text,
+        "cert_path": cert_path
+    }
+
+

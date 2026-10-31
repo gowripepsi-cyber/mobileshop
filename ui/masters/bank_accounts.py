@@ -27,6 +27,7 @@ class BankAccountDialog(QDialog):
         self.account_type_combo.setCurrentText("Current")
 
         self.balance_input = QLineEdit()
+        self.balance_input.setProperty("is_amount", True)
         self.balance_input.setText("0.00")
 
         form_layout.addRow("Bank Name *:", self.bank_name_input)
@@ -59,8 +60,20 @@ class BankAccountDialog(QDialog):
             if idx >= 0:
                 self.account_type_combo.setCurrentIndex(idx)
                 
-            self.balance_input.setText(str(self.account.balance))
-            self.balance_input.setEnabled(False) # Prevent modifying opening balance directly after creation
+            # Retrieve initial opening balance transaction
+            session = Session()
+            try:
+                op_tx = session.query(BankTransaction).filter_by(
+                    account_id=self.account.id,
+                    description="Opening Balance"
+                ).first()
+                self.orig_opening_balance = op_tx.amount if op_tx else 0.0
+            finally:
+                session.close()
+
+            self.balance_input.setText(f"{self.orig_opening_balance:.2f}")
+            self.balance_input.setEnabled(True)
+            self.balance_input.setToolTip("Edit initial opening balance (adjusts current balance accordingly)")
 
     def handle_save(self):
         bank_name = self.bank_name_input.text().strip()
@@ -86,6 +99,26 @@ class BankAccountDialog(QDialog):
                 acc.account_number = account_number
                 acc.account_name = account_name
                 acc.account_type = account_type
+
+                # Update opening balance and adjust current balance by the difference
+                old_op = getattr(self, 'orig_opening_balance', 0.0)
+                diff = balance - old_op
+                if abs(diff) > 0.001:
+                    op_tx = session.query(BankTransaction).filter_by(
+                        account_id=acc.id,
+                        description="Opening Balance"
+                    ).first()
+                    if op_tx:
+                        op_tx.amount = balance
+                    elif balance > 0:
+                        session.add(BankTransaction(
+                            account_id=acc.id,
+                            transaction_type='deposit',
+                            amount=balance,
+                            source_type='direct',
+                            description="Opening Balance"
+                        ))
+                    acc.balance += diff
             else:
                 new_acc = BankAccount(
                     bank_name=bank_name,

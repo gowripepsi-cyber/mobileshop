@@ -27,6 +27,7 @@ class SupplierDialog(QDialog):
         self.upi_id_input = QLineEdit()
         
         self.outstanding_input = QLineEdit()
+        self.outstanding_input.setProperty("is_amount", True)
         self.outstanding_input.setText("0.00")
 
         if not self.supplier and self.initial_name:
