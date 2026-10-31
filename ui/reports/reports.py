@@ -74,7 +74,7 @@ class ReportsView(QWidget):
         cash_layout.addWidget(self.cash_table)
         
         self.cash_balance_lbl = QLabel("Cash in Hand: ₹0.00")
-        self.cash_balance_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #10b981;")
+        self.cash_balance_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #8fd53b;")
         cash_layout.addWidget(self.cash_balance_lbl)
 
         layout.addWidget(cash_frame)
@@ -261,7 +261,7 @@ class ReportsView(QWidget):
 
         kpis_grid.addWidget(make_kpi_widget("Total Purchase Value", self.kpi_purchase_val, "#ffffff"), 0, 0)
         kpis_grid.addWidget(make_kpi_widget("Total Sales Value", self.kpi_sales_val, "#ffffff"), 0, 1)
-        kpis_grid.addWidget(make_kpi_widget("Total Gross Profit", self.kpi_gross_profit, "#10b981"), 0, 2)
+        kpis_grid.addWidget(make_kpi_widget("Total Gross Profit", self.kpi_gross_profit, "#8fd53b"), 0, 2)
         kpis_grid.addWidget(make_kpi_widget("Total Interest Cost", self.kpi_interest_cost, "#ef4444"), 1, 0)
         kpis_grid.addWidget(make_kpi_widget("Total Net Profit", self.kpi_net_profit, "#6366f1"), 1, 1)
         kpis_grid.addWidget(make_kpi_widget("Average Days in Stock", self.kpi_avg_days, "#3b82f6"), 1, 2)
@@ -277,7 +277,7 @@ class ReportsView(QWidget):
 
         fast_col = QVBoxLayout()
         fast_title = QLabel("<b>Fast Moving (Top 3)</b>")
-        fast_title.setStyleSheet("color: #10b981; font-weight: bold; font-size: 11px;")
+        fast_title.setStyleSheet("color: #8fd53b; font-weight: bold; font-size: 11px;")
         self.fast_moving_list = QLabel("No sales records.")
         self.fast_moving_list.setStyleSheet("color: #e2e8f0; font-size: 11px; line-height: 1.4;")
         self.fast_moving_list.setWordWrap(True)
@@ -939,7 +939,7 @@ class ReportsView(QWidget):
                     if r["net_profit"] < 0:
                         net_item.setForeground(QColor("#ef4444"))
                     else:
-                        net_item.setForeground(QColor("#10b981"))
+                        net_item.setForeground(QColor("#8fd53b"))
                     self.profit_table.setItem(i, 10, net_item)
 
             # 4. Populate Customer Receivables List
@@ -1742,7 +1742,7 @@ class ReportsView(QWidget):
         sales_card.setProperty("class", "CardFrame")
         sales_card_layout = QVBoxLayout(sales_card)
         self.lbl_taxable_sales = QLabel("₹0.00")
-        self.lbl_taxable_sales.setStyleSheet("font-size: 20px; font-weight: bold; color: #10b981;")
+        self.lbl_taxable_sales.setStyleSheet("font-size: 20px; font-weight: bold; color: #8fd53b;")
         self.lbl_output_tax = QLabel("₹0.00")
         self.lbl_output_tax.setStyleSheet("font-size: 16px; font-weight: bold; color: #34d399;")
         sales_card_layout.addWidget(QLabel("<b>Outward Supplies (Sales)</b>"))
@@ -2054,7 +2054,7 @@ class ReportsView(QWidget):
                 self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #ef4444;")
             else:
                 self.lbl_net_payable.setText(f"₹{abs(net_payable):,.2f} (ITC Refund)")
-                self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #10b981;")
+                self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #8fd53b;")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to fetch GST data: {e}")
@@ -2300,7 +2300,7 @@ class ProductDrillDownDialog(QDialog):
 
         kpi_layout.addWidget(make_kpi_card("Current Stock", self.kpi_stock, "#ffffff"), 0, 0)
         kpi_layout.addWidget(make_kpi_card("Avg Days in Stock", self.kpi_avg_days, "#3b82f6"), 0, 1)
-        kpi_layout.addWidget(make_kpi_card("Total Profit Generated", self.kpi_profit, "#10b981"), 0, 2)
+        kpi_layout.addWidget(make_kpi_card("Total Profit Generated", self.kpi_profit, "#8fd53b"), 0, 2)
         kpi_layout.addWidget(make_kpi_card("Total Interest Cost", self.kpi_interest, "#ef4444"), 0, 3)
         kpi_layout.addWidget(make_kpi_card("Net Contribution", self.kpi_net, "#6366f1"), 0, 4)
 

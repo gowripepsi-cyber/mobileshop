@@ -885,7 +885,7 @@ def generate_ledger_pdf(ledger_data, file_path):
     style_green = ParagraphStyle(
         'GreenTextLedger',
         parent=style_sub,
-        textColor=colors.HexColor('#10b981')
+        textColor=colors.HexColor('#8fd53b')
     )
 
     story = []
@@ -1933,7 +1933,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
         [
             Paragraph("<font size=8 color='#64748b'>TOTAL PURCHASE VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{report_data['total_purchase_value']:,.2f}" + "</font></b>", style_sub),
             Paragraph("<font size=8 color='#64748b'>TOTAL SALES VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{report_data['total_sales_value']:,.2f}" + "</font></b>", style_sub),
-            Paragraph("<font size=8 color='#64748b'>TOTAL GROSS PROFIT</font><br/><b><font size=11 color='#10b981'>Rs. " + f"{report_data['total_gross_profit']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL GROSS PROFIT</font><br/><b><font size=11 color='#8fd53b'>Rs. " + f"{report_data['total_gross_profit']:,.2f}" + "</font></b>", style_sub),
             Paragraph("<font size=8 color='#64748b'>TOTAL INTEREST COST</font><br/><b><font size=11 color='#ef4444'>Rs. " + f"{report_data['total_interest_cost']:,.2f}" + "</font></b>", style_sub),
             Paragraph("<font size=8 color='#64748b'>TOTAL NET PROFIT</font><br/><b><font size=11 color='#6366f1'>Rs. " + f"{report_data['total_net_profit']:,.2f}" + "</font></b>", style_sub),
             Paragraph("<font size=8 color='#64748b'>AVG DAYS IN STOCK</font><br/><b><font size=11 color='#3b82f6'>" + f"{report_data['avg_days']:.1f}" + " Days</font></b>", style_sub),
@@ -1971,7 +1971,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
         if net_prof < 0:
             net_style = ParagraphStyle('net_red', parent=style_cell, textColor=colors.HexColor('#ef4444'))
         else:
-            net_style = ParagraphStyle('net_green', parent=style_cell, textColor=colors.HexColor('#10b981'))
+            net_style = ParagraphStyle('net_green', parent=style_cell, textColor=colors.HexColor('#8fd53b'))
             
         table_data.append([
             Paragraph(row['product_code'] or "N/A", style_cell),

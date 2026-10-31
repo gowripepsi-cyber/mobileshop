@@ -37,7 +37,7 @@ class MoneyTransferView(QWidget):
         kpi_layout.setSpacing(15)
 
         self.kpi_total_amt = self.create_kpi_card("Total Transferred Amount", "₹0.00", "#6366f1")
-        self.kpi_total_charges = self.create_kpi_card("Total Service Charges", "₹0.00", "#10b981")
+        self.kpi_total_charges = self.create_kpi_card("Total Service Charges", "₹0.00", "#8fd53b")
         self.kpi_completed = self.create_kpi_card("Completed Transfers", "0", "#06b6d4")
         self.kpi_pending = self.create_kpi_card("Pending Transfers", "0", "#ef4444")
 

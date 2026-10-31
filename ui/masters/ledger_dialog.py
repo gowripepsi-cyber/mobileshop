@@ -204,7 +204,7 @@ class LedgerBreakupDialog(QDialog):
                 if running_balance > 0:
                     self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
                 else:
-                    self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #10b981;")
+                    self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #8fd53b;")
 
             else:
                 supplier = session.query(Supplier).get(self.party_id)
@@ -309,7 +309,7 @@ class LedgerBreakupDialog(QDialog):
                 if running_balance > 0:
                     self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
                 else:
-                    self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #10b981;")
+                    self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #8fd53b;")
 
         except Exception as e:
             print(f"Error loading ledger breakup dialog: {e}")

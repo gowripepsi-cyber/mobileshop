@@ -492,7 +492,7 @@ class BillingDialog(QDialog):
         right_layout.setSpacing(15)
 
         right_title = QLabel("Settlement & Invoice Summary")
-        right_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #10b981; border-bottom: 1px solid #28284e; padding-bottom: 6px;")
+        right_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #8fd53b; border-bottom: 1px solid #28284e; padding-bottom: 6px;")
         right_layout.addWidget(right_title)
 
         totals_form = QFormLayout()
@@ -514,7 +514,7 @@ class BillingDialog(QDialog):
         total_title.setStyleSheet("font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase;")
         
         self.total_lbl = QLabel("₹0.00")
-        self.total_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: #10b981;")
+        self.total_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: #8fd53b;")
         
         total_card_layout.addWidget(total_title)
         total_card_layout.addWidget(self.total_lbl)

@@ -1,13 +1,182 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                              QPushButton, QMessageBox, QFrame, QFormLayout, QTabWidget, QFileDialog,
                              QCheckBox, QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
-                             QScrollArea)
+                             QScrollArea, QGridLayout, QSizePolicy)
 from PySide6.QtCore import Qt
 from database import Session, Setting, User, get_hash, engine, init_db
 from utils.db_backup import backup_db, restore_db
 from utils.ui_helpers import setup_password_toggle
 from utils.translator import tr
 from ui.settings.user_management import UserManagementView
+
+
+class LicenseInfoCard(QFrame):
+    """
+    Clean, responsive hardware binding & license information grid.
+    Supports consistent desktop side-by-side columns and mobile stacked layout.
+    """
+    def __init__(self, cur_mid, status_text, status_color, license_file, on_copy_mid, parent=None):
+        super().__init__(parent)
+        self.setObjectName("license_info_card")
+        self.setStyleSheet("""
+            QFrame#license_info_card {
+                background-color: #fbfdf9;
+                border: 1.5px solid #8fd53b;
+                border-radius: 14px;
+            }
+        """)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setMinimumWidth(280)
+
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(18, 18, 18, 18)
+        self.grid.setHorizontalSpacing(14)
+        self.grid.setVerticalSpacing(14)
+
+        box_css = "background-color: #ffffff; border: 1.5px solid #8fd53b; border-radius: 10px;"
+        lbl_style = f"{box_css} color: #334155; font-size: 13px; font-weight: 600; padding: 0 16px;"
+
+        # --- Row 1: Machine ID ---
+        self.lbl_mid = QLabel("Machine ID (Hardware Bound):")
+        self.lbl_mid.setFixedHeight(44)
+        self.lbl_mid.setStyleSheet(lbl_style)
+        self.lbl_mid.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
+        self.val_box_mid = QFrame()
+        self.val_box_mid.setFixedHeight(44)
+        self.val_box_mid.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.val_box_mid.setStyleSheet(f"QFrame {{ {box_css} }}")
+        val_l_mid = QHBoxLayout(self.val_box_mid)
+        val_l_mid.setContentsMargins(16, 0, 10, 0)
+        val_l_mid.setSpacing(12)
+
+        self.lbl_mid_val = QLabel(cur_mid)
+        self.lbl_mid_val.setStyleSheet("font-family: monospace; font-size: 14px; font-weight: bold; color: #0284c7; border: none; background: transparent;")
+        self.lbl_mid_val.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
+        self.btn_copy_mid = QPushButton("Copy")
+        self.btn_copy_mid.setCursor(Qt.PointingHandCursor)
+        self.btn_copy_mid.setFixedHeight(28)
+        self.btn_copy_mid.setFixedWidth(65)
+        self.btn_copy_mid.setStyleSheet("""
+            QPushButton {
+                background-color: #1e293b;
+                color: #ffffff;
+                font-size: 11px;
+                font-weight: bold;
+                border: none;
+                border-radius: 6px;
+                padding: 0 8px;
+            }
+            QPushButton:hover {
+                background-color: #334155;
+            }
+            QPushButton:pressed {
+                background-color: #0f172a;
+            }
+        """)
+        self.btn_copy_mid.clicked.connect(on_copy_mid)
+
+        val_l_mid.addWidget(self.lbl_mid_val)
+        val_l_mid.addWidget(self.btn_copy_mid)
+        val_l_mid.addStretch()
+
+        # --- Row 2: Status ---
+        self.lbl_status = QLabel("License Status:")
+        self.lbl_status.setFixedHeight(44)
+        self.lbl_status.setStyleSheet(lbl_style)
+        self.lbl_status.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
+        self.val_box_status = QFrame()
+        self.val_box_status.setFixedHeight(44)
+        self.val_box_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.val_box_status.setStyleSheet(f"QFrame {{ {box_css} }}")
+        val_l_status = QHBoxLayout(self.val_box_status)
+        val_l_status.setContentsMargins(16, 0, 16, 0)
+
+        self.lbl_status_val = QLabel(status_text)
+        self.lbl_status_val.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {status_color}; border: none; background: transparent;")
+        self.lbl_status_val.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        val_l_status.addWidget(self.lbl_status_val)
+
+        # --- Row 3: File Path ---
+        self.lbl_path = QLabel("License File Path:")
+        self.lbl_path.setFixedHeight(44)
+        self.lbl_path.setStyleSheet(lbl_style)
+        self.lbl_path.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
+        self.val_box_path = QFrame()
+        self.val_box_path.setFixedHeight(44)
+        self.val_box_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.val_box_path.setStyleSheet(f"QFrame {{ {box_css} }}")
+        val_l_path = QHBoxLayout(self.val_box_path)
+        val_l_path.setContentsMargins(16, 0, 16, 0)
+
+        self.lbl_file = QLabel(license_file)
+        self.lbl_file.setStyleSheet("color: #64748b; font-size: 11px; font-family: monospace; border: none; background: transparent;")
+        self.lbl_file.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        val_l_path.addWidget(self.lbl_file)
+
+        self.is_stacked = None
+        self.set_layout_mode(stacked=False)
+
+    def set_layout_mode(self, stacked: bool):
+        if self.is_stacked == stacked:
+            return
+        self.is_stacked = stacked
+
+        self.grid.removeWidget(self.lbl_mid)
+        self.grid.removeWidget(self.val_box_mid)
+        self.grid.removeWidget(self.lbl_status)
+        self.grid.removeWidget(self.val_box_status)
+        self.grid.removeWidget(self.lbl_path)
+        self.grid.removeWidget(self.val_box_path)
+
+        if stacked:
+            self.lbl_mid.setMinimumWidth(0)
+            self.lbl_mid.setMaximumWidth(16777215)
+            self.lbl_status.setMinimumWidth(0)
+            self.lbl_status.setMaximumWidth(16777215)
+            self.lbl_path.setMinimumWidth(0)
+            self.lbl_path.setMaximumWidth(16777215)
+
+            self.grid.addWidget(self.lbl_mid, 0, 0)
+            self.grid.addWidget(self.val_box_mid, 1, 0)
+            self.grid.addWidget(self.lbl_status, 2, 0)
+            self.grid.addWidget(self.val_box_status, 3, 0)
+            self.grid.addWidget(self.lbl_path, 4, 0)
+            self.grid.addWidget(self.val_box_path, 5, 0)
+
+            self.grid.setColumnStretch(0, 1)
+            self.grid.setColumnStretch(1, 0)
+            self.grid.setVerticalSpacing(8)
+        else:
+            self.lbl_mid.setMinimumWidth(230)
+            self.lbl_mid.setMaximumWidth(230)
+            self.lbl_status.setMinimumWidth(230)
+            self.lbl_status.setMaximumWidth(230)
+            self.lbl_path.setMinimumWidth(230)
+            self.lbl_path.setMaximumWidth(230)
+
+            self.grid.addWidget(self.lbl_mid, 0, 0)
+            self.grid.addWidget(self.val_box_mid, 0, 1)
+            self.grid.addWidget(self.lbl_status, 1, 0)
+            self.grid.addWidget(self.val_box_status, 1, 1)
+            self.grid.addWidget(self.lbl_path, 2, 0)
+            self.grid.addWidget(self.val_box_path, 2, 1)
+
+            self.grid.setColumnStretch(0, 0)
+            self.grid.setColumnStretch(1, 1)
+            self.grid.setVerticalSpacing(14)
+
+    def check_responsive(self, available_width: int):
+        should_stack = (available_width < 560)
+        self.set_layout_mode(stacked=should_stack)
+
+    def update_status(self, text: str, color: str):
+        self.lbl_status_val.setText(text)
+        self.lbl_status_val.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {color}; border: none; background: transparent;")
+
 
 class SettingsView(QWidget):
     def __init__(self, parent=None):
@@ -345,7 +514,7 @@ class SettingsView(QWidget):
         # -------------------------------------------------------------
         card_frame = QFrame()
         card_frame.setProperty("class", "CardFrame")
-        card_frame.setMinimumWidth(750)
+        card_frame.setMinimumWidth(320)
         card_frame.setMaximumWidth(850)
         card_layout = QVBoxLayout(card_frame)
         card_layout.setContentsMargins(25, 25, 25, 25)
@@ -359,33 +528,15 @@ class SettingsView(QWidget):
         subtitle.setStyleSheet("color: #94a3b8; font-size: 12px; margin-bottom: 5px;")
         card_layout.addWidget(subtitle)
 
-        # Info Box Frame
-        info_frame = QFrame()
-        info_frame.setStyleSheet("background-color: #fbfdf9; border: 1.5px solid #8fd53b; border-radius: 12px; padding: 15px;")
-        info_layout = QFormLayout(info_frame)
-        info_layout.setSpacing(12)
-
+        # Hardware & License Info Card (Responsive Grid)
         info = manager.get_license_info()
         cur_mid = info["machine_id"]
         status = info["status"]
 
-        # Machine ID row with Copy
-        mid_row = QHBoxLayout()
-        self.lbl_mid_val = QLabel(cur_mid)
-        self.lbl_mid_val.setStyleSheet("font-family: monospace; font-size: 14px; font-weight: bold; color: #38bdf8;")
-        btn_copy_mid = QPushButton("Copy")
-        btn_copy_mid.setFixedWidth(65)
-        btn_copy_mid.setFixedHeight(28)
-        btn_copy_mid.setStyleSheet("background-color: #334155; font-size: 11px;")
-        btn_copy_mid.clicked.connect(lambda: self.copy_to_clipboard(cur_mid, "Machine ID"))
-        mid_row.addWidget(self.lbl_mid_val)
-        mid_row.addWidget(btn_copy_mid)
-        mid_row.addStretch()
-
         # Status Badge
         if status == "active":
             status_text = "● ACTIVE (Permanent License)"
-            status_color = "#10b981"
+            status_color = "#8fd53b"
         elif status == "trial":
             days = info["days_remaining"]
             status_text = f"● FREE TRIAL ({days} Days Remaining)"
@@ -394,23 +545,28 @@ class SettingsView(QWidget):
             status_text = "● UNACTIVATED / EXPIRED"
             status_color = "#ef4444"
 
-        self.lbl_status_val = QLabel(status_text)
-        self.lbl_status_val.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {status_color};")
+        self.license_info_card = LicenseInfoCard(
+            cur_mid=cur_mid,
+            status_text=status_text,
+            status_color=status_color,
+            license_file=info["license_file"],
+            on_copy_mid=lambda: self.copy_to_clipboard(cur_mid, "Machine ID"),
+            parent=card_frame
+        )
+        self.lbl_mid_val = self.license_info_card.lbl_mid_val
+        self.lbl_status_val = self.license_info_card.lbl_status_val
+        card_layout.addWidget(self.license_info_card)
 
-        # Storage Path
-        lbl_file = QLabel(info["license_file"])
-        lbl_file.setStyleSheet("color: #64748b; font-size: 11px; font-family: monospace;")
-        lbl_file.setWordWrap(True)
-
-        info_layout.addRow("Machine ID (Hardware Bound):", mid_row)
-        info_layout.addRow("License Status:", self.lbl_status_val)
-        info_layout.addRow("License File Path:", lbl_file)
-
-        card_layout.addWidget(info_frame)
+        orig_resize = card_frame.resizeEvent
+        def on_card_resize(event):
+            self.license_info_card.check_responsive(event.size().width())
+            if orig_resize:
+                orig_resize(event)
+        card_frame.resizeEvent = on_card_resize
 
         # Section: Self-Service Transfer
         sec_title = QLabel("License Actions")
-        sec_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #cbd5e1; margin-top: 10px;")
+        sec_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #475569; margin-top: 10px;")
         card_layout.addWidget(sec_title)
 
         btn_row = QHBoxLayout()
@@ -446,7 +602,7 @@ class SettingsView(QWidget):
         danger_frame = QFrame()
         danger_frame.setProperty("class", "CardFrame")
         danger_frame.setStyleSheet("QFrame { border: 1px solid #ef4444; background-color: #1a0b0b; }")
-        danger_frame.setMinimumWidth(750)
+        danger_frame.setMinimumWidth(320)
         danger_frame.setMaximumWidth(850)
         danger_layout = QVBoxLayout(danger_frame)
         danger_layout.setContentsMargins(20, 20, 20, 20)
@@ -566,7 +722,7 @@ class SettingsView(QWidget):
         status = info["status"]
         if status == "active":
             status_text = "● ACTIVE (Permanent License)"
-            status_color = "#10b981"
+            status_color = "#8fd53b"
         elif status == "trial":
             days = info["days_remaining"]
             status_text = f"● FREE TRIAL ({days} Days Remaining)"
@@ -574,9 +730,11 @@ class SettingsView(QWidget):
         else:
             status_text = "● UNACTIVATED / EXPIRED"
             status_color = "#ef4444"
-        if hasattr(self, 'lbl_status_val'):
+        if hasattr(self, 'license_info_card'):
+            self.license_info_card.update_status(status_text, status_color)
+        elif hasattr(self, 'lbl_status_val'):
             self.lbl_status_val.setText(status_text)
-            self.lbl_status_val.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {status_color};")
+            self.lbl_status_val.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {status_color}; border: none; background: transparent;")
 
     def setup_lang_dict_tab(self):
         layout = QVBoxLayout(self.lang_dict_tab)

@@ -29,17 +29,17 @@ class MastersView(QWidget):
         self.units_view = UnitsView(self)
 
         # Add tabs
-        self.tabs.addTab(self.products_view, "📦 Products Master (Ctrl+Shift+P)")
+        self.tabs.addTab(self.products_view, "📦 Products (Ctrl+Shift+P)")
         self.tabs.addTab(self.categories_view, "📁 Item Categories (Ctrl+Shift+K)")
-        self.tabs.addTab(self.customers_view, "👤 Customers Master (Ctrl+Shift+C)")
-        self.tabs.addTab(self.suppliers_view, "🚛 Suppliers Master (Ctrl+Shift+S)")
-        self.tabs.addTab(self.units_view, "📏 Units Master (Ctrl+Shift+U)")
+        self.tabs.addTab(self.customers_view, "👤 Customer (Ctrl+Shift+C)")
+        self.tabs.addTab(self.suppliers_view, "🚛 Supplier (Ctrl+Shift+S)")
+        self.tabs.addTab(self.units_view, "📏 Units (Ctrl+Shift+U)")
 
-        self.tabs.setTabToolTip(0, "Products Master (Ctrl+Shift+P / Ctrl+Alt+1)")
-        self.tabs.setTabToolTip(1, "Item Categories Master (Ctrl+Shift+K / Ctrl+Alt+2)")
-        self.tabs.setTabToolTip(2, "Customers Master (Ctrl+Shift+C / Ctrl+Alt+3)")
-        self.tabs.setTabToolTip(3, "Suppliers Master (Ctrl+Shift+S / Ctrl+Alt+4)")
-        self.tabs.setTabToolTip(4, "Units Master (Ctrl+Shift+U / Ctrl+Alt+5)")
+        self.tabs.setTabToolTip(0, "Products (Ctrl+Shift+P / Ctrl+Alt+1)")
+        self.tabs.setTabToolTip(1, "Item Categories (Ctrl+Shift+K / Ctrl+Alt+2)")
+        self.tabs.setTabToolTip(2, "Customer (Ctrl+Shift+C / Ctrl+Alt+3)")
+        self.tabs.setTabToolTip(3, "Supplier (Ctrl+Shift+S / Ctrl+Alt+4)")
+        self.tabs.setTabToolTip(4, "Units (Ctrl+Shift+U / Ctrl+Alt+5)")
 
         # Connect tab change signal
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -73,3 +73,21 @@ class MastersView(QWidget):
         if 0 <= index < self.tabs.count():
             self.tabs.setCurrentIndex(index)
             self.refresh_data()
+
+    def retranslate_ui(self):
+        from utils.translator import tr
+        self.tabs.setTabText(0, f"📦 {tr('Products')} (Ctrl+Shift+P)")
+        self.tabs.setTabText(1, f"📁 {tr('Item Categories')} (Ctrl+Shift+K)")
+        self.tabs.setTabText(2, f"👤 {tr('Customer')} (Ctrl+Shift+C)")
+        self.tabs.setTabText(3, f"🚛 {tr('Supplier')} (Ctrl+Shift+S)")
+        self.tabs.setTabText(4, f"📏 {tr('Units')} (Ctrl+Shift+U)")
+        self.tabs.setTabToolTip(0, f"{tr('Products')} (Ctrl+Shift+P / Ctrl+Alt+1)")
+        self.tabs.setTabToolTip(1, f"{tr('Item Categories')} (Ctrl+Shift+K / Ctrl+Alt+2)")
+        self.tabs.setTabToolTip(2, f"{tr('Customer')} (Ctrl+Shift+C / Ctrl+Alt+3)")
+        self.tabs.setTabToolTip(3, f"{tr('Supplier')} (Ctrl+Shift+S / Ctrl+Alt+4)")
+        self.tabs.setTabToolTip(4, f"{tr('Units')} (Ctrl+Shift+U / Ctrl+Alt+5)")
+        # Forward to children if they implement retranslate_ui
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if hasattr(w, 'retranslate_ui'):
+                w.retranslate_ui()

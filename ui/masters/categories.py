@@ -292,7 +292,7 @@ class CategoryManagerDialog(QDialog):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(12)
 
-        title_lbl = QLabel("Item Categories Master")
+        title_lbl = QLabel("Item Categories")
         title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #6366f1; border-bottom: 1px solid #28284e; padding-bottom: 8px;")
         layout.addWidget(title_lbl)
 

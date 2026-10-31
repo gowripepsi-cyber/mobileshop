@@ -761,7 +761,7 @@ class BankCashView(QWidget):
         cards_layout.setSpacing(15)
 
         self.dash_card_bank = self._create_stat_card("Total Bank Balance", "₹0.00", "#6366f1")
-        self.dash_card_cash = self._create_stat_card("Cash Drawer Balance", "₹0.00", "#10b981")
+        self.dash_card_cash = self._create_stat_card("Cash Drawer Balance", "₹0.00", "#8fd53b")
         self.dash_card_total = self._create_stat_card("Total Liquid Funds", "₹0.00", "#38bdf8")
         self.dash_card_upi = self._create_stat_card("UPI Received Payments", "₹0.00", "#f59e0b")
 
@@ -1069,7 +1069,7 @@ class BankCashView(QWidget):
         metrics_layout.setSpacing(15)
 
         # Card 1: Live Cash in Hand
-        self.card_cash_in_hand = self._create_stat_card("Cash in Hand", "₹0.00", "#10b981")
+        self.card_cash_in_hand = self._create_stat_card("Cash in Hand", "₹0.00", "#8fd53b")
         metrics_layout.addWidget(self.card_cash_in_hand)
 
         # Card 2: Today's Cash In
@@ -1102,7 +1102,7 @@ class BankCashView(QWidget):
 
         # Quick Action Buttons
         self.btn_quick_in = QPushButton(f"+ {tr('Quick Cash In')}")
-        self.btn_quick_in.setStyleSheet("background-color: #10b981; color: #ffffff; font-weight: bold; padding: 6px 12px;")
+        self.btn_quick_in.setStyleSheet("background-color: #8fd53b; color: #0f172a; font-weight: bold; padding: 6px 12px; border-radius: 10px;")
         self.btn_quick_in.clicked.connect(self.open_quick_cash_in)
         filter_bar.addWidget(self.btn_quick_in)
 

@@ -120,7 +120,7 @@ class TrialStatusDialog(BaseLicensedDialog):
 
         lbl_num = QLabel(str(self.days_remaining))
         lbl_num.setAlignment(Qt.AlignCenter)
-        lbl_color = "#10b981" if self.days_remaining > 7 else "#f59e0b"
+        lbl_color = "#8fd53b" if self.days_remaining > 7 else "#f59e0b"
         lbl_num.setStyleSheet(f"font-size: 48px; font-weight: bold; color: {lbl_color};")
         box_layout.addWidget(lbl_num)
 
@@ -372,7 +372,7 @@ class VendorGeneratorDialog(QDialog):
         self.key_output.setPlaceholderText("Generated Activation Key")
         self.key_output.setReadOnly(True)
         self.key_output.setFixedHeight(35)
-        self.key_output.setStyleSheet("font-family: monospace; font-size: 12px; color: #10b981; background-color: #141426;")
+        self.key_output.setStyleSheet("font-family: monospace; font-size: 12px; color: #8fd53b; background-color: #141426;")
         
         btn_copy = QPushButton("Copy Key")
         btn_copy.setFixedWidth(100)
@@ -411,7 +411,7 @@ class VendorGeneratorDialog(QDialog):
 
         btn_save_feat = QPushButton("Save Feature Settings")
         btn_save_feat.setFixedHeight(32)
-        btn_save_feat.setStyleSheet("background-color: #10b981; color: #ffffff; font-weight: bold;")
+        btn_save_feat.setStyleSheet("background-color: #8fd53b; color: #0f172a; font-weight: bold;")
         btn_save_feat.clicked.connect(self.save_feature_settings)
         feat_layout.addWidget(btn_save_feat)
 
@@ -614,7 +614,7 @@ class TransferSuccessDialog(QDialog):
 
         title = QLabel("LICENSE TRANSFERRED SUCCESSFULLY")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 17px; font-weight: bold; color: #10b981; letter-spacing: 1px;")
+        title.setStyleSheet("font-size: 17px; font-weight: bold; color: #8fd53b; letter-spacing: 1px;")
         layout.addWidget(title)
 
         info_box = QFrame()
@@ -645,7 +645,7 @@ class TransferSuccessDialog(QDialog):
         self.key_edit.setPlainText(self.transfer_data.get("new_activation_key", ""))
         self.key_edit.setReadOnly(True)
         self.key_edit.setFixedHeight(75)
-        self.key_edit.setStyleSheet("font-family: monospace; font-size: 12px; background-color: #141426; color: #10b981; border: 1px solid #28284e; padding: 6px;")
+        self.key_edit.setStyleSheet("font-family: monospace; font-size: 12px; background-color: #141426; color: #8fd53b; border: 1px solid #28284e; padding: 6px;")
         layout.addWidget(self.key_edit)
 
         # Action buttons for certificate and copying

@@ -55,7 +55,7 @@ class DashboardView(QWidget):
         metric_configs = [
             ("Today's Sales", "₹0.00", "#6366f1"),
             ("Today's Service Income", "₹0.00", "#06b6d4"),
-            ("Cash in Hand", "₹0.00", "#10b981"),
+            ("Cash in Hand", "₹0.00", "#8fd53b"),
             ("Bank Balances", "₹0.00", "#3b82f6"),
             ("Customer Outstanding", "₹0.00", "#f59e0b"),
             ("Supplier Outstanding", "₹0.00", "#ef4444"),
@@ -152,7 +152,7 @@ class DashboardView(QWidget):
         self.print_preview_btn = QPushButton("📄 Print Preview")
         self.print_preview_btn.setFixedWidth(120)
         self.print_preview_btn.setFixedHeight(44)
-        self.print_preview_btn.setStyleSheet("font-size: 11px; background-color: #10b981; color: white; border-radius: 4px; margin-bottom: 10px; padding: 0px 10px;")
+        self.print_preview_btn.setStyleSheet("font-size: 11px; background-color: #8fd53b; color: #0f172a; font-weight: bold; border-radius: 8px; margin-bottom: 10px; padding: 0px 10px;")
         self.print_preview_btn.clicked.connect(self.show_low_stock_print_preview)
         title_btn_layout.addWidget(self.print_preview_btn)
         

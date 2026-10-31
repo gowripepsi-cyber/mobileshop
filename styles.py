@@ -401,13 +401,17 @@ QPushButton:pressed, QToolButton:pressed {
 
 /* Success Button */
 .btn-success {
-    background-color: #10b981;
-    color: #ffffff;
+    background-color: #8fd53b;
+    color: #0f172a;
     font-weight: bold;
 }
 
 .btn-success:hover {
-    background-color: #059669;
+    background-color: #7ec72e;
+}
+
+.btn-success:pressed {
+    background-color: #6eb520;
 }
 
 /* Warning Button (Warm Honey Amber) */
@@ -760,8 +764,8 @@ QPushButton[class="btn-action-delete"]:hover {
 }
 
 QPushButton[class="btn-action-success"] {
-    background-color: #10b981;
-    color: #ffffff;
+    background-color: #8fd53b;
+    color: #0f172a;
     font-size: 11px;
     font-weight: bold;
     border-radius: 8px;
@@ -772,7 +776,10 @@ QPushButton[class="btn-action-success"] {
     border: none;
 }
 QPushButton[class="btn-action-success"]:hover {
-    background-color: #059669;
+    background-color: #7ec72e;
+}
+QPushButton[class="btn-action-success"]:pressed {
+    background-color: #6eb520;
 }
 
 /* Compact Table Action Icon Buttons */
@@ -794,8 +801,8 @@ QPushButton[class="btn-action-icon-view"]:hover {
 }
 
 QPushButton[class="btn-action-icon-success"] {
-    background-color: #10b981;
-    color: #ffffff;
+    background-color: #8fd53b;
+    color: #0f172a;
     font-size: 13px;
     font-weight: bold;
     border-radius: 8px;
@@ -807,7 +814,10 @@ QPushButton[class="btn-action-icon-success"] {
     padding: 0px !important;
 }
 QPushButton[class="btn-action-icon-success"]:hover {
-    background-color: #059669;
+    background-color: #7ec72e;
+}
+QPushButton[class="btn-action-icon-success"]:pressed {
+    background-color: #6eb520;
 }
 
 QPushButton[class="btn-action-icon-edit"] {

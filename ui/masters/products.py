@@ -87,7 +87,7 @@ class ItemAttributesManagerDialog(QDialog):
         main_layout.setSpacing(12)
 
         # Header Title
-        title_lbl = QLabel("Item Attributes Master (Category, Brand & Model)")
+        title_lbl = QLabel("Item Attributes (Category, Brand & Model)")
         title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #6366f1; border-bottom: 1px solid #28284e; padding-bottom: 8px;")
         main_layout.addWidget(title_lbl)
 
