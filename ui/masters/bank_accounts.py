@@ -22,7 +22,7 @@ class BankAccountDialog(QDialog):
         self.account_name_input = QLineEdit()
         
         self.account_type_combo = QComboBox()
-        self.account_type_combo.addItems(["Saving", "Current"])
+        self.account_type_combo.addItems(["Current", "Saving", "UPI / QR"])
         # Default to Current as per database column default
         self.account_type_combo.setCurrentText("Current")
 

@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
         self.categories_view = self.masters_view.categories_view
         self.customers_view = self.masters_view.customers_view
         self.suppliers_view = self.masters_view.suppliers_view
-        self.bank_accounts_view = self.masters_view.bank_accounts_view
+        self.bank_accounts_view = None  # Will be bound after BankCashView instantiation
         self.units_view = self.masters_view.units_view
         self.purchase_view = PurchaseView(self)
         self.sales_view = SalesView(self)
@@ -182,6 +182,7 @@ class MainWindow(QMainWindow):
         self.settings_view = SettingsView(self)
         self.money_transfer_view = MoneyTransferView(self)
         self.bank_cash_view = BankCashView(self)
+        self.bank_accounts_view = self.bank_cash_view.bank_accounts_view
 
         # Add Views to Stacked Widget in order
         self.stacked_widget.addWidget(self.dashboard_view)       # 0
@@ -208,14 +209,17 @@ class MainWindow(QMainWindow):
             ("Ctrl+Alt+3", 2),
             ("Ctrl+Shift+S", 3),
             ("Ctrl+Alt+4", 3),
-            ("Ctrl+Shift+B", 4),
+            ("Ctrl+Shift+U", 4),
             ("Ctrl+Alt+5", 4),
-            ("Ctrl+Shift+U", 5),
-            ("Ctrl+Alt+6", 5),
         ]
         for key, tab_idx in master_shortcuts:
             sc = QShortcut(QKeySequence(key), self)
             sc.activated.connect(partial(self.open_master_tab, tab_idx))
+
+        # Shortcut for Bank Accounts Master in Bank & Cash view
+        for key in ["Ctrl+Shift+B", "Ctrl+Alt+6"]:
+            sc = QShortcut(QKeySequence(key), self)
+            sc.activated.connect(self.open_bank_master_tab)
 
         # Setup universal Add shortcut (Ctrl+N) for master records
         self.universal_add_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
@@ -324,10 +328,23 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'masters_view'):
             self.masters_view.set_active_tab(tab_index)
 
+    def open_bank_master_tab(self):
+        self.switch_view(9)
+        if hasattr(self, 'bank_cash_view'):
+            idx = self.bank_cash_view.tabs.indexOf(getattr(self.bank_cash_view, 'bank_master_tab', None))
+            if idx >= 0:
+                self.bank_cash_view.set_active_tab(idx)
+            else:
+                self.bank_cash_view.set_active_tab(5)
+
     def handle_universal_add(self):
-        self.switch_view(1)
-        if hasattr(self, 'masters_view'):
-            self.masters_view.trigger_add_action()
+        if self.stacked_widget.currentIndex() == 9:
+            if hasattr(self, 'bank_cash_view'):
+                self.bank_cash_view.handle_add_bank()
+        else:
+            self.switch_view(1)
+            if hasattr(self, 'masters_view'):
+                self.masters_view.trigger_add_action()
 
     def handle_logout(self):
         confirm = QMessageBox.question(

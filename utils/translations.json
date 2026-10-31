@@ -1,5 +1,5 @@
 {
-  "Dashboard": "முகப்பு",
+  "Dashboard": "டாஷ்போர்டு",
   "Master Records": "முதன்மை பதிவுகள்",
   "Purchase Entry": "கொள்முதல்",
   "Sales Invoice": "விற்பனை பில்",
@@ -113,5 +113,25 @@
   "Change Password": "கடவுச்சொல் மாற்றம்",
   "Backup & Restore": "காப்பு & மீட்டமை",
   "License & Maintenance": "உரிமம் & பராமரிப்பு",
-  "Language Dictionary": "மொழி அகராதி"
+  "Language Dictionary": "மொழி அகராதி",
+  "Bank Accounts Master": "வங்கி கணக்குகள் மாஸ்டர்",
+  "Bank Passbook": "வங்கி பாஸ்புக்",
+  "Add Account": "புதிய கணக்கு",
+  "Edit Account": "கணக்கு திருத்து",
+  "Filter by Bank": "வங்கி தேர்வு",
+  "Period": "கால அளவு",
+  "Search bank accounts...": "வங்கி கணக்குகளைத் தேடு...",
+  "Search bank passbook...": "வங்கி பாஸ்புக் தேடு...",
+  "Total Bank Balance": "மொத்த வங்கி இருப்பு",
+  "Cash Drawer Balance": "கல்லா இருப்பு",
+  "Total Liquid Funds": "மொத்த பண இருப்பு",
+  "UPI Received Payments": "யுபிஐ பெறப்பட்ட தொகை",
+  "All Accounts Balance Overview": "அனைத்து கணக்குகளின் இருப்பு விவரம்",
+  "Today Inflows": "இன்றைய வரவு",
+  "Account / Source": "கணக்கு / மூலம்",
+  "Institution": "வங்கி / நிறுவனம்",
+  "Quick Navigation": "விரைவு வழிசெலுத்தல்",
+  "Txns": "பரிவர்த்தனைகள்",
+  "Total Funds": "மொத்த நிதி",
+  "Banks": "வங்கிகள்"
 }

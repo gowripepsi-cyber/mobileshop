@@ -5,7 +5,6 @@ from ui.masters.products import ProductsView
 from ui.masters.categories import CategoriesView
 from ui.masters.customers import CustomersView
 from ui.masters.suppliers import SuppliersView
-from ui.masters.bank_accounts import BankAccountsView
 from ui.masters.units import UnitsView
 
 class MastersView(QWidget):
@@ -27,7 +26,6 @@ class MastersView(QWidget):
         self.categories_view = CategoriesView(self)
         self.customers_view = CustomersView(self)
         self.suppliers_view = SuppliersView(self)
-        self.bank_accounts_view = BankAccountsView(self)
         self.units_view = UnitsView(self)
 
         # Add tabs
@@ -35,15 +33,13 @@ class MastersView(QWidget):
         self.tabs.addTab(self.categories_view, "📁 Item Categories (Ctrl+Shift+K)")
         self.tabs.addTab(self.customers_view, "👤 Customers Master (Ctrl+Shift+C)")
         self.tabs.addTab(self.suppliers_view, "🚛 Suppliers Master (Ctrl+Shift+S)")
-        self.tabs.addTab(self.bank_accounts_view, "🏦 Bank Accounts Master (Ctrl+Shift+B)")
         self.tabs.addTab(self.units_view, "📏 Units Master (Ctrl+Shift+U)")
 
         self.tabs.setTabToolTip(0, "Products Master (Ctrl+Shift+P / Ctrl+Alt+1)")
         self.tabs.setTabToolTip(1, "Item Categories Master (Ctrl+Shift+K / Ctrl+Alt+2)")
         self.tabs.setTabToolTip(2, "Customers Master (Ctrl+Shift+C / Ctrl+Alt+3)")
         self.tabs.setTabToolTip(3, "Suppliers Master (Ctrl+Shift+S / Ctrl+Alt+4)")
-        self.tabs.setTabToolTip(4, "Bank Accounts Master (Ctrl+Shift+B / Ctrl+Alt+5)")
-        self.tabs.setTabToolTip(5, "Units Master (Ctrl+Shift+U / Ctrl+Alt+6)")
+        self.tabs.setTabToolTip(4, "Units Master (Ctrl+Shift+U / Ctrl+Alt+5)")
 
         # Connect tab change signal
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -60,8 +56,6 @@ class MastersView(QWidget):
             self.customers_view.add_customer()
         elif current_widget == self.suppliers_view:
             self.suppliers_view.add_supplier()
-        elif current_widget == self.bank_accounts_view:
-            self.bank_accounts_view.add_account()
         elif current_widget == self.units_view:
             self.units_view.add_unit()
 

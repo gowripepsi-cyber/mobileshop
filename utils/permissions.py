@@ -97,7 +97,7 @@ def enforce_ui_permissions(main_window):
                 can_access = any(has_permission(user, mod, act) for mod, act in reqs)
                 btn.setVisible(can_access)
 
-    # 2. Masters Sub-tabs
+    # 2. Masters Sub-tabs (Products, Categories, Customers, Suppliers, Units)
     if hasattr(main_window, 'masters_view'):
         mv = main_window.masters_view
         if hasattr(mv, 'tabs'):
@@ -105,9 +105,22 @@ def enforce_ui_permissions(main_window):
             mv.tabs.setTabVisible(1, is_admin or has_permission(user, "categories", "view") or has_permission(user, "products", "view"))
             mv.tabs.setTabVisible(2, is_admin or has_permission(user, "customers", "view"))
             mv.tabs.setTabVisible(3, is_admin or has_permission(user, "suppliers", "view"))
-            mv.tabs.setTabVisible(4, is_admin or has_permission(user, "bank_accounts", "view"))
-            if mv.tabs.count() > 5:
-                mv.tabs.setTabVisible(5, is_admin or has_permission(user, "products", "view"))
+            if mv.tabs.count() > 4:
+                mv.tabs.setTabVisible(4, is_admin or has_permission(user, "products", "view"))
+
+    # 3. Bank & Cash Sub-tabs (Dashboard, Cash Drawer, Bank Passbook, Fund Transfer, Direct, Bank Accounts Master)
+    if hasattr(main_window, 'bank_cash_view'):
+        bcv = main_window.bank_cash_view
+        if hasattr(bcv, 'tabs'):
+            can_bank = is_admin or has_permission(user, "bank_accounts", "view")
+            can_pay = is_admin or has_permission(user, "payments", "view")
+            bcv.tabs.setTabVisible(0, can_bank or can_pay)  # Dashboard
+            bcv.tabs.setTabVisible(1, can_pay)              # Cash Drawer
+            bcv.tabs.setTabVisible(2, can_bank)             # Bank Passbook
+            bcv.tabs.setTabVisible(3, can_bank or can_pay)  # Fund Transfer
+            bcv.tabs.setTabVisible(4, can_pay)              # Direct Transactions
+            if bcv.tabs.count() > 5:
+                bcv.tabs.setTabVisible(5, can_bank)         # Bank Accounts Master (last tab)
 
     # 3. Settings Sub-tabs
     if hasattr(main_window, 'settings_view'):
@@ -156,3 +169,6 @@ def enforce_ui_permissions(main_window):
         enforce_crud_buttons(getattr(mv, 'customers_view', None), "customers")
         enforce_crud_buttons(getattr(mv, 'suppliers_view', None), "suppliers")
         enforce_crud_buttons(getattr(mv, 'bank_accounts_view', None), "bank_accounts")
+    if hasattr(main_window, 'bank_cash_view'):
+        bcv = main_window.bank_cash_view
+        enforce_crud_buttons(getattr(bcv, 'bank_accounts_view', None), "bank_accounts")

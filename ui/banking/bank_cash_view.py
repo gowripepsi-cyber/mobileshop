@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, 
     QDateEdit, QDoubleSpinBox, QPushButton, QTableWidget, QTableWidgetItem, 
     QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, 
-    QDialogButtonBox, QSpacerItem, QSizePolicy
+    QDialogButtonBox, QSpacerItem, QSizePolicy, QScrollArea
 )
 from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QDoubleValidator
@@ -12,7 +12,7 @@ from sqlalchemy import func
 from database import Session
 from models import (
     BankAccount, BankTransaction, CashTransaction, 
-    FundTransfer, DirectTransaction
+    FundTransfer, DirectTransaction, MoneyTransfer
 )
 from ui.masters.bank_accounts import BankAccountDialog
 from utils.translator import tr
@@ -547,35 +547,91 @@ class BankCashView(QWidget):
         layout.setSpacing(15)
 
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("bank_cash_tab_widget")
 
-        # 1. Cash Drawer Tab
+        # 1. Dashboard Tab (Tab 0)
+        self.dashboard_tab = QWidget()
+        self.setup_dashboard_tab()
+        self.tabs.addTab(self.dashboard_tab, f"📊 {tr('Dashboard')}")
+
+        # 2. Cash Drawer Tab (Tab 1)
         self.cash_tab = QWidget()
         self.setup_cash_tab()
         self.tabs.addTab(self.cash_tab, f"💵 {tr('Cash Drawer')}")
 
-        # 2. Bank Accounts & Passbook Tab
-        self.bank_tab = QWidget()
-        self.setup_bank_tab()
-        self.tabs.addTab(self.bank_tab, f"🏛️ {tr('Bank Accounts & Passbook')}")
+        # 3. Bank Passbook Tab (Tab 2)
+        self.passbook_tab = QWidget()
+        self.setup_passbook_tab()
+        self.tabs.addTab(self.passbook_tab, f"🏛️ {tr('Bank Passbook')}")
 
-        # 3. Fund Transfer Tab
+        # 4. Fund Transfer Tab (Tab 3)
         self.transfer_tab = QWidget()
         self.setup_transfer_tab()
         self.tabs.addTab(self.transfer_tab, f"🔄 {tr('Fund Transfer')}")
 
-        # 4. Direct Expenses & Income Tab
+        # 5. Direct Expenses & Income Tab (Tab 4)
         self.direct_tab = QWidget()
         self.setup_direct_tab()
         self.tabs.addTab(self.direct_tab, f"📝 {tr('Daily Expenses & Direct Income')}")
 
+        # 6. Bank Accounts Master Tab (Tab 5 - Last place in row)
+        self.bank_master_tab = QWidget()
+        self.setup_bank_master_tab()
+        self.tabs.addTab(self.bank_master_tab, f"🏦 {tr('Bank Accounts Master')}")
+
+        # Aliases for backward compatibility
+        self.bank_tab = self.bank_master_tab
+
+        # Connect tab change
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+
         layout.addWidget(self.tabs)
+
+    def on_tab_changed(self, index):
+        if index == 0:
+            self.load_dashboard_data()
+        elif index == 1:
+            self.load_cash_metrics_and_ledger()
+        elif index == 2:
+            self.load_bank_passbook()
+        elif index == 3:
+            self.populate_transfer_combos()
+            self.load_transfer_history()
+        elif index == 4:
+            self.populate_direct_combos()
+            self.load_direct_history()
+        elif index == 5:
+            self.load_bank_accounts()
+
+    def set_active_tab(self, index):
+        if 0 <= index < self.tabs.count():
+            self.tabs.setCurrentIndex(index)
+            self.refresh_data()
 
     def retranslate_ui(self):
         """Updates tab headers and labels when active language changes."""
-        self.tabs.setTabText(0, f"💵 {tr('Cash Drawer')}")
-        self.tabs.setTabText(1, f"🏛️ {tr('Bank Accounts & Passbook')}")
-        self.tabs.setTabText(2, f"🔄 {tr('Fund Transfer')}")
-        self.tabs.setTabText(3, f"📝 {tr('Daily Expenses & Direct Income')}")
+        self.tabs.setTabText(0, f"📊 {tr('Dashboard')}")
+        self.tabs.setTabText(1, f"💵 {tr('Cash Drawer')}")
+        self.tabs.setTabText(2, f"🏛️ {tr('Bank Passbook')}")
+        self.tabs.setTabText(3, f"🔄 {tr('Fund Transfer')}")
+        self.tabs.setTabText(4, f"📝 {tr('Daily Expenses & Direct Income')}")
+        self.tabs.setTabText(5, f"🏦 {tr('Bank Accounts Master')}")
+
+        if hasattr(self, 'dash_card_bank'):
+            self.dash_card_bank.title_label.setText(tr("Total Bank Balance"))
+        if hasattr(self, 'dash_card_cash'):
+            self.dash_card_cash.title_label.setText(tr("Cash Drawer Balance"))
+        if hasattr(self, 'dash_card_total'):
+            self.dash_card_total.title_label.setText(tr("Total Liquid Funds"))
+        if hasattr(self, 'dash_card_upi'):
+            self.dash_card_upi.title_label.setText(tr("UPI Received Payments"))
+
+        if hasattr(self, 'lbl_all_acc_title'):
+            self.lbl_all_acc_title.setText(f"🏦 {tr('All Accounts Balance Overview')}")
+        if hasattr(self, 'lbl_upi_title'):
+            self.lbl_upi_title.setText(f"📱 {tr('UPI Received Payments')}")
+        if hasattr(self, 'btn_dash_add_bank'):
+            self.btn_dash_add_bank.setText(f"+ {tr('Add Account')}")
 
         if hasattr(self, 'card_cash_in_hand'):
             self.card_cash_in_hand.title_label.setText(tr("Cash in Hand"))
@@ -608,6 +664,320 @@ class BankCashView(QWidget):
             self.direct_log_table.setHorizontalHeaderLabels([
                 tr("ID"), tr("Date"), tr("Type"), tr("Account"), f"{tr('Amount')} (₹)", tr("Description"), tr("Action")
             ])
+
+    # -------------------------------------------------------------------------
+    # TAB 0: DASHBOARD (வங்கி & கல்லா டாஷ்போர்டு)
+    # -------------------------------------------------------------------------
+    def setup_dashboard_tab(self):
+        scroll = QScrollArea(self.dashboard_tab)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
+
+        # 1. Top Stat Cards (4 Cards)
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(15)
+
+        self.dash_card_bank = self._create_stat_card("Total Bank Balance", "₹0.00", "#6366f1")
+        self.dash_card_cash = self._create_stat_card("Cash Drawer Balance", "₹0.00", "#10b981")
+        self.dash_card_total = self._create_stat_card("Total Liquid Funds", "₹0.00", "#38bdf8")
+        self.dash_card_upi = self._create_stat_card("UPI Received Payments", "₹0.00", "#f59e0b")
+
+        cards_layout.addWidget(self.dash_card_bank)
+        cards_layout.addWidget(self.dash_card_cash)
+        cards_layout.addWidget(self.dash_card_total)
+        cards_layout.addWidget(self.dash_card_upi)
+        layout.addLayout(cards_layout)
+
+        # 2. Main Middle Section: Split between All Accounts Table & UPI Details
+        mid_layout = QHBoxLayout()
+        mid_layout.setSpacing(15)
+
+        # Left Frame: All Accounts Balance Overview
+        acc_frame = QFrame()
+        acc_frame.setProperty("class", "CardFrame")
+        acc_vbox = QVBoxLayout(acc_frame)
+        acc_vbox.setContentsMargins(15, 15, 15, 15)
+        acc_vbox.setSpacing(10)
+
+        acc_header = QHBoxLayout()
+        self.lbl_all_acc_title = QLabel(f"🏦 {tr('All Accounts Balance Overview')}")
+        self.lbl_all_acc_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        acc_header.addWidget(self.lbl_all_acc_title)
+        acc_header.addStretch()
+
+        self.btn_dash_add_bank = QPushButton(f"+ {tr('Add Account')}")
+        self.btn_dash_add_bank.setProperty("class", "btn-success")
+        self.btn_dash_add_bank.setFixedHeight(28)
+        self.btn_dash_add_bank.setCursor(Qt.PointingHandCursor)
+        self.btn_dash_add_bank.clicked.connect(self.handle_add_bank)
+        acc_header.addWidget(self.btn_dash_add_bank)
+
+        acc_vbox.addLayout(acc_header)
+
+        # All Accounts Table
+        self.dash_accounts_table = QTableWidget()
+        self.dash_accounts_table.setColumnCount(5)
+        self.dash_accounts_table.setHorizontalHeaderLabels([
+            tr("Account / Source"), tr("Institution"), tr("Type"), tr("Today Inflows"), tr("Current Balance")
+        ])
+        self.dash_accounts_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.dash_accounts_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.dash_accounts_table.verticalHeader().setVisible(False)
+        self.dash_accounts_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.dash_accounts_table.setMinimumHeight(220)
+        acc_vbox.addWidget(self.dash_accounts_table)
+
+        # Summary footer label
+        self.lbl_acc_summary = QLabel("")
+        self.lbl_acc_summary.setStyleSheet("color: #94a3b8; font-weight: bold; font-size: 12px; margin-top: 4px;")
+        acc_vbox.addWidget(self.lbl_acc_summary)
+
+        mid_layout.addWidget(acc_frame, 3)
+
+        # Right Frame: UPI Account Received Payments
+        upi_frame = QFrame()
+        upi_frame.setProperty("class", "CardFrame")
+        upi_vbox = QVBoxLayout(upi_frame)
+        upi_vbox.setContentsMargins(15, 15, 15, 15)
+        upi_vbox.setSpacing(10)
+
+        upi_header = QHBoxLayout()
+        self.lbl_upi_title = QLabel(f"📱 {tr('UPI Received Payments')}")
+        self.lbl_upi_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        upi_header.addWidget(self.lbl_upi_title)
+        upi_header.addStretch()
+
+        self.upi_period_combo = QComboBox()
+        self.upi_period_combo.addItems([tr("All Time"), tr("Today"), tr("This Week"), tr("This Month")])
+        self.upi_period_combo.currentIndexChanged.connect(self.load_dashboard_data)
+        upi_header.addWidget(self.upi_period_combo)
+
+        upi_vbox.addLayout(upi_header)
+
+        # UPI Highlights Bar
+        upi_stats_layout = QHBoxLayout()
+        upi_stats_layout.setSpacing(10)
+
+        self.lbl_upi_amount_badge = QLabel("₹0.00")
+        self.lbl_upi_amount_badge.setStyleSheet("font-size: 18px; font-weight: bold; color: #f59e0b;")
+
+        self.lbl_upi_count_badge = QLabel("0 Txns")
+        self.lbl_upi_count_badge.setStyleSheet("font-size: 13px; font-weight: bold; color: #38bdf8; background: rgba(56,189,248,0.12); padding: 3px 8px; border-radius: 4px;")
+
+        upi_stats_layout.addWidget(self.lbl_upi_amount_badge)
+        upi_stats_layout.addWidget(self.lbl_upi_count_badge)
+        upi_stats_layout.addStretch()
+        upi_vbox.addLayout(upi_stats_layout)
+
+        # UPI Transactions Table
+        self.dash_upi_table = QTableWidget()
+        self.dash_upi_table.setColumnCount(4)
+        self.dash_upi_table.setHorizontalHeaderLabels([
+            tr("Date"), tr("Account / Bank"), tr("Description"), tr("Amount (+₹)")
+        ])
+        self.dash_upi_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.dash_upi_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.dash_upi_table.verticalHeader().setVisible(False)
+        self.dash_upi_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.dash_upi_table.setMinimumHeight(220)
+        upi_vbox.addWidget(self.dash_upi_table)
+
+        mid_layout.addWidget(upi_frame, 2)
+        layout.addLayout(mid_layout)
+
+        # 3. Quick Action Shortcut Pills Bar
+        actions_frame = QFrame()
+        actions_frame.setProperty("class", "CardFrame")
+        act_layout = QHBoxLayout(actions_frame)
+        act_layout.setContentsMargins(15, 10, 15, 10)
+        act_layout.setSpacing(12)
+
+        lbl_quick = QLabel(tr("Quick Navigation") + ":")
+        lbl_quick.setStyleSheet("color: #94a3b8; font-weight: bold; font-size: 12px;")
+        act_layout.addWidget(lbl_quick)
+
+        self.btn_nav_cash = QPushButton(f"💵 {tr('Cash Drawer')}")
+        self.btn_nav_cash.setProperty("class", "btn-secondary")
+        self.btn_nav_cash.setCursor(Qt.PointingHandCursor)
+        self.btn_nav_cash.clicked.connect(lambda: self.tabs.setCurrentIndex(1))
+        act_layout.addWidget(self.btn_nav_cash)
+
+        self.btn_nav_passbook = QPushButton(f"🏛️ {tr('Bank Passbook')}")
+        self.btn_nav_passbook.setProperty("class", "btn-secondary")
+        self.btn_nav_passbook.setCursor(Qt.PointingHandCursor)
+        self.btn_nav_passbook.clicked.connect(lambda: self.tabs.setCurrentIndex(2))
+        act_layout.addWidget(self.btn_nav_passbook)
+
+        self.btn_nav_transfer = QPushButton(f"🔄 {tr('Fund Transfer')}")
+        self.btn_nav_transfer.setProperty("class", "btn-secondary")
+        self.btn_nav_transfer.setCursor(Qt.PointingHandCursor)
+        self.btn_nav_transfer.clicked.connect(lambda: self.tabs.setCurrentIndex(3))
+        act_layout.addWidget(self.btn_nav_transfer)
+
+        self.btn_nav_direct = QPushButton(f"📝 {tr('Daily Expenses & Direct Income')}")
+        self.btn_nav_direct.setProperty("class", "btn-secondary")
+        self.btn_nav_direct.setCursor(Qt.PointingHandCursor)
+        self.btn_nav_direct.clicked.connect(lambda: self.tabs.setCurrentIndex(4))
+        act_layout.addWidget(self.btn_nav_direct)
+
+        self.btn_nav_master = QPushButton(f"🏦 {tr('Bank Accounts Master')}")
+        self.btn_nav_master.setProperty("class", "btn-secondary")
+        self.btn_nav_master.setCursor(Qt.PointingHandCursor)
+        self.btn_nav_master.clicked.connect(lambda: self.tabs.setCurrentIndex(5))
+        act_layout.addWidget(self.btn_nav_master)
+
+        act_layout.addStretch()
+        layout.addWidget(actions_frame)
+
+        # Wrap in scroll layout
+        outer_layout = QVBoxLayout(self.dashboard_tab)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        scroll.setWidget(content_widget)
+        outer_layout.addWidget(scroll)
+
+    def load_dashboard_data(self):
+        session = Session()
+        try:
+            today = datetime.date.today()
+            week_start = today - datetime.timedelta(days=today.weekday())
+            month_start = today.replace(day=1)
+
+            # 1. Bank Accounts & Balances
+            banks = session.query(BankAccount).all()
+            total_bank_bal = sum(b.balance for b in banks)
+
+            # 2. Cash Drawer Balance
+            cash_in_all = sum(tx.amount for tx in session.query(CashTransaction).filter_by(transaction_type='in').all())
+            cash_out_all = sum(tx.amount for tx in session.query(CashTransaction).filter_by(transaction_type='out').all())
+            cash_bal = cash_in_all - cash_out_all
+
+            total_liquid = total_bank_bal + cash_bal
+
+            # Update Stat Cards
+            self.dash_card_bank.value_label.setText(f"₹{total_bank_bal:,.2f}")
+            self.dash_card_cash.value_label.setText(f"₹{cash_bal:,.2f}")
+            self.dash_card_total.value_label.setText(f"₹{total_liquid:,.2f}")
+
+            # 3. UPI Stats and Transactions
+            period = self.upi_period_combo.currentText() if hasattr(self, 'upi_period_combo') else "All Time"
+
+            # Query UPI Bank Deposits
+            q_bank = session.query(BankTransaction).join(BankAccount).filter(BankTransaction.transaction_type == 'deposit')
+            q_bank = q_bank.filter(
+                BankTransaction.description.ilike('%upi%') |
+                BankTransaction.description.ilike('%gpay%') |
+                BankTransaction.description.ilike('%phonepe%') |
+                BankTransaction.description.ilike('%paytm%') |
+                BankTransaction.description.ilike('%qr%') |
+                BankAccount.account_type.ilike('%upi%') |
+                BankAccount.bank_name.ilike('%upi%') |
+                BankAccount.account_name.ilike('%upi%')
+            )
+
+            # Query UPI Money Transfers
+            q_mt = session.query(MoneyTransfer).filter(MoneyTransfer.transfer_type == 'UPI')
+
+            if period in ["Today", tr("Today")]:
+                q_bank = q_bank.filter(BankTransaction.date == today)
+                q_mt = q_mt.filter(MoneyTransfer.date == today)
+            elif period in ["This Week", tr("This Week")]:
+                q_bank = q_bank.filter(BankTransaction.date >= week_start)
+                q_mt = q_mt.filter(MoneyTransfer.date >= week_start)
+            elif period in ["This Month", tr("This Month")]:
+                q_bank = q_bank.filter(BankTransaction.date >= month_start)
+                q_mt = q_mt.filter(MoneyTransfer.date >= month_start)
+
+            b_txs = q_bank.order_by(BankTransaction.date.desc(), BankTransaction.id.desc()).all()
+            mt_txs = q_mt.order_by(MoneyTransfer.date.desc(), MoneyTransfer.id.desc()).all()
+
+            upi_count = len(b_txs) + len(mt_txs)
+            upi_amount = sum(t.amount for t in b_txs) + sum(m.amount for m in mt_txs)
+
+            self.dash_card_upi.value_label.setText(f"₹{upi_amount:,.2f}")
+            self.lbl_upi_amount_badge.setText(f"₹{upi_amount:,.2f}")
+            self.lbl_upi_count_badge.setText(f"{upi_count} {tr('Txns')}")
+
+            # Populate UPI Table
+            all_upi_rows = []
+            for t in b_txs:
+                bname = t.bank_account.bank_name if t.bank_account else "Bank A/c"
+                all_upi_rows.append((t.date, bname, t.description or "UPI Deposit", t.amount))
+            for m in mt_txs:
+                all_upi_rows.append((m.date, f"UPI: {m.upi_id or m.beneficiary_name}", f"Remittance from {m.customer_name or 'Customer'}", m.amount))
+            all_upi_rows.sort(key=lambda r: r[0], reverse=True)
+
+            self.dash_upi_table.setRowCount(len(all_upi_rows))
+            for i, (dt, acc, desc, amt) in enumerate(all_upi_rows[:100]):
+                self.dash_upi_table.setItem(i, 0, QTableWidgetItem(dt.strftime("%Y-%m-%d") if hasattr(dt, 'strftime') else str(dt)))
+                self.dash_upi_table.setItem(i, 1, QTableWidgetItem(acc))
+                self.dash_upi_table.setItem(i, 2, QTableWidgetItem(desc))
+                item_amt = QTableWidgetItem(f"+ ₹{amt:,.2f}")
+                item_amt.setForeground(Qt.green)
+                self.dash_upi_table.setItem(i, 3, item_amt)
+
+            # 4. Populate All Accounts Balance Table
+            today_cash_in = sum(tx.amount for tx in session.query(CashTransaction).filter(CashTransaction.transaction_type == 'in', CashTransaction.date == today).all())
+
+            accounts_data = []
+            # Cash Drawer
+            accounts_data.append({
+                "name": tr("Cash Drawer"),
+                "inst": tr("Physical Cash"),
+                "type": tr("Cash"),
+                "today_in": today_cash_in,
+                "balance": cash_bal,
+                "is_cash": True
+            })
+
+            for b in banks:
+                today_b_in = sum(tx.amount for tx in session.query(BankTransaction).filter(
+                    BankTransaction.account_id == b.id,
+                    BankTransaction.transaction_type == 'deposit',
+                    BankTransaction.date == today
+                ).all())
+                is_upi = (b.account_type or "").upper() in ["UPI", "UPI / QR"] or "upi" in (b.bank_name or "").lower() or "upi" in (b.account_name or "").lower()
+                accounts_data.append({
+                    "name": b.account_name,
+                    "inst": b.bank_name,
+                    "type": "UPI / QR" if is_upi else (b.account_type or "Current"),
+                    "today_in": today_b_in,
+                    "balance": b.balance,
+                    "is_upi": is_upi
+                })
+
+            self.dash_accounts_table.setRowCount(len(accounts_data))
+            for i, acc in enumerate(accounts_data):
+                icon_prefix = "💵 " if acc.get("is_cash") else ("📱 " if acc.get("is_upi") else "🏛️ ")
+                self.dash_accounts_table.setItem(i, 0, QTableWidgetItem(f"{icon_prefix}{acc['name']}"))
+                self.dash_accounts_table.setItem(i, 1, QTableWidgetItem(acc['inst']))
+                self.dash_accounts_table.setItem(i, 2, QTableWidgetItem(acc['type']))
+
+                in_item = QTableWidgetItem(f"+ ₹{acc['today_in']:,.2f}")
+                if acc['today_in'] > 0:
+                    in_item.setForeground(Qt.green)
+                self.dash_accounts_table.setItem(i, 3, in_item)
+
+                bal_item = QTableWidgetItem(f"₹{acc['balance']:,.2f}")
+                if acc['balance'] < 1000.0:
+                    bal_item.setForeground(Qt.red)
+                else:
+                    bal_item.setForeground(Qt.cyan)
+                self.dash_accounts_table.setItem(i, 4, bal_item)
+
+            self.lbl_acc_summary.setText(
+                f"💵 {tr('Cash')}: ₹{cash_bal:,.2f}  |  🏛️ {tr('Banks')}: ₹{total_bank_bal:,.2f}  |  💼 {tr('Total Funds')}: ₹{total_liquid:,.2f}"
+            )
+
+        except Exception as e:
+            print(f"Error loading dashboard data: {e}")
+        finally:
+            session.close()
 
     # -------------------------------------------------------------------------
     # TAB 1: CASH DRAWER
@@ -680,10 +1050,10 @@ class BankCashView(QWidget):
         layout.addWidget(self.cash_table)
 
     # -------------------------------------------------------------------------
-    # TAB 2: BANK ACCOUNTS & PASSBOOK (வங்கிக் கணக்குகள்)
+    # TAB 2: BANK ACCOUNTS MASTER (வங்கி கணக்குகள் மாஸ்டர்)
     # -------------------------------------------------------------------------
-    def setup_bank_tab(self):
-        layout = QVBoxLayout(self.bank_tab)
+    def setup_bank_master_tab(self):
+        layout = QVBoxLayout(self.bank_master_tab)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(15)
 
@@ -699,57 +1069,72 @@ class BankCashView(QWidget):
 
         layout.addLayout(metrics_layout)
 
-        # Bank Accounts Management Bar
-        bank_mgmt_frame = QFrame()
-        bank_mgmt_frame.setProperty("class", "CardFrame")
-        bm_layout = QVBoxLayout(bank_mgmt_frame)
-        bm_layout.setContentsMargins(12, 12, 12, 12)
-        bm_layout.setSpacing(10)
+        # Action & Search Bar
+        top_bar = QHBoxLayout()
+        top_bar.setSpacing(10)
 
-        bm_top = QHBoxLayout()
-        bm_title = QLabel("Bank Accounts Overview")
-        bm_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
-        bm_top.addWidget(bm_title)
-        bm_top.addStretch()
+        self.bank_search_input = QLineEdit()
+        self.bank_search_input.setPlaceholderText(tr("Search bank accounts..."))
+        self.bank_search_input.textChanged.connect(self.load_bank_accounts)
+        top_bar.addWidget(self.bank_search_input, 4)
 
-        self.btn_add_bank = QPushButton("+ Add Bank Account")
+        self.btn_add_bank = QPushButton(f"+ {tr('Add Account')} (Ctrl+N)")
         self.btn_add_bank.setProperty("class", "btn-success")
+        self.btn_add_bank.setToolTip("Add new bank account (Ctrl+N)")
         self.btn_add_bank.clicked.connect(self.handle_add_bank)
-        bm_top.addWidget(self.btn_add_bank)
+        top_bar.addWidget(self.btn_add_bank, 1)
 
-        self.btn_edit_bank = QPushButton("Edit Bank")
+        self.btn_edit_bank = QPushButton(f"✏️ {tr('Edit Account')}")
         self.btn_edit_bank.setProperty("class", "btn-secondary")
         self.btn_edit_bank.clicked.connect(self.handle_edit_bank)
-        bm_top.addWidget(self.btn_edit_bank)
+        top_bar.addWidget(self.btn_edit_bank, 1)
 
-        bm_layout.addLayout(bm_top)
+        self.btn_delete_bank = QPushButton(f"🗑️ {tr('Delete')}")
+        self.btn_delete_bank.setProperty("class", "btn-danger")
+        self.btn_delete_bank.clicked.connect(self.handle_delete_bank)
+        top_bar.addWidget(self.btn_delete_bank, 1)
+
+        layout.addLayout(top_bar)
 
         # Bank Accounts Table
         self.bank_acc_table = QTableWidget()
         self.bank_acc_table.setColumnCount(6)
         self.bank_acc_table.setHorizontalHeaderLabels([
-            "ID", "Bank Name", "Account Number", "Account Display Name", "Account Type", "Current Balance"
+            "ID", tr("Bank Name"), tr("Account Number"), tr("Account Display Name"), tr("Account Type"), tr("Current Balance")
         ])
         self.bank_acc_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.bank_acc_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.bank_acc_table.verticalHeader().setVisible(False)
-        self.bank_acc_table.setFixedHeight(140)
         self.bank_acc_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.bank_acc_table.setSelectionMode(QTableWidget.SingleSelection)
         self.bank_acc_table.doubleClicked.connect(self.handle_edit_bank)
-        bm_layout.addWidget(self.bank_acc_table)
+        layout.addWidget(self.bank_acc_table)
 
-        layout.addWidget(bank_mgmt_frame)
+        # Master compatibility aliases for permissions & shortcuts
+        self.add_btn = self.btn_add_bank
+        self.edit_btn = self.btn_edit_bank
+        self.delete_btn = self.btn_delete_bank
+        self.table = self.bank_acc_table
+        self.search_input = self.bank_search_input
+        self.bank_accounts_view = self
+
+    # -------------------------------------------------------------------------
+    # TAB 3: BANK PASSBOOK (வங்கி பாஸ்புக்)
+    # -------------------------------------------------------------------------
+    def setup_passbook_tab(self):
+        layout = QVBoxLayout(self.passbook_tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
 
         # Passbook Filter & Section
-        passbook_title = QLabel("Bank Passbook Transactions")
-        passbook_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff; margin-top: 5px;")
+        passbook_title = QLabel(tr("Bank Passbook Transactions"))
+        passbook_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
         layout.addWidget(passbook_title)
 
         pb_filter_bar = QHBoxLayout()
         pb_filter_bar.setSpacing(10)
 
-        lbl_bank_sel = QLabel("Filter by Bank:")
+        lbl_bank_sel = QLabel(tr("Filter by Bank") + ":")
         lbl_bank_sel.setStyleSheet("font-weight: bold; color: #94a3b8;")
         pb_filter_bar.addWidget(lbl_bank_sel)
 
@@ -757,17 +1142,17 @@ class BankCashView(QWidget):
         self.pb_bank_filter.currentIndexChanged.connect(self.load_bank_passbook)
         pb_filter_bar.addWidget(self.pb_bank_filter, 1)
 
-        lbl_pb_period = QLabel("Period:")
+        lbl_pb_period = QLabel(tr("Period") + ":")
         lbl_pb_period.setStyleSheet("font-weight: bold; color: #94a3b8;")
         pb_filter_bar.addWidget(lbl_pb_period)
 
         self.pb_period_combo = QComboBox()
-        self.pb_period_combo.addItems(["All Transactions", "Today", "Yesterday", "This Week", "This Month"])
+        self.pb_period_combo.addItems([tr("All Transactions"), tr("Today"), tr("Yesterday"), tr("This Week"), tr("This Month")])
         self.pb_period_combo.currentIndexChanged.connect(self.load_bank_passbook)
         pb_filter_bar.addWidget(self.pb_period_combo)
 
         self.pb_search = QLineEdit()
-        self.pb_search.setPlaceholderText("Search bank passbook...")
+        self.pb_search.setPlaceholderText(tr("Search bank passbook..."))
         self.pb_search.textChanged.connect(self.load_bank_passbook)
         pb_filter_bar.addWidget(self.pb_search, 2)
 
@@ -777,7 +1162,7 @@ class BankCashView(QWidget):
         self.bank_tx_table = QTableWidget()
         self.bank_tx_table.setColumnCount(6)
         self.bank_tx_table.setHorizontalHeaderLabels([
-            "Date", "Bank Account", "Description", "Source / Ref", "Deposit (+₹)", "Withdrawal (-₹)"
+            tr("Date"), tr("Bank Account"), tr("Description"), tr("Source / Ref"), f"{tr('Deposit')} (+₹)", f"{tr('Withdrawal')} (-₹)"
         ])
         self.bank_tx_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.bank_tx_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -1002,6 +1387,7 @@ class BankCashView(QWidget):
     # -------------------------------------------------------------------------
     def refresh_data(self):
         """Called automatically when switching to this view."""
+        self.load_dashboard_data()
         self.load_cash_metrics_and_ledger()
         self.load_bank_accounts_and_passbook()
         self.populate_transfer_combos()
@@ -1108,6 +1494,10 @@ class BankCashView(QWidget):
             session.close()
 
     def load_bank_accounts_and_passbook(self):
+        self.load_bank_accounts()
+        self.load_bank_passbook()
+
+    def load_bank_accounts(self):
         session = Session()
         try:
             banks = session.query(BankAccount).all()
@@ -1116,9 +1506,21 @@ class BankCashView(QWidget):
             self.card_bank_balance.value_label.setText(f"₹{total_bal:,.2f}")
             self.card_bank_count.value_label.setText(str(len(banks)))
 
+            search_txt = self.bank_search_input.text().strip().lower() if hasattr(self, 'bank_search_input') else ""
+            if search_txt:
+                filtered_banks = [
+                    b for b in banks
+                    if search_txt in (b.bank_name or "").lower()
+                    or search_txt in (b.account_name or "").lower()
+                    or search_txt in (b.account_number or "").lower()
+                    or search_txt in (b.account_type or "").lower()
+                ]
+            else:
+                filtered_banks = banks
+
             # Populate Accounts Table
-            self.bank_acc_table.setRowCount(len(banks))
-            for i, a in enumerate(banks):
+            self.bank_acc_table.setRowCount(len(filtered_banks))
+            for i, a in enumerate(filtered_banks):
                 self.bank_acc_table.setItem(i, 0, QTableWidgetItem(str(a.id)))
                 self.bank_acc_table.setItem(i, 1, QTableWidgetItem(a.bank_name))
                 self.bank_acc_table.setItem(i, 2, QTableWidgetItem(a.account_number or ""))
@@ -1133,24 +1535,23 @@ class BankCashView(QWidget):
                 self.bank_acc_table.setItem(i, 5, bal_item)
 
             # Update passbook bank filter combo
-            cur_bank_id = self.pb_bank_filter.currentData()
-            self.pb_bank_filter.blockSignals(True)
-            self.pb_bank_filter.clear()
-            self.pb_bank_filter.addItem("All Registered Banks", -1)
-            for b in banks:
-                self.pb_bank_filter.addItem(f"{b.bank_name} - {b.account_name} ({b.account_number or 'No A/C'})", b.id)
-            if cur_bank_id is not None:
-                idx = self.pb_bank_filter.findData(cur_bank_id)
-                if idx >= 0:
-                    self.pb_bank_filter.setCurrentIndex(idx)
-            self.pb_bank_filter.blockSignals(False)
+            if hasattr(self, 'pb_bank_filter'):
+                cur_bank_id = self.pb_bank_filter.currentData()
+                self.pb_bank_filter.blockSignals(True)
+                self.pb_bank_filter.clear()
+                self.pb_bank_filter.addItem(tr("All Registered Banks"), -1)
+                for b in banks:
+                    self.pb_bank_filter.addItem(f"{b.bank_name} - {b.account_name} ({b.account_number or 'No A/C'})", b.id)
+                if cur_bank_id is not None:
+                    idx = self.pb_bank_filter.findData(cur_bank_id)
+                    if idx >= 0:
+                        self.pb_bank_filter.setCurrentIndex(idx)
+                self.pb_bank_filter.blockSignals(False)
 
         except Exception as e:
             print(f"Error loading bank accounts: {e}")
         finally:
             session.close()
-
-        self.load_bank_passbook()
 
     def load_bank_passbook(self):
         session = Session()
@@ -1214,7 +1615,7 @@ class BankCashView(QWidget):
     def handle_edit_bank(self):
         selected = self.bank_acc_table.selectedItems()
         if not selected:
-            QMessageBox.information(self, "Select Account", "Please select a bank account from the table to edit.")
+            QMessageBox.information(self, tr("Select Account"), tr("Please select a bank account from the table to edit."))
             return
 
         row = selected[0].row()
@@ -1229,6 +1630,35 @@ class BankCashView(QWidget):
                     self.refresh_data()
         finally:
             session.close()
+
+    def handle_delete_bank(self):
+        selected = self.bank_acc_table.selectedItems()
+        if not selected:
+            QMessageBox.information(self, tr("No Selection"), tr("Please select a bank account to delete."))
+            return
+
+        row = selected[0].row()
+        acc_id = int(self.bank_acc_table.item(row, 0).text())
+
+        confirm = QMessageBox.question(
+            self, tr("Confirm Delete"), 
+            tr("Are you sure you want to delete this bank account? This will also remove associated transaction ledgers."),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if confirm == QMessageBox.Yes:
+            session = Session()
+            try:
+                acc = session.query(BankAccount).get(acc_id)
+                if acc:
+                    session.query(BankTransaction).filter_by(account_id=acc.id).delete()
+                    session.delete(acc)
+                    session.commit()
+                    self.refresh_data()
+            except Exception as e:
+                session.rollback()
+                QMessageBox.critical(self, tr("Error"), f"Could not delete bank account: {e}")
+            finally:
+                session.close()
 
     # -------------------------------------------------------------------------
     # TAB 3 LOGIC: FUND TRANSFER
@@ -1712,13 +2142,13 @@ class BankCashView(QWidget):
     # QUICK MODAL HELPERS (FROM CASH DRAWER TAB)
     # -------------------------------------------------------------------------
     def open_quick_cash_in(self):
-        self.tabs.setCurrentIndex(3) # Switch to Direct tab
+        self.tabs.setCurrentIndex(self.tabs.indexOf(self.direct_tab))
         self.dir_type.setCurrentIndex(1) # Deposit / Income
         self.dir_acc_type.setCurrentIndex(0) # Cash Drawer
         self.dir_amount.setFocus()
 
     def open_quick_cash_out(self):
-        self.tabs.setCurrentIndex(3) # Switch to Direct tab
+        self.tabs.setCurrentIndex(self.tabs.indexOf(self.direct_tab))
         self.dir_type.setCurrentIndex(0) # Withdrawal / Expense
         self.dir_acc_type.setCurrentIndex(0) # Cash Drawer
         self.dir_amount.setFocus()
