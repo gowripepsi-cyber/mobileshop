@@ -33,8 +33,8 @@ class DashboardView(QWidget):
         # 1. Search Bar at the very top of self.main_layout
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Search name, mobile number, job number, bill number...")
-        self.search_input.setStyleSheet("QLineEdit { font-size: 14px; padding: 10px 15px; border-radius: 8px; }")
+        self.search_input.setPlaceholderText("🔍 What do you want to find? (Search name, mobile number, job number, bill number...)")
+        self.search_input.setStyleSheet("QLineEdit { font-size: 14px; padding: 12px 20px; border-radius: 22px; background-color: #f4faee; border: 1.5px solid #8fd53b; color: #0f172a; } QLineEdit:focus { border: 2px solid #8fd53b; background-color: #ffffff; }")
         self.search_input.textChanged.connect(self.handle_search)
         search_layout.addWidget(self.search_input)
         self.main_layout.addLayout(search_layout)
@@ -116,7 +116,7 @@ class DashboardView(QWidget):
         bank_card_layout.setContentsMargins(15, 15, 15, 15)
         
         bank_title = QLabel("Bank & Cash Accounts Breakdown")
-        bank_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        bank_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         bank_card_layout.addWidget(bank_title)
 
         self.bank_table = QTableWidget()
@@ -181,7 +181,7 @@ class DashboardView(QWidget):
         results_layout.setContentsMargins(15, 15, 15, 15)
 
         results_title = QLabel("Search Results")
-        results_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #6366f1; margin-bottom: 10px;")
+        results_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         results_layout.addWidget(results_title)
 
         self.results_table = QTableWidget()

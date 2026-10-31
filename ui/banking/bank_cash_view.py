@@ -609,7 +609,7 @@ class BankCashView(QWidget):
             self.refresh_data()
 
     def retranslate_ui(self):
-        """Updates tab headers and labels when active language changes."""
+        """Updates tab headers, table headers, labels, and data rows when active language changes."""
         self.tabs.setTabText(0, f"📊 {tr('Dashboard')}")
         self.tabs.setTabText(1, f"💵 {tr('Cash Drawer')}")
         self.tabs.setTabText(2, f"🏛️ {tr('Bank Passbook')}")
@@ -617,6 +617,7 @@ class BankCashView(QWidget):
         self.tabs.setTabText(4, f"📝 {tr('Daily Expenses & Direct Income')}")
         self.tabs.setTabText(5, f"🏦 {tr('Bank Accounts Master')}")
 
+        # Tab 0: Dashboard
         if hasattr(self, 'dash_card_bank'):
             self.dash_card_bank.title_label.setText(tr("Total Bank Balance"))
         if hasattr(self, 'dash_card_cash'):
@@ -628,11 +629,42 @@ class BankCashView(QWidget):
 
         if hasattr(self, 'lbl_all_acc_title'):
             self.lbl_all_acc_title.setText(f"🏦 {tr('All Accounts Balance Overview')}")
-        if hasattr(self, 'lbl_upi_title'):
-            self.lbl_upi_title.setText(f"📱 {tr('UPI Received Payments')}")
         if hasattr(self, 'btn_dash_add_bank'):
             self.btn_dash_add_bank.setText(f"+ {tr('Add Account')}")
 
+        if hasattr(self, 'dash_accounts_table'):
+            self.dash_accounts_table.setHorizontalHeaderLabels([
+                tr("Account / Source"), tr("Institution"), tr("Type"), tr("Today Inflows"), tr("Current Balance")
+            ])
+
+        if hasattr(self, 'lbl_upi_title'):
+            self.lbl_upi_title.setText(f"📱 {tr('UPI Received Payments')}")
+        if hasattr(self, 'dash_upi_table'):
+            self.dash_upi_table.setHorizontalHeaderLabels([
+                tr("Date"), tr("Account / Bank"), tr("Description"), f"{tr('Amount')} (+₹)"
+            ])
+        if hasattr(self, 'upi_period_combo'):
+            curr_idx = self.upi_period_combo.currentIndex()
+            self.upi_period_combo.blockSignals(True)
+            self.upi_period_combo.clear()
+            self.upi_period_combo.addItems([tr("All Time"), tr("Today"), tr("This Week"), tr("This Month")])
+            self.upi_period_combo.setCurrentIndex(curr_idx if curr_idx >= 0 else 0)
+            self.upi_period_combo.blockSignals(False)
+
+        if hasattr(self, 'lbl_quick'):
+            self.lbl_quick.setText(tr("Quick Navigation") + ":")
+        if hasattr(self, 'btn_nav_cash'):
+            self.btn_nav_cash.setText(f"💵 {tr('Cash Drawer')}")
+        if hasattr(self, 'btn_nav_passbook'):
+            self.btn_nav_passbook.setText(f"🏛️ {tr('Bank Passbook')}")
+        if hasattr(self, 'btn_nav_transfer'):
+            self.btn_nav_transfer.setText(f"🔄 {tr('Fund Transfer')}")
+        if hasattr(self, 'btn_nav_direct'):
+            self.btn_nav_direct.setText(f"📝 {tr('Daily Expenses & Direct Income')}")
+        if hasattr(self, 'btn_nav_master'):
+            self.btn_nav_master.setText(f"🏦 {tr('Bank Accounts Master')}")
+
+        # Tab 1: Cash Drawer
         if hasattr(self, 'card_cash_in_hand'):
             self.card_cash_in_hand.title_label.setText(tr("Cash in Hand"))
         if hasattr(self, 'card_today_in'):
@@ -649,21 +681,66 @@ class BankCashView(QWidget):
         if hasattr(self, 'btn_quick_out'):
             self.btn_quick_out.setText(f"- {tr('Cash Expense')}")
 
+        if hasattr(self, 'lbl_cash_filter'):
+            self.lbl_cash_filter.setText(tr("Filter Period") + ":")
+        if hasattr(self, 'cash_period_combo'):
+            curr_idx = self.cash_period_combo.currentIndex()
+            self.cash_period_combo.blockSignals(True)
+            self.cash_period_combo.clear()
+            self.cash_period_combo.addItems([tr("All Transactions"), tr("Today"), tr("Yesterday"), tr("This Week"), tr("This Month")])
+            self.cash_period_combo.setCurrentIndex(curr_idx if curr_idx >= 0 else 0)
+            self.cash_period_combo.blockSignals(False)
+        if hasattr(self, 'cash_table'):
+            self.cash_table.setHorizontalHeaderLabels([
+                tr("Date"), tr("Description"), tr("Source / Category"), f"{tr('Cash In')} (+₹)", f"{tr('Cash Out')} (-₹)"
+            ])
+
+        # Tab 2: Bank Passbook
+        if hasattr(self, 'passbook_title'):
+            self.passbook_title.setText(tr("Bank Passbook Transactions"))
+        if hasattr(self, 'lbl_bank_sel'):
+            self.lbl_bank_sel.setText(tr("Filter by Bank") + ":")
+        if hasattr(self, 'lbl_pb_period'):
+            self.lbl_pb_period.setText(tr("Period") + ":")
+        if hasattr(self, 'pb_period_combo'):
+            curr_idx = self.pb_period_combo.currentIndex()
+            self.pb_period_combo.blockSignals(True)
+            self.pb_period_combo.clear()
+            self.pb_period_combo.addItems([tr("All Transactions"), tr("Today"), tr("Yesterday"), tr("This Week"), tr("This Month")])
+            self.pb_period_combo.setCurrentIndex(curr_idx if curr_idx >= 0 else 0)
+            self.pb_period_combo.blockSignals(False)
+        if hasattr(self, 'bank_tx_table'):
+            self.bank_tx_table.setHorizontalHeaderLabels([
+                tr("Date"), tr("Bank Account"), tr("Description"), tr("Source / Ref"), f"{tr('Deposit')} (+₹)", f"{tr('Withdrawal')} (-₹)"
+            ])
+
+        # Tab 3: Fund Transfer
         if hasattr(self, 'lbl_exec_title'):
             self.lbl_exec_title.setText(tr("Execute Fund Transfer"))
         if hasattr(self, 'lbl_hist_title'):
             self.lbl_hist_title.setText(tr("Recent Transfer History"))
         if hasattr(self, 'btn_submit_transfer'):
             self.btn_submit_transfer.setText(f"🔄 {tr('Complete Transfer')}")
-
         if hasattr(self, 'transfer_log_table'):
             self.transfer_log_table.setHorizontalHeaderLabels([
                 tr("ID"), tr("Date"), tr("From Account"), tr("To Account"), f"{tr('Amount')} (₹)", tr("Remarks"), tr("Action")
             ])
+
+        # Tab 4: Daily Expenses & Direct Income
+        if hasattr(self, 'direct_form_title'):
+            self.direct_form_title.setText(tr("Record Expense or Direct Income"))
+        if hasattr(self, 'direct_log_title'):
+            self.direct_log_title.setText(tr("Expenses & Direct Transactions Log"))
+        if hasattr(self, 'btn_save_direct'):
+            self.btn_save_direct.setText(tr("Save Entry"))
         if hasattr(self, 'direct_log_table'):
             self.direct_log_table.setHorizontalHeaderLabels([
                 tr("ID"), tr("Date"), tr("Type"), tr("Account"), f"{tr('Amount')} (₹)", tr("Description"), tr("Action")
             ])
+
+        # Always reload dashboard data so rows (Cash Drawer, Physical Cash, etc.) and footer are updated
+        if hasattr(self, 'load_dashboard_data'):
+            self.load_dashboard_data()
 
     # -------------------------------------------------------------------------
     # TAB 0: DASHBOARD (வங்கி & கல்லா டாஷ்போர்டு)
@@ -707,7 +784,7 @@ class BankCashView(QWidget):
 
         acc_header = QHBoxLayout()
         self.lbl_all_acc_title = QLabel(f"🏦 {tr('All Accounts Balance Overview')}")
-        self.lbl_all_acc_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        self.lbl_all_acc_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #0f172a;")
         acc_header.addWidget(self.lbl_all_acc_title)
         acc_header.addStretch()
 
@@ -735,7 +812,7 @@ class BankCashView(QWidget):
 
         # Summary footer label
         self.lbl_acc_summary = QLabel("")
-        self.lbl_acc_summary.setStyleSheet("color: #94a3b8; font-weight: bold; font-size: 12px; margin-top: 4px;")
+        self.lbl_acc_summary.setStyleSheet("color: #64748b; font-weight: bold; font-size: 12px; margin-top: 4px;")
         acc_vbox.addWidget(self.lbl_acc_summary)
 
         mid_layout.addWidget(acc_frame, 3)
@@ -749,7 +826,7 @@ class BankCashView(QWidget):
 
         upi_header = QHBoxLayout()
         self.lbl_upi_title = QLabel(f"📱 {tr('UPI Received Payments')}")
-        self.lbl_upi_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        self.lbl_upi_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #0f172a;")
         upi_header.addWidget(self.lbl_upi_title)
         upi_header.addStretch()
 
@@ -765,10 +842,10 @@ class BankCashView(QWidget):
         upi_stats_layout.setSpacing(10)
 
         self.lbl_upi_amount_badge = QLabel("₹0.00")
-        self.lbl_upi_amount_badge.setStyleSheet("font-size: 18px; font-weight: bold; color: #f59e0b;")
+        self.lbl_upi_amount_badge.setStyleSheet("font-size: 18px; font-weight: bold; color: #d97706;")
 
         self.lbl_upi_count_badge = QLabel("0 Txns")
-        self.lbl_upi_count_badge.setStyleSheet("font-size: 13px; font-weight: bold; color: #38bdf8; background: rgba(56,189,248,0.12); padding: 3px 8px; border-radius: 4px;")
+        self.lbl_upi_count_badge.setStyleSheet("font-size: 13px; font-weight: bold; color: #0284c7; background: #e0f2fe; padding: 3px 10px; border-radius: 10px;")
 
         upi_stats_layout.addWidget(self.lbl_upi_amount_badge)
         upi_stats_layout.addWidget(self.lbl_upi_count_badge)
@@ -798,9 +875,9 @@ class BankCashView(QWidget):
         act_layout.setContentsMargins(15, 10, 15, 10)
         act_layout.setSpacing(12)
 
-        lbl_quick = QLabel(tr("Quick Navigation") + ":")
-        lbl_quick.setStyleSheet("color: #94a3b8; font-weight: bold; font-size: 12px;")
-        act_layout.addWidget(lbl_quick)
+        self.lbl_quick = QLabel(tr("Quick Navigation") + ":")
+        self.lbl_quick.setStyleSheet("color: #94a3b8; font-weight: bold; font-size: 12px;")
+        act_layout.addWidget(self.lbl_quick)
 
         self.btn_nav_cash = QPushButton(f"💵 {tr('Cash Drawer')}")
         self.btn_nav_cash.setProperty("class", "btn-secondary")
@@ -1009,9 +1086,9 @@ class BankCashView(QWidget):
         filter_bar = QHBoxLayout()
         filter_bar.setSpacing(10)
 
-        lbl_filter = QLabel("Filter Period:")
-        lbl_filter.setStyleSheet("font-weight: bold; color: #94a3b8;")
-        filter_bar.addWidget(lbl_filter)
+        self.lbl_cash_filter = QLabel(tr("Filter Period") + ":")
+        self.lbl_cash_filter.setStyleSheet("font-weight: bold; color: #94a3b8;")
+        filter_bar.addWidget(self.lbl_cash_filter)
 
         self.cash_period_combo = QComboBox()
         self.cash_period_combo.addItems(["All Transactions", "Today", "Yesterday", "This Week", "This Month"])
@@ -1127,24 +1204,24 @@ class BankCashView(QWidget):
         layout.setSpacing(12)
 
         # Passbook Filter & Section
-        passbook_title = QLabel(tr("Bank Passbook Transactions"))
-        passbook_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
-        layout.addWidget(passbook_title)
+        self.passbook_title = QLabel(tr("Bank Passbook Transactions"))
+        self.passbook_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
+        layout.addWidget(self.passbook_title)
 
         pb_filter_bar = QHBoxLayout()
         pb_filter_bar.setSpacing(10)
 
-        lbl_bank_sel = QLabel(tr("Filter by Bank") + ":")
-        lbl_bank_sel.setStyleSheet("font-weight: bold; color: #94a3b8;")
-        pb_filter_bar.addWidget(lbl_bank_sel)
+        self.lbl_bank_sel = QLabel(tr("Filter by Bank") + ":")
+        self.lbl_bank_sel.setStyleSheet("font-weight: bold; color: #94a3b8;")
+        pb_filter_bar.addWidget(self.lbl_bank_sel)
 
         self.pb_bank_filter = QComboBox()
         self.pb_bank_filter.currentIndexChanged.connect(self.load_bank_passbook)
         pb_filter_bar.addWidget(self.pb_bank_filter, 1)
 
-        lbl_pb_period = QLabel(tr("Period") + ":")
-        lbl_pb_period.setStyleSheet("font-weight: bold; color: #94a3b8;")
-        pb_filter_bar.addWidget(lbl_pb_period)
+        self.lbl_pb_period = QLabel(tr("Period") + ":")
+        self.lbl_pb_period.setStyleSheet("font-weight: bold; color: #94a3b8;")
+        pb_filter_bar.addWidget(self.lbl_pb_period)
 
         self.pb_period_combo = QComboBox()
         self.pb_period_combo.addItems([tr("All Transactions"), tr("Today"), tr("Yesterday"), tr("This Week"), tr("This Month")])
@@ -1186,7 +1263,7 @@ class BankCashView(QWidget):
         form_layout.setSpacing(10)
 
         self.lbl_exec_title = QLabel(tr("Execute Fund Transfer"))
-        self.lbl_exec_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
+        self.lbl_exec_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
         form_layout.addWidget(self.lbl_exec_title)
 
         grid = QGridLayout()
@@ -1263,7 +1340,7 @@ class BankCashView(QWidget):
         hist_layout.setSpacing(10)
 
         self.lbl_hist_title = QLabel(tr("Recent Transfer History"))
-        self.lbl_hist_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
+        self.lbl_hist_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
         hist_layout.addWidget(self.lbl_hist_title)
 
         self.transfer_log_table = QTableWidget()
@@ -1300,9 +1377,9 @@ class BankCashView(QWidget):
         form_layout.setContentsMargins(15, 15, 15, 15)
         form_layout.setSpacing(12)
 
-        lbl_title = QLabel("Record Expense or Direct Income")
-        lbl_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 8px;")
-        form_layout.addRow(lbl_title)
+        self.direct_form_title = QLabel(tr("Record Expense or Direct Income"))
+        self.direct_form_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 8px;")
+        form_layout.addRow(self.direct_form_title)
 
         self.dir_date = QDateEdit()
         self.dir_date.setCalendarPopup(True)
@@ -1348,7 +1425,7 @@ class BankCashView(QWidget):
         form_layout.addRow("Amount (₹) *:", self.dir_amount)
         form_layout.addRow("Description:", self.dir_desc)
 
-        self.btn_save_direct = QPushButton("Save Entry")
+        self.btn_save_direct = QPushButton(tr("Save Entry"))
         self.btn_save_direct.setProperty("class", "btn-success")
         self.btn_save_direct.setFixedHeight(40)
         self.btn_save_direct.clicked.connect(self.save_direct_entry)
@@ -1362,9 +1439,9 @@ class BankCashView(QWidget):
         log_layout = QVBoxLayout(log_frame)
         log_layout.setContentsMargins(15, 15, 15, 15)
 
-        log_title = QLabel("Expenses & Direct Transactions Log")
-        log_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
-        log_layout.addWidget(log_title)
+        self.direct_log_title = QLabel(tr("Expenses & Direct Transactions Log"))
+        self.direct_log_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
+        log_layout.addWidget(self.direct_log_title)
 
         self.direct_log_table = QTableWidget()
         self.direct_log_table.setColumnCount(7)
@@ -1397,13 +1474,14 @@ class BankCashView(QWidget):
 
     def _create_stat_card(self, title: str, initial_value: str, color_hex: str) -> QFrame:
         card = QFrame()
-        card.setProperty("class", "CardFrame")
+        card.setProperty("class", "MetricCard")
+        card.setStyleSheet(f"border-left: 4px solid {color_hex};")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(15, 12, 15, 12)
+        card_layout.setContentsMargins(20, 14, 16, 14)
         card_layout.setSpacing(4)
 
         lbl_t = QLabel(tr(title))
-        lbl_t.setStyleSheet("font-size: 12px; color: #94a3b8; font-weight: bold;")
+        lbl_t.setStyleSheet("font-size: 12px; color: #64748b; font-weight: bold;")
         card_layout.addWidget(lbl_t)
         card.title_label = lbl_t
 

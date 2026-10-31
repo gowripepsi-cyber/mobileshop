@@ -303,7 +303,7 @@ class ReportsView(QWidget):
 
         # 3. Detailed Data Table (PDF Style statement layout)
         table_title = QLabel("<b>Detailed Inventory Holding & Profit Statement</b>")
-        table_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; margin-top: 5px;")
+        table_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a; margin-top: 5px;")
         layout.addWidget(table_title)
 
         self.profit_table = QTableWidget()
@@ -544,7 +544,7 @@ class ReportsView(QWidget):
         export_layout.setSpacing(15)
 
         title = QLabel("Select Reports to Export to Excel")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         export_layout.addWidget(title)
 
         self.chk_stock = QCheckBox("Current Stock Ledger")
@@ -2241,26 +2241,27 @@ class ProductDrillDownDialog(QDialog):
         self.resize(950, 650)
         self.setStyleSheet("""
             QDialog {
-                background-color: #12121e;
-                color: #ffffff;
+                background-color: #ffffff;
+                color: #0f172a;
             }
             QLabel {
-                color: #ffffff;
+                color: #0f172a;
             }
             QTableWidget {
-                background-color: #1e1e2f;
-                gridline-color: #2b2b40;
-                color: #ffffff;
-                border: 1px solid #2b2b40;
+                background-color: #ffffff;
+                gridline-color: #f1f5f9;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
             }
             QTableWidget::item {
-                padding: 5px;
+                padding: 7px;
             }
             QHeaderView::section {
-                background-color: #2b2b40;
-                color: #ffffff;
-                padding: 6px;
-                border: 1px solid #1e1e2f;
+                background-color: #f4faee;
+                color: #334155;
+                padding: 8px;
+                border: none;
+                border-bottom: 2px solid #e2e8f0;
                 font-weight: bold;
             }
         """)

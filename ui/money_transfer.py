@@ -56,7 +56,7 @@ class MoneyTransferView(QWidget):
         form_layout.setSpacing(10)
 
         self.form_title = QLabel("New Money Transfer")
-        self.form_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 2px;")
+        self.form_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 2px;")
         form_layout.addWidget(self.form_title)
 
         # Row 1: Names, Type, and Dynamic Fields

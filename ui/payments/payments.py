@@ -64,7 +64,7 @@ class PaymentsView(QWidget):
         form_layout.setSpacing(12)
 
         lbl = QLabel("Receive Customer Outstanding")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         form_layout.addRow(lbl)
 
         self.c_customer_combo = AutoClearSearchableComboBox()
@@ -135,7 +135,7 @@ class PaymentsView(QWidget):
         info_frame.setProperty("class", "CardFrame")
         info_layout = QVBoxLayout(info_frame)
         info_lbl = QLabel("Customer Ledger Helper")
-        info_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
+        info_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
         info_layout.addWidget(info_lbl)
         
         info_txt = QLabel(
@@ -165,7 +165,7 @@ class PaymentsView(QWidget):
         form_layout.setSpacing(12)
 
         lbl = QLabel("Pay Supplier Outstanding")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         form_layout.addRow(lbl)
 
         self.s_supplier_combo = AutoClearSearchableComboBox()
@@ -236,7 +236,7 @@ class PaymentsView(QWidget):
         info_frame.setProperty("class", "CardFrame")
         info_layout = QVBoxLayout(info_frame)
         info_lbl = QLabel("Supplier Ledger Helper")
-        info_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
+        info_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
         info_layout.addWidget(info_lbl)
         
         info_txt = QLabel(
@@ -304,7 +304,7 @@ class PaymentsView(QWidget):
         form_layout.setSpacing(12)
 
         lbl = QLabel("New Fund Transfer")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         form_layout.addRow(lbl)
 
         self.t_date = QDateEdit()
@@ -344,7 +344,7 @@ class PaymentsView(QWidget):
         history_layout.setContentsMargins(15, 15, 15, 15)
         
         history_title = QLabel("Transfer Log")
-        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         history_layout.addWidget(history_title)
 
         self.transfer_table = QTableWidget()
@@ -556,7 +556,7 @@ class PaymentsView(QWidget):
         form_layout.setSpacing(12)
 
         lbl = QLabel("New Direct Inflow/Outflow")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         form_layout.addRow(lbl)
 
         self.d_date = QDateEdit()
@@ -602,7 +602,7 @@ class PaymentsView(QWidget):
         history_layout.setContentsMargins(15, 15, 15, 15)
         
         history_title = QLabel("Direct Transactions Log")
-        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         history_layout.addWidget(history_title)
 
         self.direct_table = QTableWidget()

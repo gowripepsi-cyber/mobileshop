@@ -125,63 +125,63 @@ class UserEditDialog(QDialog):
         self.perm_tree.setHeaderLabels(["Module / Sub-system", "View", "Add", "Edit", "Delete"])
         self.perm_tree.setStyleSheet("""
             QTreeWidget, QTreeView {
-                background-color: #141426;
-                alternate-background-color: #18182e;
-                border: 1px solid #28284e;
+                background-color: #ffffff;
+                alternate-background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
                 border-radius: 6px;
-                color: #f1f5f9;
+                color: #0f172a;
             }
             QTreeWidget:disabled, QTreeView:disabled {
-                background-color: #141426;
+                background-color: #ffffff;
                 color: #e2e8f0;
             }
             QTreeWidget::item, QTreeView::item {
                 padding: 6px 4px;
-                color: #f1f5f9;
-                border-bottom: 1px solid #1e1e38;
+                color: #0f172a;
+                border-bottom: 1px solid #ffffff;
             }
             QTreeWidget::item:hover, QTreeView::item:hover {
-                background-color: #20203c;
+                background-color: #f4faee;
                 color: #ffffff;
             }
             QTreeWidget::item:selected, QTreeView::item:selected {
-                background-color: #4f46e5;
+                background-color: #8fd53b;
                 color: #ffffff;
             }
             QHeaderView::section {
-                background-color: #1c1c36;
-                color: #818cf8;
+                background-color: #f4faee;
+                color: #334155;
                 padding: 8px;
                 font-weight: bold;
                 border: none;
-                border-bottom: 2px solid #2c2c54;
+                border-bottom: 2px solid #e2e8f0;
             }
             QTreeWidget::indicator, QCheckBox::indicator {
                 width: 18px;
                 height: 18px;
-                background-color: #1e1e38;
-                border: 2px solid #475569;
+                background-color: #ffffff;
+                border: 2px solid #cbd5e1;
                 border-radius: 4px;
             }
             QTreeWidget::indicator:hover, QCheckBox::indicator:hover {
-                border: 2px solid #818cf8;
-                background-color: #28284e;
+                border: 2px solid #334155;
+                background-color: #e2e8f0;
             }
             QTreeWidget::indicator:checked, QCheckBox::indicator:checked {
-                background-color: #6366f1;
-                border: 2px solid #818cf8;
+                background-color: #8fd53b;
+                border: 2px solid #334155;
             }
             QTreeWidget::indicator:unchecked, QCheckBox::indicator:unchecked {
-                background-color: #141426;
-                border: 2px solid #475569;
+                background-color: #ffffff;
+                border: 2px solid #cbd5e1;
             }
             QTreeWidget::indicator:disabled, QCheckBox::indicator:disabled {
-                background-color: #18182e;
+                background-color: #f8fafc;
                 border: 2px solid #334155;
             }
             QTreeWidget::indicator:checked:disabled, QCheckBox::indicator:checked:disabled {
                 background-color: #3730a3;
-                border: 2px solid #818cf8;
+                border: 2px solid #334155;
             }
         """)
         self.perm_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -225,15 +225,15 @@ class UserEditDialog(QDialog):
             cat_item = QTreeWidgetItem(self.perm_tree, [cat_name])
             cat_item.setExpanded(True)
             cat_item.setFont(0, bold_font)
-            cat_item.setForeground(0, QBrush(QColor('#818cf8')))
-            cat_item.setBackground(0, QBrush(QColor('#1e1e38')))
+            cat_item.setForeground(0, QBrush(QColor('#334155')))
+            cat_item.setBackground(0, QBrush(QColor('#ffffff')))
             for i in range(1, 5):
-                cat_item.setBackground(i, QBrush(QColor('#1e1e38')))
+                cat_item.setBackground(i, QBrush(QColor('#ffffff')))
 
             for mod_key, mod_label, actions in modules:
                 mod_item = QTreeWidgetItem(cat_item, [mod_label])
                 mod_item.setData(0, Qt.UserRole, mod_key)
-                mod_item.setForeground(0, QBrush(QColor('#f1f5f9')))
+                mod_item.setForeground(0, QBrush(QColor('#0f172a')))
 
                 item_actions = {}
                 for col_idx, act in [(1, 'view'), (2, 'add'), (3, 'edit'), (4, 'delete')]:

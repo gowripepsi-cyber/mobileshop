@@ -30,20 +30,33 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(14, 14, 14, 14)
+        main_layout.setSpacing(14)
 
-        # 1. Sidebar Setup
+        # 1. Sidebar Setup (Floating Lime Capsule Dock)
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        sidebar_layout.setSpacing(0)
+        sidebar_layout.setContentsMargins(10, 16, 10, 14)
+        sidebar_layout.setSpacing(4)
 
-        # Shop Logo / Title
+        # Shop Logo / Title with circular emblem badge
+        logo_container = QWidget()
+        logo_layout = QVBoxLayout(logo_container)
+        logo_layout.setContentsMargins(0, 4, 0, 8)
+        logo_layout.setSpacing(6)
+        logo_layout.setAlignment(Qt.AlignCenter)
+
+        self.logo_icon = QLabel("☀️")
+        self.logo_icon.setObjectName("shop_emblem")
+        self.logo_icon.setAlignment(Qt.AlignCenter)
+        logo_layout.addWidget(self.logo_icon)
+
         self.logo_label = QLabel("SUN COMPUTERS,")
+        self.logo_label.setObjectName("shop_title")
         self.logo_label.setAlignment(Qt.AlignCenter)
-        sidebar_layout.addWidget(self.logo_label)
+        logo_layout.addWidget(self.logo_label)
+        sidebar_layout.addWidget(logo_container)
         self.update_shop_name()
 
         # Navigation buttons mapping and shortcuts
@@ -79,6 +92,7 @@ class MainWindow(QMainWindow):
             shortcut_key = shortcuts.get(index)
             btn = QPushButton()
             btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
             
             # Create horizontal layout inside the button to align title and shortcut
             btn_layout = QHBoxLayout(btn)
@@ -116,7 +130,7 @@ class MainWindow(QMainWindow):
         # Logout Button
         self.logout_btn = QPushButton(tr("Log Out"))
         self.logout_btn.setObjectName("logout_btn")
-        self.logout_btn.setStyleSheet("color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); margin-bottom: 20px;")
+        self.logout_btn.setCursor(Qt.PointingHandCursor)
         self.logout_btn.clicked.connect(self.handle_logout)
         sidebar_layout.addWidget(self.logout_btn)
 
@@ -124,9 +138,10 @@ class MainWindow(QMainWindow):
 
         # 2. Main Content Wrapper
         content_wrapper = QWidget()
+        content_wrapper.setObjectName("content_area")
         content_wrapper_layout = QVBoxLayout(content_wrapper)
         content_wrapper_layout.setContentsMargins(0, 0, 0, 0)
-        content_wrapper_layout.setSpacing(0)
+        content_wrapper_layout.setSpacing(12)
 
         # Header Area
         header = QWidget()
@@ -140,7 +155,7 @@ class MainWindow(QMainWindow):
         header_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         user_info = QLabel(f"{tr('Welcome')}, {self.user_data['username']} ({self.user_data['role']})")
-        user_info.setStyleSheet("color: #94a3b8; font-size: 13px; font-weight: 500;")
+        user_info.setStyleSheet("color: #475569; font-size: 13px; font-weight: 600;")
         header_layout.addWidget(user_info)
         self.user_info_label = user_info
 
@@ -151,10 +166,10 @@ class MainWindow(QMainWindow):
         self.lang_btn = QPushButton("🌐 தமிழ்" if curr_lang == 'en' else "🌐 English")
         self.lang_btn.setToolTip("Switch Language / மொழி மாற்றம் (English ⇄ தமிழ்)")
         self.lang_btn.setCursor(Qt.PointingHandCursor)
-        self.lang_btn.setFixedHeight(30)
+        self.lang_btn.setFixedHeight(34)
         self.lang_btn.setStyleSheet(
-            "background-color: #1e1b4b; color: #a5b4fc; border: 1px solid #4338ca; "
-            "border-radius: 6px; padding: 2px 12px; font-weight: bold; font-size: 11px;"
+            "background-color: #8fd53b; color: #0f172a; border: none; "
+            "border-radius: 17px; padding: 4px 18px; font-weight: bold; font-size: 12px;"
         )
         self.lang_btn.clicked.connect(self.toggle_language)
         header_layout.addWidget(self.lang_btn)

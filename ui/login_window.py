@@ -23,13 +23,13 @@ class LoginWindow(QDialog):
         # Title Label
         title_label = QLabel("SUN INVENTORY & SERVICE LITE")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #6366f1; letter-spacing: 1px;")
+        title_label.setStyleSheet("font-size: 22px; font-weight: 800; color: #142b05; letter-spacing: 0.5px;")
         layout.addWidget(title_label)
 
         # Subtitle
         sub_label = QLabel("Management System Login")
         sub_label.setAlignment(Qt.AlignCenter)
-        sub_label.setStyleSheet("font-size: 13px; color: #94a3b8; margin-bottom: 10px;")
+        sub_label.setStyleSheet("font-size: 13px; color: #64748b; margin-bottom: 10px;")
         layout.addWidget(sub_label)
 
         # Username Input
@@ -55,27 +55,28 @@ class LoginWindow(QDialog):
         self.remember_cb.setCursor(Qt.PointingHandCursor)
         self.remember_cb.setStyleSheet("""
             QCheckBox {
-                color: #94a3b8;
+                color: #475569;
                 font-size: 13px;
                 padding-top: 2px;
                 padding-bottom: 2px;
             }
             QCheckBox:hover {
-                color: #e2e8f0;
+                color: #0f172a;
             }
             QCheckBox::indicator {
                 width: 17px;
                 height: 17px;
                 border-radius: 4px;
-                border: 1px solid #3b3b54;
-                background-color: #141426;
+                border: 1.5px solid #cbd5e1;
+                background-color: #ffffff;
             }
             QCheckBox::indicator:hover {
-                border-color: #6366f1;
+                border-color: #8fd53b;
+                background-color: #f4faee;
             }
             QCheckBox::indicator:checked {
-                background-color: #6366f1;
-                border-color: #6366f1;
+                background-color: #8fd53b;
+                border-color: #7ec72e;
             }
         """)
         layout.addWidget(self.remember_cb)

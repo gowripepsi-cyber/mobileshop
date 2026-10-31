@@ -330,7 +330,7 @@ class BillingDialog(QDialog):
         header_bar.setContentsMargins(0, 0, 0, 5)
         
         header_title = QLabel(f"<b>BILLING & ESTIMATE</b>")
-        header_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff;")
+        header_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0f172a;")
         header_bar.addWidget(header_title)
         
         header_sub = QLabel(f"| &nbsp;&nbsp;Job Card: <b>{self.job.job_number}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Status: <b>{self.job.status}</b>")
@@ -422,7 +422,7 @@ class BillingDialog(QDialog):
 
         # Spare Parts Entry Section
         parts_header = QLabel("Spare Parts Used")
-        parts_header.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff; margin-top: 5px;")
+        parts_header.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a; margin-top: 5px;")
         left_layout.addWidget(parts_header)
 
         add_part_layout = QVBoxLayout()
@@ -499,14 +499,14 @@ class BillingDialog(QDialog):
         totals_form.setSpacing(8)
         
         self.parts_cost_lbl = QLabel("₹0.00")
-        self.parts_cost_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        self.parts_cost_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #0f172a;")
         totals_form.addRow("Spare Parts Total Cost:", self.parts_cost_lbl)
         
         right_layout.addLayout(totals_form)
 
         # Net Total Card
         total_card = QFrame()
-        total_card.setStyleSheet("background-color: #1e1e38; border: 1px solid #6366f1; border-radius: 8px; padding: 10px;")
+        total_card.setStyleSheet("background-color: #fbfdf9; border: 2px solid #8fd53b; border-radius: 12px; padding: 10px;")
         total_card_layout = QVBoxLayout(total_card)
         total_card_layout.setSpacing(2)
         

@@ -76,7 +76,7 @@ class SettingsView(QWidget):
         form_layout.setSpacing(15)
 
         title = QLabel("Modify Shop Business Profile")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         form_layout.addRow(title)
 
         self.shop_name_input = QLineEdit()
@@ -112,7 +112,7 @@ class SettingsView(QWidget):
         form_layout.setSpacing(15)
 
         title = QLabel("Update Credentials")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         form_layout.addRow(title)
 
         self.old_pass_input = QLineEdit()
@@ -151,7 +151,7 @@ class SettingsView(QWidget):
         db_layout.setSpacing(15)
 
         title = QLabel("Database Actions")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
         db_layout.addWidget(title)
 
         desc = QLabel(
@@ -352,7 +352,7 @@ class SettingsView(QWidget):
         card_layout.setSpacing(18)
 
         title = QLabel("Hardware Binding & License Management")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
         card_layout.addWidget(title)
 
         subtitle = QLabel("Manage your software license, review hardware binding, or transfer your license to a new PC.")
@@ -361,7 +361,7 @@ class SettingsView(QWidget):
 
         # Info Box Frame
         info_frame = QFrame()
-        info_frame.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px; padding: 15px;")
+        info_frame.setStyleSheet("background-color: #fbfdf9; border: 1.5px solid #8fd53b; border-radius: 12px; padding: 15px;")
         info_layout = QFormLayout(info_frame)
         info_layout.setSpacing(12)
 
@@ -591,7 +591,7 @@ class SettingsView(QWidget):
 
         # Header Title
         title = QLabel("Language Dictionary / ஆங்கிலம் - தமிழ் மொழிப் பட்டியல்")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
         card_layout.addWidget(title)
 
         subtitle = QLabel(
