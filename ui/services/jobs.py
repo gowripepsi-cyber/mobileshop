@@ -545,15 +545,23 @@ class BillingDialog(QDialog):
 
         # Balance Receivable Card
         balance_card = QFrame()
-        balance_card.setStyleSheet("background-color: #1e1e38; border: 1px solid #28284e; border-radius: 8px; padding: 10px;")
+        balance_card.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1.5px solid #e2e8f0;
+                border-left: 5px solid #ef4444;
+                border-radius: 14px;
+            }
+        """)
         balance_card_layout = QVBoxLayout(balance_card)
-        balance_card_layout.setSpacing(2)
+        balance_card_layout.setContentsMargins(14, 10, 14, 10)
+        balance_card_layout.setSpacing(4)
         
         balance_title = QLabel("BALANCE RECEIVABLE (OUTSTANDING)")
-        balance_title.setStyleSheet("font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase;")
+        balance_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; border: none; background: transparent;")
         
         self.balance_lbl = QLabel("₹0.00")
-        self.balance_lbl.setStyleSheet("font-size: 20px; font-weight: bold; color: #ef4444;")
+        self.balance_lbl.setStyleSheet("font-size: 20px; font-weight: 800; color: #ef4444; border: none; background: transparent;")
         
         balance_card_layout.addWidget(balance_title)
         balance_card_layout.addWidget(self.balance_lbl)

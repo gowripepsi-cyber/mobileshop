@@ -1,6 +1,8 @@
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, 
-                             QMessageBox, QCheckBox)
+import datetime
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
+                             QMessageBox, QCheckBox, QFrame, QGraphicsDropShadowEffect)
 from PySide6.QtCore import Qt, QTimer, QEvent
+from PySide6.QtGui import QColor
 from database import Session, User, get_hash, Setting
 from utils.ui_helpers import setup_password_toggle
 
@@ -8,29 +10,105 @@ class LoginWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Login - SUN INVENTORY & SERVICE LITE")
-        self.setFixedSize(484, 400)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setFixedSize(510, 440)
+        # Frameless window without native OS top title bar & transparent background for true rounded corners
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
         self.user_data = None
+        self._drag_pos = None
+
         self.init_ui()
         self.load_remembered_credentials()
 
+    def get_theme_color(self):
+        session = Session()
+        try:
+            t = session.query(Setting).filter_by(key='theme_color').first()
+            if t and t.value:
+                return t.value
+        except Exception:
+            pass
+        finally:
+            session.close()
+        return "#8fd53b"
+
     def init_ui(self):
-        # Main Layout
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 35, 30, 35)
-        layout.setSpacing(12)
+        theme_hex = self.get_theme_color()
+        c = QColor(theme_hex)
+        if not c.isValid():
+            c = QColor("#8fd53b")
+        theme_hex = c.name()
+        hover_hex = c.darker(110).name()
+        lum = (0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()) / 255.0
+        btn_text_color = "#0f172a" if lum > 0.55 else "#ffffff"
+
+        # Outer Layout with margins to allow drop shadow and smooth anti-aliased rounded corners
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(10, 10, 10, 10)
+
+        # Rounded Capsule Card Container
+        self.card = QFrame(self)
+        self.card.setObjectName("login_card")
+        self.card.setStyleSheet(f"""
+            QFrame#login_card {{
+                background-color: #ffffff;
+                border: 2px solid {theme_hex};
+                border-radius: 24px;
+            }}
+        """)
+
+        # Soft drop shadow for floating modal aesthetic
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 45))
+        shadow.setOffset(0, 4)
+        self.card.setGraphicsEffect(shadow)
+
+        # Inner Card Layout
+        card_layout = QVBoxLayout(self.card)
+        card_layout.setContentsMargins(28, 14, 28, 26)
+        card_layout.setSpacing(10)
+
+        # Top Bar with Close Button
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
+        top_bar.addStretch()
+
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setFixedSize(28, 28)
+        self.close_btn.setCursor(Qt.PointingHandCursor)
+        self.close_btn.setToolTip("Close / மூடு (Esc)")
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #94a3b8;
+                font-size: 14px;
+                font-weight: bold;
+                border: none;
+                border-radius: 14px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #fee2e2;
+                color: #ef4444;
+            }
+        """)
+        self.close_btn.clicked.connect(self.reject)
+        top_bar.addWidget(self.close_btn)
+        card_layout.addLayout(top_bar)
 
         # Title Label
         title_label = QLabel("SUN INVENTORY & SERVICE LITE")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 22px; font-weight: 800; color: #142b05; letter-spacing: 0.5px;")
-        layout.addWidget(title_label)
+        title_label.setStyleSheet("font-size: 21px; font-weight: 800; color: #142b05; letter-spacing: 0.5px;")
+        card_layout.addWidget(title_label)
 
         # Subtitle
         sub_label = QLabel("Management System Login")
         sub_label.setAlignment(Qt.AlignCenter)
-        sub_label.setStyleSheet("font-size: 13px; color: #64748b; margin-bottom: 10px;")
-        layout.addWidget(sub_label)
+        sub_label.setStyleSheet("font-size: 13px; color: #64748b; margin-bottom: 6px;")
+        card_layout.addWidget(sub_label)
 
         # Username Input
         self.username_input = QLineEdit()
@@ -38,7 +116,7 @@ class LoginWindow(QDialog):
         self.username_input.setFixedHeight(40)
         self.username_input._skip_enter_nav = True
         self.username_input.returnPressed.connect(self.handle_username_return)
-        layout.addWidget(self.username_input)
+        card_layout.addWidget(self.username_input)
 
         # Password Input
         self.password_input = QLineEdit()
@@ -48,52 +126,68 @@ class LoginWindow(QDialog):
         setup_password_toggle(self.password_input)
         self.password_input._skip_enter_nav = True
         self.password_input.returnPressed.connect(self.handle_password_return)
-        layout.addWidget(self.password_input)
+        card_layout.addWidget(self.password_input)
 
         # Remember Login Credentials Checkbox
         self.remember_cb = QCheckBox("Remember login credentials")
         self.remember_cb.setCursor(Qt.PointingHandCursor)
-        self.remember_cb.setStyleSheet("""
-            QCheckBox {
+        self.remember_cb.setStyleSheet(f"""
+            QCheckBox {{
                 color: #475569;
                 font-size: 13px;
                 padding-top: 2px;
                 padding-bottom: 2px;
-            }
-            QCheckBox:hover {
+            }}
+            QCheckBox:hover {{
                 color: #0f172a;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 17px;
                 height: 17px;
                 border-radius: 4px;
                 border: 1.5px solid #cbd5e1;
                 background-color: #ffffff;
-            }
-            QCheckBox::indicator:hover {
-                border-color: #8fd53b;
-                background-color: #f4faee;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #8fd53b;
-                border-color: #7ec72e;
-            }
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {theme_hex};
+                background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 0.08);
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {theme_hex};
+                border-color: {hover_hex};
+            }}
         """)
-        layout.addWidget(self.remember_cb)
+        card_layout.addWidget(self.remember_cb)
 
         # Error label
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("color: #ef4444; font-size: 12px;")
         self.error_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.error_label)
+        card_layout.addWidget(self.error_label)
 
         # Login Button
         self.login_btn = QPushButton("Log In")
         self.login_btn.setFixedHeight(42)
         self.login_btn.setDefault(True)
         self.login_btn.setAutoDefault(True)
+        self.login_btn.setCursor(Qt.PointingHandCursor)
+        self.login_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_hex};
+                color: {btn_text_color};
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+                border-radius: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_hex};
+            }}
+        """)
         self.login_btn.clicked.connect(self.handle_login)
-        layout.addWidget(self.login_btn)
+        card_layout.addWidget(self.login_btn)
+
+        outer_layout.addWidget(self.card)
 
         # Tab Order
         self.setTabOrder(self.username_input, self.password_input)
@@ -102,6 +196,21 @@ class LoginWindow(QDialog):
 
         # Intercept Enter on remember_cb to advance to login_btn
         self.remember_cb.installEventFilter(self)
+
+    # Window Dragging for Frameless Dialog
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        event.accept()
 
     def eventFilter(self, obj, event):
         if obj == self.remember_cb and event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -148,7 +257,6 @@ class LoginWindow(QDialog):
 
         session = Session()
         try:
-            import datetime
             hashed_pwd = get_hash(password)
             user = session.query(User).filter_by(username=username, password_hash=hashed_pwd).first()
             if user:

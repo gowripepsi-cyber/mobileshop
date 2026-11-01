@@ -232,22 +232,42 @@ class ReportsView(QWidget):
         summary_panel = QHBoxLayout()
         summary_panel.setSpacing(15)
 
-        # KPI grid frame
+        # Get active theme primary color
+        try:
+            from styles import get_theme_palette
+            theme_primary = get_theme_palette().get("primary", "#8fd53b")
+        except Exception:
+            theme_primary = "#8fd53b"
+
+        # KPI grid frame (clean transparent container holding individual dashboard metric cards)
         kpis_frame = QFrame()
-        kpis_frame.setProperty("class", "CardFrame")
+        kpis_frame.setStyleSheet("background: transparent; border: none;")
         kpis_grid = QGridLayout(kpis_frame)
-        kpis_grid.setContentsMargins(15, 15, 15, 15)
+        kpis_grid.setContentsMargins(0, 0, 0, 0)
         kpis_grid.setSpacing(12)
 
-        def make_kpi_widget(title_text, val_lbl, color_str="#ffffff"):
+        def make_kpi_widget(title_text, val_lbl, border_color="#3b82f6"):
             widget = QFrame()
-            widget.setStyleSheet(f"background-color: #1e1e38; border: 1px solid #2c2c54; border-radius: 8px; padding: 10px;")
+            widget.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #ffffff;
+                    border: 1.5px solid #e2e8f0;
+                    border-left: 5px solid {border_color};
+                    border-radius: 16px;
+                }}
+                QFrame:hover {{
+                    background-color: #fbfdf9;
+                    border: 1.5px solid {border_color};
+                    border-left: 5px solid {border_color};
+                }}
+            """)
             w_layout = QVBoxLayout(widget)
-            w_layout.setContentsMargins(8, 8, 8, 8)
+            w_layout.setContentsMargins(16, 12, 16, 12)
             w_layout.setSpacing(4)
             t_lbl = QLabel(title_text)
-            t_lbl.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: bold; text-transform: uppercase;")
-            val_lbl.setStyleSheet(f"color: {color_str}; font-size: 16px; font-weight: bold;")
+            t_lbl.setStyleSheet("color: #64748b; font-size: 11px; font-weight: bold; text-transform: uppercase; border: none; background: transparent;")
+            val_lbl.setStyleSheet("color: #0f172a; font-size: 20px; font-weight: 800; border: none; background: transparent;")
+            val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
             w_layout.addWidget(t_lbl)
             w_layout.addWidget(val_lbl)
             return widget
@@ -259,43 +279,56 @@ class ReportsView(QWidget):
         self.kpi_net_profit = QLabel("₹0.00")
         self.kpi_avg_days = QLabel("0 Days")
 
-        kpis_grid.addWidget(make_kpi_widget("Total Purchase Value", self.kpi_purchase_val, "#ffffff"), 0, 0)
-        kpis_grid.addWidget(make_kpi_widget("Total Sales Value", self.kpi_sales_val, "#ffffff"), 0, 1)
-        kpis_grid.addWidget(make_kpi_widget("Total Gross Profit", self.kpi_gross_profit, "#8fd53b"), 0, 2)
+        kpis_grid.addWidget(make_kpi_widget("Total Purchase Value", self.kpi_purchase_val, "#6366f1"), 0, 0)
+        kpis_grid.addWidget(make_kpi_widget("Total Sales Value", self.kpi_sales_val, "#06b6d4"), 0, 1)
+        kpis_grid.addWidget(make_kpi_widget("Total Gross Profit", self.kpi_gross_profit, theme_primary), 0, 2)
         kpis_grid.addWidget(make_kpi_widget("Total Interest Cost", self.kpi_interest_cost, "#ef4444"), 1, 0)
-        kpis_grid.addWidget(make_kpi_widget("Total Net Profit", self.kpi_net_profit, "#6366f1"), 1, 1)
+        kpis_grid.addWidget(make_kpi_widget("Total Net Profit", self.kpi_net_profit, "#8b5cf6"), 1, 1)
         kpis_grid.addWidget(make_kpi_widget("Average Days in Stock", self.kpi_avg_days, "#3b82f6"), 1, 2)
 
         summary_panel.addWidget(kpis_frame, 2)
 
         # Fast/Slow Moving Panel
         moving_frame = QFrame()
-        moving_frame.setProperty("class", "CardFrame")
+        moving_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1.5px solid #e2e8f0;
+                border-radius: 16px;
+            }
+        """)
         moving_layout = QHBoxLayout(moving_frame)
-        moving_layout.setContentsMargins(15, 15, 15, 15)
+        moving_layout.setContentsMargins(16, 14, 16, 14)
         moving_layout.setSpacing(15)
 
         fast_col = QVBoxLayout()
         fast_title = QLabel("<b>Fast Moving (Top 3)</b>")
-        fast_title.setStyleSheet("color: #8fd53b; font-weight: bold; font-size: 11px;")
+        fast_title.setStyleSheet(f"color: {theme_primary}; font-weight: bold; font-size: 11px; text-transform: uppercase; border: none; background: transparent;")
         self.fast_moving_list = QLabel("No sales records.")
-        self.fast_moving_list.setStyleSheet("color: #e2e8f0; font-size: 11px; line-height: 1.4;")
+        self.fast_moving_list.setStyleSheet("color: #334155; font-size: 11px; line-height: 1.4; border: none; background: transparent;")
         self.fast_moving_list.setWordWrap(True)
         fast_col.addWidget(fast_title)
         fast_col.addWidget(self.fast_moving_list)
         fast_col.addStretch()
 
+        # Vertical separator between fast and slow moving
+        moving_sep = QFrame()
+        moving_sep.setFrameShape(QFrame.VLine)
+        moving_sep.setFrameShadow(QFrame.Plain)
+        moving_sep.setStyleSheet("border: none; background-color: #e2e8f0; max-width: 1px;")
+
         slow_col = QVBoxLayout()
         slow_title = QLabel("<b>Slow Moving (Top 3)</b>")
-        slow_title.setStyleSheet("color: #ef4444; font-weight: bold; font-size: 11px;")
+        slow_title.setStyleSheet("color: #ef4444; font-weight: bold; font-size: 11px; text-transform: uppercase; border: none; background: transparent;")
         self.slow_moving_list = QLabel("No stock records.")
-        self.slow_moving_list.setStyleSheet("color: #e2e8f0; font-size: 11px; line-height: 1.4;")
+        self.slow_moving_list.setStyleSheet("color: #334155; font-size: 11px; line-height: 1.4; border: none; background: transparent;")
         self.slow_moving_list.setWordWrap(True)
         slow_col.addWidget(slow_title)
         slow_col.addWidget(self.slow_moving_list)
         slow_col.addStretch()
 
         moving_layout.addLayout(fast_col, 1)
+        moving_layout.addWidget(moving_sep)
         moving_layout.addLayout(slow_col, 1)
 
         summary_panel.addWidget(moving_frame, 1)
@@ -2279,15 +2312,27 @@ class ProductDrillDownDialog(QDialog):
         kpi_layout = QGridLayout()
         kpi_layout.setSpacing(12)
 
-        def make_kpi_card(title, value_lbl, text_color="#ffffff"):
+        def make_kpi_card(title, value_lbl, border_color="#3b82f6"):
             card = QFrame()
-            card.setStyleSheet("background-color: #1e1e35; border: 1px solid #2c2c50; border-radius: 8px; padding: 10px;")
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #ffffff;
+                    border: 1.5px solid #e2e8f0;
+                    border-left: 5px solid {border_color};
+                    border-radius: 14px;
+                }}
+                QFrame:hover {{
+                    background-color: #fbfdf9;
+                    border: 1.5px solid {border_color};
+                    border-left: 5px solid {border_color};
+                }}
+            """)
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(8, 8, 8, 8)
+            card_layout.setContentsMargins(14, 10, 14, 10)
             card_layout.setSpacing(4)
             lbl_title = QLabel(title)
-            lbl_title.setStyleSheet("color: #94a3b8; font-size: 10px; font-weight: bold; text-transform: uppercase;")
-            value_lbl.setStyleSheet(f"color: {text_color}; font-size: 16px; font-weight: bold;")
+            lbl_title.setStyleSheet("color: #64748b; font-size: 11px; font-weight: bold; text-transform: uppercase; border: none; background: transparent;")
+            value_lbl.setStyleSheet("color: #0f172a; font-size: 18px; font-weight: 800; border: none; background: transparent;")
             card_layout.addWidget(lbl_title)
             card_layout.addWidget(value_lbl)
             return card
@@ -2298,11 +2343,17 @@ class ProductDrillDownDialog(QDialog):
         self.kpi_interest = QLabel("₹0.00")
         self.kpi_net = QLabel("₹0.00")
 
-        kpi_layout.addWidget(make_kpi_card("Current Stock", self.kpi_stock, "#ffffff"), 0, 0)
-        kpi_layout.addWidget(make_kpi_card("Avg Days in Stock", self.kpi_avg_days, "#3b82f6"), 0, 1)
-        kpi_layout.addWidget(make_kpi_card("Total Profit Generated", self.kpi_profit, "#8fd53b"), 0, 2)
+        try:
+            from styles import get_theme_palette
+            hist_primary = get_theme_palette().get("primary", "#8fd53b")
+        except Exception:
+            hist_primary = "#8fd53b"
+
+        kpi_layout.addWidget(make_kpi_card("Current Stock", self.kpi_stock, "#0284c7"), 0, 0)
+        kpi_layout.addWidget(make_kpi_card("Avg Days in Stock", self.kpi_avg_days, "#f59e0b"), 0, 1)
+        kpi_layout.addWidget(make_kpi_card("Total Profit Generated", self.kpi_profit, hist_primary), 0, 2)
         kpi_layout.addWidget(make_kpi_card("Total Interest Cost", self.kpi_interest, "#ef4444"), 0, 3)
-        kpi_layout.addWidget(make_kpi_card("Net Contribution", self.kpi_net, "#6366f1"), 0, 4)
+        kpi_layout.addWidget(make_kpi_card("Net Contribution", self.kpi_net, "#8b5cf6"), 0, 4)
 
         layout.addLayout(kpi_layout)
 

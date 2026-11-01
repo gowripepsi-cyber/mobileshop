@@ -57,7 +57,6 @@ class LedgerBreakupDialog(QDialog):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.NoSelection)
-        self.table.setStyleSheet("QTableWidget { background-color: #1e1e2f; gridline-color: #2e2e3f; }")
         
         layout.addWidget(self.table)
 

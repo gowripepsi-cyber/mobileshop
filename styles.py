@@ -591,6 +591,11 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 /* =========================================================================
    Dialog Boxes & Tabs
    ========================================================================= */
+LoginWindow, ModernAlertDialog {
+    background-color: transparent;
+    border: none;
+}
+
 QDialog {
     background-color: #ffffff;
     border: 1.5px solid __THEME_PRIMARY__;

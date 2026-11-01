@@ -415,22 +415,25 @@ class MainWindow(QMainWindow):
         session = Session()
         try:
             low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
+            from utils.ui_helpers import show_modern_alert
             if low_stock_products:
                 msg = "The following items are low in stock:\n\n"
                 for p in low_stock_products:
                     status = "OUT OF STOCK" if p.stock_qty == 0 else f"Qty: {p.stock_qty} (Limit: {p.low_stock_limit})"
                     msg += f"• {p.name} ({p.brand} {p.model}) - {status}\n"
                 
-                QMessageBox.warning(
+                show_modern_alert(
                     self,
                     "Low Stock Alert",
-                    msg
+                    msg,
+                    icon_type="warning"
                 )
             elif manual:
-                QMessageBox.information(
+                show_modern_alert(
                     self,
                     "Low Stock Alert",
-                    "All products are well stocked!\n(No items below their individual low stock limits)."
+                    "All products are well stocked!\n(No items below their individual low stock limits).",
+                    icon_type="success"
                 )
         except Exception as e:
             print(f"Error checking low stock alert: {e}")

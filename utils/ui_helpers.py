@@ -3,8 +3,8 @@ from PySide6.QtCore import QObject, QEvent, QTimer, Qt, QByteArray, QSize, QItem
 from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpinBox, 
                              QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter,
                              QPushButton, QToolButton, QSpinBox, QDoubleSpinBox,
-                             QProxyStyle, QStyle)
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QDoubleValidator, QIntValidator
+                             QProxyStyle, QStyle, QDialog, QFrame, QGraphicsDropShadowEffect, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel)
+from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QAction, QDoubleValidator, QIntValidator
 from PySide6.QtSvg import QSvgRenderer
 
 EYE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e2e8f0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -717,3 +717,233 @@ def get_circular_pixmap(src, size=44):
     painter.end()
 
     return out
+
+
+class ModernAlertDialog(QDialog):
+    """
+    Modern frameless alert dialog with true rounded corners, floating drop shadow,
+    draggable header, and dynamic theme styling.
+    """
+    def __init__(self, title, message, icon_type="warning", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumWidth(460)
+        self.setMaximumWidth(560)
+        self._drag_pos = None
+        self.init_ui(title, message, icon_type)
+
+    def get_theme_color(self):
+        try:
+            from database import Session, Setting
+            session = Session()
+            t = session.query(Setting).filter_by(key='theme_color').first()
+            val = t.value if t and t.value else "#8fd53b"
+            session.close()
+            return val
+        except Exception:
+            return "#8fd53b"
+
+    def init_ui(self, title, message, icon_type):
+        theme_hex = self.get_theme_color()
+        c = QColor(theme_hex)
+        if not c.isValid():
+            c = QColor("#8fd53b")
+        theme_hex = c.name()
+        hover_hex = c.darker(110).name()
+        lum = (0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()) / 255.0
+        btn_text_color = "#0f172a" if lum > 0.55 else "#ffffff"
+
+        # Outer Layout with margins for shadow and smooth anti-aliased rounded corners
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(12, 12, 12, 12)
+
+        # Card container with rounded corners and theme border
+        self.card = QFrame(self)
+        self.card.setObjectName("alert_card")
+        self.card.setStyleSheet(f"""
+            QFrame#alert_card {{
+                background-color: #ffffff;
+                border: 2px solid {theme_hex};
+                border-radius: 24px;
+            }}
+        """)
+
+        # Drop shadow effect
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 45))
+        shadow.setOffset(0, 4)
+        self.card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(self.card)
+        card_layout.setContentsMargins(24, 16, 24, 20)
+        card_layout.setSpacing(12)
+
+        # Top Bar: Title & Close Button
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
+
+        lbl_title = QLabel(title)
+        lbl_title.setStyleSheet("font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: 0.3px;")
+        top_bar.addWidget(lbl_title)
+
+        top_bar.addStretch()
+
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setFixedSize(28, 28)
+        self.close_btn.setCursor(Qt.PointingHandCursor)
+        self.close_btn.setToolTip("Close / மூடு (Esc)")
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #94a3b8;
+                font-size: 14px;
+                font-weight: bold;
+                border: none;
+                border-radius: 14px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #fee2e2;
+                color: #ef4444;
+            }
+        """)
+        self.close_btn.clicked.connect(self.reject)
+        top_bar.addWidget(self.close_btn)
+        card_layout.addLayout(top_bar)
+
+        # Content Row: Icon + Message
+        content_row = QHBoxLayout()
+        content_row.setContentsMargins(0, 4, 0, 4)
+        content_row.setSpacing(16)
+        content_row.setAlignment(Qt.AlignTop)
+
+        # Icon Badge
+        icon_badge = QLabel("⚠️" if icon_type == "warning" else ("✅" if icon_type == "success" else "ℹ️"))
+        icon_badge.setFixedSize(44, 44)
+        icon_badge.setAlignment(Qt.AlignCenter)
+        if icon_type == "warning":
+            badge_bg = "#fffbeb"
+            badge_border = "#f59e0b"
+        elif icon_type == "success":
+            badge_bg = "#f0fdf4"
+            badge_border = "#22c55e"
+        else:
+            badge_bg = "#eff6ff"
+            badge_border = "#3b82f6"
+
+        icon_badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: {badge_bg};
+                border: 1.5px solid {badge_border};
+                border-radius: 22px;
+                font-size: 24px;
+            }}
+        """)
+        content_row.addWidget(icon_badge)
+
+        # Message Text
+        msg_layout = QVBoxLayout()
+        msg_layout.setSpacing(6)
+
+        # Parse message lines to highlight OUT OF STOCK
+        lines = message.strip().split("\n")
+        header_text = lines[0] if lines else ""
+        lbl_msg_head = QLabel(header_text)
+        lbl_msg_head.setStyleSheet("font-size: 13px; font-weight: 700; color: #1e293b;")
+        msg_layout.addWidget(lbl_msg_head)
+
+        if len(lines) > 1:
+            items_container = QWidget()
+            items_layout = QVBoxLayout(items_container)
+            items_layout.setContentsMargins(0, 0, 0, 0)
+            items_layout.setSpacing(4)
+
+            for line in lines[1:]:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                lbl_item = QLabel()
+                lbl_item.setWordWrap(True)
+                lbl_item.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                if "OUT OF STOCK" in line_str:
+                    parts = line_str.split("OUT OF STOCK")
+                    lbl_item.setText(f"{parts[0]}<span style='color: #ef4444; font-weight: bold;'>OUT OF STOCK</span>{parts[1]}")
+                elif "Qty:" in line_str:
+                    parts = line_str.split(" - ")
+                    if len(parts) == 2:
+                        lbl_item.setText(f"{parts[0]} - <span style='color: #f59e0b; font-weight: 600;'>{parts[1]}</span>")
+                    else:
+                        lbl_item.setText(line_str)
+                else:
+                    lbl_item.setText(line_str)
+                lbl_item.setStyleSheet("font-size: 12px; color: #334155; line-height: 1.4;")
+                items_layout.addWidget(lbl_item)
+
+            # If many lines, wrap in scroll area
+            if len(lines) > 8:
+                scroll = QScrollArea()
+                scroll.setWidget(items_container)
+                scroll.setWidgetResizable(True)
+                scroll.setMaximumHeight(160)
+                scroll.setFrameShape(QFrame.NoFrame)
+                scroll.setStyleSheet("background: transparent;")
+                msg_layout.addWidget(scroll)
+            else:
+                msg_layout.addWidget(items_container)
+
+        content_row.addLayout(msg_layout)
+        card_layout.addLayout(content_row)
+
+        # Bottom Row: OK Button
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 6, 0, 0)
+        btn_row.addStretch()
+
+        self.ok_btn = QPushButton("OK")
+        self.ok_btn.setFixedSize(92, 36)
+        self.ok_btn.setCursor(Qt.PointingHandCursor)
+        self.ok_btn.setDefault(True)
+        self.ok_btn.setAutoDefault(True)
+        self.ok_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_hex};
+                color: {btn_text_color};
+                font-weight: bold;
+                font-size: 13px;
+                border: none;
+                border-radius: 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_hex};
+            }}
+        """)
+        self.ok_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self.ok_btn)
+        card_layout.addLayout(btn_row)
+
+        outer_layout.addWidget(self.card)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        event.accept()
+
+
+def show_modern_alert(parent, title, message, icon_type="warning"):
+    """
+    Displays a frameless rounded modal alert matching the application theme.
+    """
+    dlg = ModernAlertDialog(title, message, icon_type=icon_type, parent=parent)
+    return dlg.exec()
