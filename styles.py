@@ -77,40 +77,74 @@ QWidget {
     border-radius: 24px;
     min-width: 250px;
     max-width: 250px;
-    padding: 10px 6px;
+    padding: 10px 4px 8px 4px;
 }
 
 #shop_emblem {
     background-color: #f59e0b;
     color: #ffffff;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: bold;
-    border-radius: 24px;
-    min-width: 48px;
-    max-width: 48px;
-    min-height: 48px;
-    max-height: 48px;
+    border-radius: 20px;
+    min-width: 40px;
+    max-width: 40px;
+    min-height: 40px;
+    max-height: 40px;
     border: 2px solid #ffffff;
     qproperty-alignment: AlignCenter;
 }
 
 #shop_title {
     color: __THEME_SIDEBAR_TEXT__;
-    font-size: 15px;
+    font-size: 13.5px;
     font-weight: 800;
-    margin-top: 4px;
-    margin-bottom: 8px;
+    margin-top: 2px;
+    margin-bottom: 4px;
     letter-spacing: 0.5px;
     qproperty-alignment: AlignCenter;
     text-align: center;
 }
 
+#sidebar QPushButton#sidebar_group_header_btn {
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 3px 6px;
+    margin: 6px 2px 2px 2px;
+    min-height: 22px;
+    max-height: 24px;
+}
+
+#sidebar QPushButton#sidebar_group_header_btn:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+#sidebar QLabel#sidebar_group_title {
+    color: __THEME_SIDEBAR_TEXT__;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+}
+
+#sidebar QLabel#sidebar_group_arrow {
+    color: __THEME_SIDEBAR_TEXT__;
+    font-size: 11px;
+    font-weight: bold;
+    background: transparent;
+    border: none;
+}
+
 #sidebar QPushButton {
     background-color: transparent;
     border: none;
-    padding: 10px 14px;
-    border-radius: 18px;
-    margin: 3px 6px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    margin: 1px 2px;
+    min-height: 32px;
+    max-height: 32px;
 }
 
 #sidebar QPushButton:hover {
@@ -120,6 +154,7 @@ QWidget {
 #sidebar QPushButton:checked {
     background-color: #ffffff;
     border: none;
+    border-radius: 12px;
 }
 
 #sidebar QPushButton QLabel {
@@ -128,7 +163,7 @@ QWidget {
 
 #sidebar QPushButton QLabel#btn_label {
     color: __THEME_SIDEBAR_TEXT__;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
 }
 
@@ -142,30 +177,35 @@ QWidget {
 }
 
 #sidebar QPushButton QLabel#shortcut_label {
-    color: #1b3808;
-    font-size: 11px;
+    color: __THEME_SIDEBAR_TEXT__;
+    font-size: 10px;
     font-weight: 700;
-    background: transparent;
-    border: none;
-    padding: 0px;
+    background-color: rgba(0, 0, 0, 0.08);
+    border-radius: 5px;
+    padding: 1px 5px;
 }
 
 #sidebar QPushButton:hover QLabel#shortcut_label {
     color: #0f172a;
+    background-color: rgba(0, 0, 0, 0.12);
 }
 
 #sidebar QPushButton:checked QLabel#shortcut_label {
     color: #475569;
+    background-color: #f1f5f9;
 }
 
 #logout_btn {
     background-color: rgba(255, 255, 255, 0.9);
     color: #dc2626;
     border: 1px solid rgba(220, 38, 38, 0.25);
-    border-radius: 18px;
-    padding: 10px 16px;
+    border-radius: 12px;
+    padding: 8px 14px;
     font-weight: bold;
-    margin: 10px 12px 14px 12px;
+    font-size: 12px;
+    margin: 4px 6px 4px 6px;
+    min-height: 32px;
+    max-height: 32px;
 }
 
 #logout_btn:hover {

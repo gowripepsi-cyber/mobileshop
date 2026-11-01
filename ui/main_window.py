@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QStackedWidget, QMessageBox, QSpacerItem, QSizePolicy
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QStackedWidget, QMessageBox, QSpacerItem, QSizePolicy, QScrollArea
 from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QShortcut, QKeySequence
 from functools import partial
@@ -14,6 +14,8 @@ from ui.reports.reports import ReportsView
 from ui.settings.settings import SettingsView
 from ui.money_transfer import MoneyTransferView
 from ui.banking.bank_cash_view import BankCashView
+from ui.expenses import ExpensesView
+from ui.staff import StaffView
 from utils.translator import tr, get_current_language, set_current_language
 
 class MainWindow(QMainWindow):
@@ -61,73 +63,147 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(logo_container)
         self.update_shop_name()
 
-        # Navigation buttons mapping and shortcuts
+        # Categorized Navigation Groups with Compact Styling & Smooth Scroll
         self.nav_buttons = {}
-        nav_items = [
-            ("Dashboard", 0),
-            ("Master Records", 1),
-            ("Purchase Entry", 2),
-            ("Sales Invoice", 3),
-            ("Service Cards", 4),
-            ("Payments", 5),
-            ("Bank & Cash", 9),
-            ("Reports", 6),
-            ("Settings", 7),
-            ("UPI / Money Transfer", 8),
+        self.nav_group_headers = []
+        self.nav_groups = []
+
+        nav_groups_data = [
+            ("MAIN", [
+                ("Dashboard", 0, "Ctrl+1"),
+            ]),
+            ("OPERATIONS & BILLING", [
+                ("Sales Invoice", 3, "Ctrl+4"),
+                ("Purchase Entry", 2, "Ctrl+3"),
+                ("Service Cards", 4, "Ctrl+5"),
+            ]),
+            ("FINANCE & HR", [
+                ("Payments", 5, "Ctrl+6"),
+                ("Expenses", 10, "Ctrl+9"),
+                ("Staff Management", 11, "Ctrl+0"),
+                ("Bank & Cash", 9, "Ctrl+8"),
+                ("UPI / Money Transfer", 8, "Ctrl+Shift+M"),
+            ]),
+            ("MANAGEMENT & REPORTS", [
+                ("Reports", 6, "Ctrl+7"),
+                ("Master Records", 1, "Ctrl+2"),
+                ("Settings", 7, "Ctrl+,"),
+            ]),
         ]
 
-        # Map index to shortcut key
-        shortcuts = {
-            0: "Ctrl+1",
-            1: "Ctrl+2",
-            2: "Ctrl+3",
-            3: "Ctrl+4",
-            4: "Ctrl+5",
-            5: "Ctrl+6",
-            6: "Ctrl+7",
-            7: "Ctrl+,",
-            8: "Ctrl+Shift+M",
-            9: "Ctrl+8"
-        }
+        # Smooth Scroll Area for navigation buttons
+        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll.setObjectName("sidebar_scroll")
+        self.sidebar_scroll.setWidgetResizable(True)
+        self.sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sidebar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.sidebar_scroll.setStyleSheet("""
+            QScrollArea#sidebar_scroll {
+                background: transparent;
+                border: none;
+            }
+            QScrollArea#sidebar_scroll > QWidget > QWidget {
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                width: 4px;
+                background: transparent;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255, 255, 255, 0.35);
+                border-radius: 2px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(255, 255, 255, 0.6);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
 
-        for text, index in nav_items:
-            shortcut_key = shortcuts.get(index)
-            btn = QPushButton()
-            btn.setCheckable(True)
-            btn.setCursor(Qt.PointingHandCursor)
-            
-            # Create horizontal layout inside the button to align title and shortcut
-            btn_layout = QHBoxLayout(btn)
-            btn_layout.setContentsMargins(15, 0, 15, 0)
-            btn_layout.setSpacing(8)
-            
-            # Title Label (left side)
-            lbl_text = QLabel(tr(text))
-            lbl_text.setObjectName("btn_label")
-            lbl_text.setAttribute(Qt.WA_TransparentForMouseEvents)
-            btn_layout.addWidget(lbl_text)
-            btn.label = lbl_text
-            btn.orig_text = text
-            
-            # Stretch spacer to push shortcut label to the right
-            btn_layout.addStretch()
-            
-            # Shortcut Badge (right side)
-            if shortcut_key:
-                btn.setShortcut(shortcut_key)
-                btn.setToolTip(f"{text} ({shortcut_key})")
-                
-                lbl_shortcut = QLabel(shortcut_key)
-                lbl_shortcut.setObjectName("shortcut_label")
-                lbl_shortcut.setAttribute(Qt.WA_TransparentForMouseEvents)
-                btn_layout.addWidget(lbl_shortcut)
-                
-            btn.clicked.connect(lambda checked, idx=index: self.switch_view(idx))
-            sidebar_layout.addWidget(btn)
-            self.nav_buttons[index] = btn
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(2)
 
-        # Spacer to push logout button to bottom
-        sidebar_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        for group_name, items in nav_groups_data:
+            # Clickable Collapsible Header Button
+            header_btn = QPushButton()
+            header_btn.setObjectName("sidebar_group_header_btn")
+            header_btn.setCursor(Qt.PointingHandCursor)
+
+            h_layout = QHBoxLayout(header_btn)
+            h_layout.setContentsMargins(6, 0, 6, 0)
+            h_layout.setSpacing(4)
+
+            lbl_title = QLabel(tr(group_name))
+            lbl_title.setObjectName("sidebar_group_title")
+            lbl_title.setAttribute(Qt.WA_TransparentForMouseEvents)
+            lbl_title.orig_text = group_name
+            h_layout.addWidget(lbl_title)
+            h_layout.addStretch()
+
+            lbl_arrow = QLabel("▾")
+            lbl_arrow.setObjectName("sidebar_group_arrow")
+            lbl_arrow.setAttribute(Qt.WA_TransparentForMouseEvents)
+            h_layout.addWidget(lbl_arrow)
+
+            scroll_layout.addWidget(header_btn)
+            self.nav_group_headers.append(lbl_title)
+
+            # Container for group buttons
+            group_container = QWidget()
+            group_container.setStyleSheet("background: transparent;")
+            group_layout = QVBoxLayout(group_container)
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(2)
+
+            group_btns = []
+            for text, index, shortcut_key in items:
+                btn = QPushButton()
+                btn.setCheckable(True)
+                btn.setCursor(Qt.PointingHandCursor)
+
+                btn_layout = QHBoxLayout(btn)
+                btn_layout.setContentsMargins(10, 0, 10, 0)
+                btn_layout.setSpacing(6)
+
+                lbl_text = QLabel(tr(text))
+                lbl_text.setObjectName("btn_label")
+                lbl_text.setAttribute(Qt.WA_TransparentForMouseEvents)
+                btn_layout.addWidget(lbl_text)
+                btn.label = lbl_text
+                btn.orig_text = text
+
+                btn_layout.addStretch()
+
+                if shortcut_key:
+                    btn.setShortcut(shortcut_key)
+                    btn.setToolTip(f"{text} ({shortcut_key})")
+
+                    lbl_shortcut = QLabel(shortcut_key)
+                    lbl_shortcut.setObjectName("shortcut_label")
+                    lbl_shortcut.setAttribute(Qt.WA_TransparentForMouseEvents)
+                    btn_layout.addWidget(lbl_shortcut)
+
+                btn.clicked.connect(lambda checked, idx=index: self.switch_view(idx))
+                group_layout.addWidget(btn)
+                self.nav_buttons[index] = btn
+                group_btns.append(btn)
+
+            scroll_layout.addWidget(group_container)
+
+            header_btn.is_expanded = True
+            header_btn.arrow_lbl = lbl_arrow
+            header_btn.clicked.connect(lambda checked, c=group_container, h=header_btn: self.toggle_nav_group(c, h))
+            self.nav_groups.append((header_btn, group_container, group_btns))
+
+        scroll_layout.addStretch()
+        self.sidebar_scroll.setWidget(scroll_content)
+        sidebar_layout.addWidget(self.sidebar_scroll, 1)
 
         # Logout Button
         self.logout_btn = QPushButton(tr("Log Out"))
@@ -197,6 +273,8 @@ class MainWindow(QMainWindow):
         self.money_transfer_view = MoneyTransferView(self)
         self.bank_cash_view = BankCashView(self)
         self.bank_accounts_view = self.bank_cash_view.bank_accounts_view
+        self.expenses_view = ExpensesView(self)
+        self.staff_view = StaffView(self)
 
         # Add Views to Stacked Widget in order
         self.stacked_widget.addWidget(self.dashboard_view)       # 0
@@ -209,6 +287,8 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.settings_view)        # 7
         self.stacked_widget.addWidget(self.money_transfer_view)   # 8
         self.stacked_widget.addWidget(self.bank_cash_view)        # 9
+        self.stacked_widget.addWidget(self.expenses_view)         # 10
+        self.stacked_widget.addWidget(self.staff_view)            # 11
 
         content_wrapper_layout.addWidget(self.stacked_widget)
         main_layout.addWidget(content_wrapper)
@@ -303,6 +383,17 @@ class MainWindow(QMainWindow):
             app.setStyleSheet(get_theme_stylesheet(color_hex))
         self.update_shop_name()
 
+    def toggle_nav_group(self, container, header_btn, force_state=None):
+        if force_state is not None:
+            new_state = force_state
+        else:
+            new_state = not getattr(header_btn, 'is_expanded', True)
+
+        header_btn.is_expanded = new_state
+        container.setVisible(new_state)
+        if hasattr(header_btn, 'arrow_lbl'):
+            header_btn.arrow_lbl.setText("▾" if new_state else "▸")
+
     def switch_view(self, index):
         # Prevent switching to hidden sidebar buttons (via shortcuts)
         if index in self.nav_buttons and self.nav_buttons[index].isHidden():
@@ -313,6 +404,13 @@ class MainWindow(QMainWindow):
             btn.setChecked(idx == index)
 
         self.stacked_widget.setCurrentIndex(index)
+
+        # Auto-expand active group if it was collapsed
+        if hasattr(self, 'nav_groups'):
+            for header_btn, container, group_btns in self.nav_groups:
+                if any(self.nav_buttons.get(index) == b for b in group_btns):
+                    if not getattr(header_btn, 'is_expanded', True):
+                        self.toggle_nav_group(container, header_btn, force_state=True)
         
         # Update Header Title
         self.update_header_title_for_index(index)
@@ -336,7 +434,9 @@ class MainWindow(QMainWindow):
             6: "Reports & Financial Analysis",
             7: "System Settings & Database Admin",
             8: "UPI / Money Transfer",
-            9: "Bank Accounts & Cash Drawer Management"
+            9: "Bank Accounts & Cash Drawer Management",
+            10: "Daily Expenses & Cost Management",
+            11: "Staff & Payroll Management"
         }
         raw_title = title_map.get(index, "Inventory & Accounting")
         self.header_title.setText(tr(raw_title))
@@ -354,7 +454,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'lang_btn'):
             self.lang_btn.setText("🌐 தமிழ்" if curr == 'en' else "🌐 English")
 
-        # 2. Update sidebar buttons
+        # 2. Update sidebar buttons and group headers
+        if hasattr(self, 'nav_group_headers'):
+            for lbl in self.nav_group_headers:
+                if hasattr(lbl, 'orig_text'):
+                    lbl.setText(tr(lbl.orig_text))
+
         if hasattr(self, 'nav_buttons'):
             for idx, btn in self.nav_buttons.items():
                 if hasattr(btn, 'label') and hasattr(btn, 'orig_text'):

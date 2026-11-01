@@ -115,6 +115,20 @@ class JobCardDialog(QDialog):
         self.complaint_input.setFixedHeight(80)
         
         self.technician_input = QLineEdit()
+        self.technician_input.setPlaceholderText("Assigned technician (type or select from staff)...")
+        # Autocomplete from active staff
+        try:
+            from database import Staff
+            _t_sess = Session()
+            _techs = _t_sess.query(Staff.name).filter_by(status='Active').all()
+            _t_names = [t[0] for t in _techs if t[0]]
+            _t_sess.close()
+            if _t_names:
+                _comp = QCompleter(_t_names, self)
+                _comp.setCaseSensitivity(Qt.CaseInsensitive)
+                self.technician_input.setCompleter(_comp)
+        except Exception:
+            pass
         
         self.status_combo = QComboBox()
         self.status_combo.addItems(["Received", "Under Repair", "Ready", "Delivered"])

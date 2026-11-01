@@ -739,7 +739,148 @@ class TestInventoryDB(unittest.TestCase):
         self.session.delete(cust)
         self.session.commit()
 
+
+    def test_13_expense_recording_and_ledger(self):
+        from models import ExpenseCategory, Expense
+        from database import generate_next_expense_voucher
+
+        # 1. Ensure category exists
+        cat = self.session.query(ExpenseCategory).filter_by(name="Shop Rent").first()
+        if not cat:
+            cat = ExpenseCategory(name="Shop Rent", description="Premises rent")
+            self.session.add(cat)
+            self.session.commit()
+
+        # 2. Record Expense
+        v_num = generate_next_expense_voucher(self.session)
+        exp = Expense(
+            voucher_number=v_num,
+            date=datetime.date.today(),
+            category_id=cat.id,
+            amount=15000.0,
+            payment_mode="Cash",
+            payee="Mr. Landlord",
+            reference_no="RENT-NOV-2026",
+            description="Shop premises rent for November 2026"
+        )
+        self.session.add(exp)
+        self.session.flush()
+
+        # Cash ledger integration
+        cash_tx = CashTransaction(
+            date=exp.date,
+            transaction_type='out',
+            amount=exp.amount,
+            source_type='expense',
+            source_id=exp.id,
+            description=f"Expense [{cat.name}] - {exp.payee} (Voucher: {exp.voucher_number})"
+        )
+        self.session.add(cash_tx)
+        self.session.commit()
+
+        # Verify
+        db_exp = self.session.query(Expense).filter_by(voucher_number=v_num).first()
+        self.assertIsNotNone(db_exp)
+        self.assertEqual(db_exp.amount, 15000.0)
+        self.assertEqual(db_exp.payee, "Mr. Landlord")
+
+        db_cash = self.session.query(CashTransaction).filter_by(source_type='expense', source_id=exp.id).first()
+        self.assertIsNotNone(db_cash)
+        self.assertEqual(db_cash.amount, 15000.0)
+        self.assertEqual(db_cash.transaction_type, 'out')
+
+        # Cleanup
+        self.session.delete(db_cash)
+        self.session.delete(db_exp)
+        self.session.commit()
+
+    def test_14_staff_management_attendance_and_payroll(self):
+        from models import Staff, StaffAttendance, StaffSalaryPayment
+        from database import generate_next_staff_code, generate_next_salary_payment_number
+
+        # 1. Create Staff
+        st_code = generate_next_staff_code(self.session)
+        staff = Staff(
+            staff_code=st_code,
+            name="Ravi Kumar",
+            mobile="9876543210",
+            email="ravi@example.com",
+            designation="Technician",
+            salary_type="Monthly",
+            base_salary=25000.0,
+            status="Active"
+        )
+        self.session.add(staff)
+        self.session.commit()
+
+        db_staff = self.session.query(Staff).filter_by(staff_code=st_code).first()
+        self.assertIsNotNone(db_staff)
+        self.assertEqual(db_staff.name, "Ravi Kumar")
+        self.assertEqual(db_staff.designation, "Technician")
+        self.assertEqual(db_staff.base_salary, 25000.0)
+
+        # 2. Record Attendance
+        att = StaffAttendance(
+            staff_id=db_staff.id,
+            date=datetime.date.today(),
+            status="Present",
+            in_time="09:30 AM",
+            out_time="08:30 PM",
+            notes="On time"
+        )
+        self.session.add(att)
+        self.session.commit()
+
+        db_att = self.session.query(StaffAttendance).filter_by(staff_id=db_staff.id).first()
+        self.assertIsNotNone(db_att)
+        self.assertEqual(db_att.status, "Present")
+
+        # 3. Pay Salary
+        pay_num = generate_next_salary_payment_number(self.session, "Salary")
+        sal = StaffSalaryPayment(
+            payment_number=pay_num,
+            staff_id=db_staff.id,
+            date=datetime.date.today(),
+            payment_type="Salary",
+            for_month="2026-11",
+            amount=25000.0,
+            deductions=1000.0,
+            net_paid=24000.0,
+            payment_mode="Cash",
+            notes="November salary after advance adjustment"
+        )
+        self.session.add(sal)
+        self.session.flush()
+
+        cash_tx = CashTransaction(
+            date=sal.date,
+            transaction_type='out',
+            amount=sal.net_paid,
+            source_type='salary',
+            source_id=sal.id,
+            description=f"Staff Salary [{db_staff.name}] (2026-11)"
+        )
+        self.session.add(cash_tx)
+        self.session.commit()
+
+        # Verify salary payment
+        db_sal = self.session.query(StaffSalaryPayment).filter_by(payment_number=pay_num).first()
+        self.assertIsNotNone(db_sal)
+        self.assertEqual(db_sal.net_paid, 24000.0)
+
+        db_tx = self.session.query(CashTransaction).filter_by(source_type='salary', source_id=sal.id).first()
+        self.assertIsNotNone(db_tx)
+        self.assertEqual(db_tx.amount, 24000.0)
+
+        # Cleanup
+        self.session.delete(db_tx)
+        self.session.delete(db_sal)
+        self.session.delete(db_att)
+        self.session.delete(db_staff)
+        self.session.commit()
+
 if __name__ == '__main__':
+
     unittest.main()
 
 

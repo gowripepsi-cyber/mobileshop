@@ -17,6 +17,12 @@ MODULE_CATEGORIES = {
         ("services", "Service Cards (Repair Center)", ["view", "add", "edit", "delete"]),
         ("payments", "Payments Ledger", ["view", "add", "edit", "delete"])
     ],
+    "Expenses": [
+        ("expenses", "Expenses Management", ["view", "add", "edit", "delete"])
+    ],
+    "Staff Management": [
+        ("staff", "Staff & Payroll Management", ["view", "add", "edit", "delete"])
+    ],
     "Analytics": [
         ("reports", "Reports & Financial Analysis", ["view"])
     ],
@@ -85,7 +91,9 @@ def enforce_ui_permissions(main_window):
         6: [("reports", "view")],
         7: [("settings", "view"), ("system_configuration", "view"), ("user_management", "view"), ("backup_restore", "view"), ("database_maintenance", "view")],
         8: [("bank_accounts", "view"), ("payments", "view")],
-        9: [("bank_accounts", "view"), ("payments", "view")]
+        9: [("bank_accounts", "view"), ("payments", "view")],
+        10: [("expenses", "view")],
+        11: [("staff", "view")]
     }
 
     if hasattr(main_window, 'nav_buttons'):
@@ -96,6 +104,16 @@ def enforce_ui_permissions(main_window):
                 reqs = nav_permission_map.get(idx, [])
                 can_access = any(has_permission(user, mod, act) for mod, act in reqs)
                 btn.setVisible(can_access)
+
+    if hasattr(main_window, 'nav_groups'):
+        for header_btn, container, group_btns in main_window.nav_groups:
+            if is_admin:
+                header_btn.setVisible(True)
+            else:
+                header_visible = any(b.isVisible() for b in group_btns)
+                header_btn.setVisible(header_visible)
+                if not header_visible:
+                    container.setVisible(False)
 
     # 2. Masters Sub-tabs (Products, Categories, Customers, Suppliers, Units)
     if hasattr(main_window, 'masters_view'):

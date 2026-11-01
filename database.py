@@ -1,7 +1,7 @@
 import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit, ExpenseCategory, Expense, Staff, StaffAttendance, StaffSalaryPayment
 
 DATABASE_URL = "sqlite:///inventory.db"
 
@@ -42,6 +42,44 @@ def generate_next_product_code(session, category_name: str) -> str:
         next_num += 1
         
     return f"{prefix}{next_num:03d}"
+
+
+def generate_next_expense_voucher(session) -> str:
+    expenses = session.query(Expense.voucher_number).all()
+    max_num = 0
+    for (v_num,) in expenses:
+        if v_num and v_num.startswith("EXP-"):
+            try:
+                num = int(v_num.split("-")[1])
+                max_num = max(max_num, num)
+            except Exception:
+                pass
+    return f"EXP-{(max_num + 1):06d}"
+
+def generate_next_staff_code(session) -> str:
+    staff_list = session.query(Staff.staff_code).all()
+    max_num = 0
+    for (s_code,) in staff_list:
+        if s_code and s_code.startswith("EMP"):
+            try:
+                num = int(s_code.replace("EMP", ""))
+                max_num = max(max_num, num)
+            except Exception:
+                pass
+    return f"EMP{(max_num + 1):03d}"
+
+def generate_next_salary_payment_number(session, payment_type="Salary") -> str:
+    prefix = "ADV-" if payment_type == "Advance" else "SAL-"
+    payments = session.query(StaffSalaryPayment.payment_number).filter(StaffSalaryPayment.payment_number.like(f"{prefix}%")).all()
+    max_num = 0
+    for (p_num,) in payments:
+        if p_num and p_num.startswith(prefix):
+            try:
+                num = int(p_num.split("-")[1])
+                max_num = max(max_num, num)
+            except Exception:
+                pass
+    return f"{prefix}{(max_num + 1):05d}"
 
 def init_db():
     Base.metadata.create_all(engine)
@@ -382,6 +420,26 @@ def init_db():
             ]
             for u_name, u_desc in default_units:
                 session.add(Unit(name=u_name, description=u_desc))
+            session.commit()
+
+
+        # 10. Seed default expense categories if empty
+        exp_cat_count = session.query(ExpenseCategory).count()
+        if exp_cat_count == 0:
+            default_exp_cats = [
+                ("Shop Rent", "Monthly shop premises rent"),
+                ("Electricity Bill", "Monthly EB / power utility bills"),
+                ("Tea & Refreshments", "Staff and customer tea, snacks, and water"),
+                ("Internet & Telephone", "Shop broadband internet and mobile recharge"),
+                ("Staff Welfare", "Staff lunch, health, and welfare expenses"),
+                ("Transportation & Fuel", "Delivery, courier, and travel fuel expenses"),
+                ("Stationery & Printing", "Paper, bill rolls, pens, and printing"),
+                ("Shop Maintenance", "Cleaning, repairs, lighting, and electrical work"),
+                ("Marketing & Promotion", "Pamphlets, local ads, and signage"),
+                ("Miscellaneous Expense", "Other small daily shop expenses")
+            ]
+            for c_name, c_desc in default_exp_cats:
+                session.add(ExpenseCategory(name=c_name, description=c_desc))
             session.commit()
 
         session.commit()

@@ -406,3 +406,88 @@ class PurchaseReturnItem(Base):
     
     purchase_return = relationship("PurchaseReturnMaster", back_populates="items")
     product = relationship("Product")
+
+
+class ExpenseCategory(Base):
+    __tablename__ = 'expense_categories'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    expenses = relationship("Expense", back_populates="category")
+
+
+class Expense(Base):
+    __tablename__ = 'expenses'
+    id = Column(Integer, primary_key=True)
+    voucher_number = Column(String, unique=True, nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    category_id = Column(Integer, ForeignKey('expense_categories.id'), nullable=False)
+    amount = Column(Float, default=0.0)
+    payment_mode = Column(String, default='Cash')  # 'Cash', 'Bank'
+    bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    payee = Column(String, nullable=True)          # Paid To / Vendor
+    reference_no = Column(String, nullable=True)   # Invoice / Receipt / Txn #
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    category = relationship("ExpenseCategory", back_populates="expenses")
+    bank_account = relationship("BankAccount")
+
+
+class Staff(Base):
+    __tablename__ = 'staff'
+    id = Column(Integer, primary_key=True)
+    staff_code = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    mobile = Column(String, nullable=False)
+    email = Column(String, nullable=True)
+    designation = Column(String, default='Salesperson')  # Technician, Salesperson, Cashier, Manager, Helper
+    salary_type = Column(String, default='Monthly')      # Monthly, Daily, Weekly
+    base_salary = Column(Float, default=0.0)
+    joining_date = Column(Date, default=datetime.date.today)
+    address = Column(Text, nullable=True)
+    id_proof_type = Column(String, nullable=True)        # Aadhaar, Voter ID, PAN, Driving License
+    id_proof_number = Column(String, nullable=True)
+    status = Column(String, default='Active')            # Active, Inactive, Resigned
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    attendances = relationship("StaffAttendance", back_populates="staff", cascade="all, delete-orphan")
+    salary_payments = relationship("StaffSalaryPayment", back_populates="staff", cascade="all, delete-orphan")
+
+
+class StaffAttendance(Base):
+    __tablename__ = 'staff_attendance'
+    id = Column(Integer, primary_key=True)
+    staff_id = Column(Integer, ForeignKey('staff.id'), nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    status = Column(String, default='Present')           # Present, Absent, Half Day, Leave
+    in_time = Column(String, nullable=True)              # e.g. 09:30 AM
+    out_time = Column(String, nullable=True)             # e.g. 08:30 PM
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    staff = relationship("Staff", back_populates="attendances")
+
+
+class StaffSalaryPayment(Base):
+    __tablename__ = 'staff_salary_payments'
+    id = Column(Integer, primary_key=True)
+    payment_number = Column(String, unique=True, nullable=False)
+    staff_id = Column(Integer, ForeignKey('staff.id'), nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    payment_type = Column(String, default='Salary')      # Salary, Advance, Bonus, Incentive
+    for_month = Column(String, nullable=False)           # e.g. 2026-11
+    amount = Column(Float, default=0.0)                 # Gross Amount
+    deductions = Column(Float, default=0.0)             # Advance / Other Deductions
+    net_paid = Column(Float, default=0.0)               # Net Amount Paid
+    payment_mode = Column(String, default='Cash')       # Cash, Bank
+    bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    staff = relationship("Staff", back_populates="salary_payments")
+    bank_account = relationship("BankAccount")
