@@ -217,7 +217,7 @@ class TestInventoryDB(unittest.TestCase):
         self.session.commit()
         
         # 2. Create a dummy Service Job
-        job_no = f"TEST-JOB-{datetime.datetime.now().microsecond}"
+        job_no = f"{(datetime.datetime.now().microsecond % 900000 + 100000):06d}"
         job = ServiceJob(
             job_number=job_no,
             customer_name="Test Service Customer",

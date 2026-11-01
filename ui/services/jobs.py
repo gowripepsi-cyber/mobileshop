@@ -4,8 +4,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                              QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, 
                              QFrame, QFormLayout, QDialog, QTextEdit, QDoubleSpinBox, QSpacerItem, QSizePolicy,
                              QApplication, QScrollArea, QSpinBox, QDialogButtonBox)
-from PySide6.QtCore import Qt, QObject, QEvent, QTimer
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QRegularExpression
+from PySide6.QtGui import QColor, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import QCompleter
 from sqlalchemy import case
 from database import Session, Setting
@@ -66,7 +66,10 @@ class JobCardDialog(QDialog):
         form_layout = QFormLayout()
 
         self.job_num_input = QLineEdit()
-        self.job_num_input.setPlaceholderText("e.g. JOB-1001")
+        self.job_num_input.setPlaceholderText("6-digit ID (e.g. 000001)")
+        self.job_num_input.setMaxLength(6)
+        regex = QRegularExpression(r"^[0-9]{0,6}$")
+        self.job_num_input.setValidator(QRegularExpressionValidator(regex, self))
         
         self.cust_name_combo = QComboBox()
         self.cust_name_combo.setEditable(True)
@@ -152,14 +155,20 @@ class JobCardDialog(QDialog):
             self.technician_input.setText(self.job.technician or "")
             self.status_combo.setCurrentText(self.job.status)
         else:
-            # Suggest Job Number
+            # Suggest next 6-digit serial number (pure numbers, no alphabets)
             session = Session()
-            last_job = session.query(ServiceJob).order_by(ServiceJob.id.desc()).first()
-            if last_job:
-                self.job_num_input.setText(f"JOB-{last_job.id + 1001}")
-            else:
-                self.job_num_input.setText("JOB-1001")
-            session.close()
+            try:
+                jobs = session.query(ServiceJob.job_number).all()
+                max_num = 0
+                for (j_num,) in jobs:
+                    if j_num and j_num.strip().isdigit():
+                        max_num = max(max_num, int(j_num.strip()))
+                next_val = max_num + 1
+                self.job_num_input.setText(f"{next_val:06d}")
+            except Exception:
+                self.job_num_input.setText("000001")
+            finally:
+                session.close()
 
     def load_customers(self, select_customer_name=None):
         session = Session()
@@ -264,6 +273,19 @@ class JobCardDialog(QDialog):
         is_invalid = not job_num or not mobile or not name or not model
         if is_invalid:
             QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)\n(Customer Name, Mobile, and Device Detail are required)")
+            return
+
+        # Ensure Job ID is purely numeric (no alphabets or special characters)
+        if not job_num.isdigit():
+            QMessageBox.warning(self, "Validation Error", "Job ID must contain only numbers (no alphabets).")
+            return
+
+        # Auto-pad to 6 digits if fewer digits entered
+        if len(job_num) < 6:
+            job_num = job_num.zfill(6)
+            self.job_num_input.setText(job_num)
+        elif len(job_num) > 6:
+            QMessageBox.warning(self, "Validation Error", "Job ID must be exactly 6 digits.")
             return
 
         session = Session()
@@ -1409,8 +1431,10 @@ class ServicesView(QWidget):
 
             for offset_idx, j in enumerate(jobs):
                 i = start_row + offset_idx
-                # Col 0: Job #
-                self.table.setItem(i, 0, QTableWidgetItem(j.job_number))
+                # Col 0: Job # (Centered 6-digit numeric ID)
+                job_item = QTableWidgetItem(j.job_number)
+                job_item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(i, 0, job_item)
 
                 # Col 1: Created Date
                 if j.created_at:

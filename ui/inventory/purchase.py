@@ -265,11 +265,7 @@ class PurchaseView(QWidget):
 
         # Items Table
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
-        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Category", "Qty", "Unit", "Rate (₹)", "Total (₹)", "Action"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-        self.table.setColumnWidth(7, 100)
+        self.setup_table_columns(False)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
         right_layout.addWidget(self.table)
@@ -789,21 +785,39 @@ class PurchaseView(QWidget):
         if gst_active:
             self.table.setColumnCount(10)
             self.table.setHorizontalHeaderLabels([
-                "Product Code", "Product Name", "Category", 
+                "Code", "Name", "Category", 
                 "Qty", "Unit", "Rate (₹)", "GST %", "Tax (₹)", "Total (₹)", "Action"
             ])
-            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-            self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
-            self.table.setColumnWidth(9, 100)
+            header = self.table.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Interactive)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            self.table.setColumnWidth(0, 62)   # Code
+            self.table.setColumnWidth(2, 76)   # Category
+            self.table.setColumnWidth(3, 44)   # Qty
+            self.table.setColumnWidth(4, 48)   # Unit
+            self.table.setColumnWidth(5, 74)   # Rate (₹)
+            self.table.setColumnWidth(6, 54)   # GST %
+            self.table.setColumnWidth(7, 68)   # Tax (₹)
+            self.table.setColumnWidth(8, 78)   # Total (₹)
+            header.setSectionResizeMode(9, QHeaderView.Fixed)
+            self.table.setColumnWidth(9, 68)   # Action
         else:
             self.table.setColumnCount(8)
             self.table.setHorizontalHeaderLabels([
-                "Product Code", "Product Name", "Category", 
+                "Code", "Name", "Category", 
                 "Qty", "Unit", "Rate (₹)", "Total (₹)", "Action"
             ])
-            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-            self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-            self.table.setColumnWidth(7, 100)
+            header = self.table.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Interactive)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            self.table.setColumnWidth(0, 65)   # Code
+            self.table.setColumnWidth(2, 82)   # Category
+            self.table.setColumnWidth(3, 46)   # Qty
+            self.table.setColumnWidth(4, 52)   # Unit
+            self.table.setColumnWidth(5, 76)   # Rate (₹)
+            self.table.setColumnWidth(6, 82)   # Total (₹)
+            header.setSectionResizeMode(7, QHeaderView.Fixed)
+            self.table.setColumnWidth(7, 68)   # Action
 
     def add_item_to_list(self):
         prod_idx = self.product_combo.currentIndex()
@@ -1251,8 +1265,14 @@ class PurchaseView(QWidget):
             # Items table
             items_table = QTableWidget()
             items_table.setColumnCount(5)
-            items_table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Qty", "Rate (₹)", "Total (₹)"])
-            items_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            items_table.setHorizontalHeaderLabels(["Code", "Name", "Qty", "Rate (₹)", "Total (₹)"])
+            header = items_table.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Interactive)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            items_table.setColumnWidth(0, 75)
+            items_table.setColumnWidth(2, 60)
+            items_table.setColumnWidth(3, 85)
+            items_table.setColumnWidth(4, 90)
             items_table.verticalHeader().setVisible(False)
             
             items = session.query(PurchaseItem).filter_by(purchase_id=purchase_id).all()

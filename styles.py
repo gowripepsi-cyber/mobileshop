@@ -29,7 +29,8 @@ def get_theme_palette(primary_hex="#8fd53b"):
     sidebar_subtext = "rgba(20, 43, 5, 0.65)" if lum > 0.55 else "rgba(255, 255, 255, 0.70)"
 
     light_bg = f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.08)"
-    light_hover = f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.04)"
+    light_hover = f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.15)"
+    dropdown_hover = f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.24)"
 
     return {
         "primary": primary,
@@ -43,6 +44,7 @@ def get_theme_palette(primary_hex="#8fd53b"):
         "sidebar_subtext": sidebar_subtext,
         "light_bg": light_bg,
         "light_hover": light_hover,
+        "dropdown_hover": dropdown_hover,
     }
 
 THEME_STYLESHEET_TEMPLATE = """
@@ -344,30 +346,42 @@ QComboBox QLineEdit:focus {
 
 QComboBox QAbstractItemView, QListView {
     background-color: #ffffff;
-    border: 1.5px solid __THEME_PRIMARY__;
-    border-radius: 8px;
+    border: 2px solid __THEME_PRIMARY__;
+    border-radius: 10px;
     color: #0f172a;
     selection-background-color: __THEME_PRIMARY__;
-    selection-color: #0f172a;
-    padding: 4px;
+    selection-color: __THEME_TEXT_PRIMARY__;
+    padding: 5px;
 }
 
 QComboBox QAbstractItemView::item, QListView::item {
     background-color: #ffffff;
     color: #0f172a;
-    padding: 7px 12px;
+    padding: 8px 12px;
     border-radius: 6px;
+    border: 1.5px solid transparent;
+    margin: 1px 0px;
 }
 
 QComboBox QAbstractItemView::item:selected, QListView::item:selected {
     background-color: __THEME_PRIMARY__;
     color: __THEME_TEXT_PRIMARY__;
     font-weight: bold;
+    border: 1.5px solid __THEME_HOVER__;
 }
 
 QComboBox QAbstractItemView::item:hover, QListView::item:hover {
-    background-color: __THEME_LIGHT_HOVER__;
+    background-color: __THEME_DROPDOWN_HOVER__;
     color: #0f172a;
+    font-weight: bold;
+    border: 1.5px solid __THEME_PRIMARY__;
+}
+
+QComboBox QAbstractItemView::item:selected:hover, QListView::item:selected:hover {
+    background-color: __THEME_HOVER__;
+    color: __THEME_TEXT_PRIMARY__;
+    font-weight: bold;
+    border: 1.5px solid __THEME_HOVER__;
 }
 
 QComboBox QAbstractItemView::item:disabled, QListView::item:disabled {
@@ -584,7 +598,7 @@ QTableWidget::item:focus, QTableView::item:focus {
 QHeaderView::section {
     background-color: __THEME_LIGHT_HOVER__;
     color: #334155;
-    padding: 9px;
+    padding: 8px 6px;
     font-weight: bold;
     border: none;
     border-bottom: 2px solid #e2e8f0;
@@ -1131,6 +1145,7 @@ def get_theme_stylesheet(primary_hex="#8fd53b"):
         "__THEME_SIDEBAR_SUBTEXT__": palette["sidebar_subtext"],
         "__THEME_LIGHT_BG__": palette["light_bg"],
         "__THEME_LIGHT_HOVER__": palette["light_hover"],
+        "__THEME_DROPDOWN_HOVER__": palette["dropdown_hover"],
     }
     for token, val in replacements.items():
         css = css.replace(token, val)

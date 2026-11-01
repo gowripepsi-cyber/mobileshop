@@ -342,7 +342,7 @@ class ReportsView(QWidget):
         self.profit_table = QTableWidget()
         self.profit_table.setColumnCount(11)
         self.profit_table.setHorizontalHeaderLabels([
-            "Product Code", "Product Name", "Purchase Date", "Sale Date", 
+            "Code", "Name", "Purchase Date", "Sale Date", 
             "Days in Stock", "Qty", "Pur. Price (₹)", "Sale Price (₹)", 
             "Gross Profit (₹)", "Interest Cost (₹)", "Net Profit (₹)"
         ])

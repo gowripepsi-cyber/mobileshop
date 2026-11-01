@@ -180,10 +180,16 @@ class SalesReturnEntryWidget(QWidget):
         # Table
         self.table = QTableWidget()
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Qty", "Rate (₹)", "Total (₹)", "Action"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 110)
+        self.table.setHorizontalHeaderLabels(["Code", "Name", "Qty", "Rate (₹)", "Total (₹)", "Action"])
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setColumnWidth(0, 65)   # Code
+        self.table.setColumnWidth(2, 50)   # Qty
+        self.table.setColumnWidth(3, 80)   # Rate (₹)
+        self.table.setColumnWidth(4, 85)   # Total (₹)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 68)   # Action
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
         right_layout.addWidget(self.table)
@@ -822,8 +828,14 @@ class SalesReturnHistoryWidget(QWidget):
 
             items_table = QTableWidget()
             items_table.setColumnCount(5)
-            items_table.setHorizontalHeaderLabels(["Product Code", "Product Name", "Qty", "Rate (₹)", "Total (₹)"])
-            items_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            items_table.setHorizontalHeaderLabels(["Code", "Name", "Qty", "Rate (₹)", "Total (₹)"])
+            header = items_table.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Interactive)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            items_table.setColumnWidth(0, 75)
+            items_table.setColumnWidth(2, 60)
+            items_table.setColumnWidth(3, 85)
+            items_table.setColumnWidth(4, 90)
             items_table.verticalHeader().setVisible(False)
             
             items = session.query(SalesReturnItem).filter_by(sales_return_id=return_id).all()
