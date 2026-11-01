@@ -1,6 +1,6 @@
 import os
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
@@ -79,12 +79,19 @@ def generate_sales_pdf(invoice_data, file_path):
     story = []
 
     # 1. Header Grid (Shop Details Left, Invoice Title & Info Right)
-    left_info = [
+    left_info = []
+    if invoice_data.get('shop_logo') and os.path.exists(invoice_data['shop_logo']):
+        try:
+            left_info.append(RLImage(invoice_data['shop_logo'], width=48, height=48))
+            left_info.append(Spacer(1, 4))
+        except Exception:
+            pass
+    left_info.extend([
         Paragraph(invoice_data['shop_name'], style_shop_name),
         Paragraph(invoice_data['shop_address'], style_sub),
         Paragraph(f"Contact: {invoice_data['shop_contact']}", style_sub),
         Paragraph(f"GSTIN: {invoice_data['shop_gst']}", style_sub)
-    ]
+    ])
     
     right_info = [
         Paragraph("TAX INVOICE", style_title),
@@ -1824,7 +1831,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
     import datetime
 
     # A4 Landscape is 841.89 x 595.27 points

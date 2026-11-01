@@ -283,6 +283,10 @@ def init_db():
         if not enable_gst:
             session.add(Setting(key='enable_gst', value='false'))
 
+        theme_color = session.query(Setting).filter_by(key='theme_color').first()
+        if not theme_color:
+            session.add(Setting(key='theme_color', value='#8fd53b'))
+
         # 5. Seed default categories if empty or missing requested standard categories
         default_categories = [
             ("Accessories", "Mobile and computer accessories"),

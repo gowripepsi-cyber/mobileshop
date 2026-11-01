@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QStackedWidget, QMessageBox, QSpacerItem, QSizePolicy
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, QStackedWidget, QMessageBox, QSpacerItem, QSizePolicy
 from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QShortcut, QKeySequence
 from functools import partial
@@ -49,13 +49,15 @@ class MainWindow(QMainWindow):
 
         self.logo_icon = QLabel("☀️")
         self.logo_icon.setObjectName("shop_emblem")
+        self.logo_icon.setFixedSize(48, 48)
         self.logo_icon.setAlignment(Qt.AlignCenter)
-        logo_layout.addWidget(self.logo_icon)
+        logo_layout.addWidget(self.logo_icon, alignment=Qt.AlignCenter)
 
         self.logo_label = QLabel("SUN COMPUTERS,")
         self.logo_label.setObjectName("shop_title")
         self.logo_label.setAlignment(Qt.AlignCenter)
-        logo_layout.addWidget(self.logo_label)
+        self.logo_label.setWordWrap(True)
+        logo_layout.addWidget(self.logo_label, alignment=Qt.AlignCenter)
         sidebar_layout.addWidget(logo_container)
         self.update_shop_name()
 
@@ -164,13 +166,10 @@ class MainWindow(QMainWindow):
         # Language Toggle Button (English ⇄ தமிழ்)
         curr_lang = get_current_language()
         self.lang_btn = QPushButton("🌐 தமிழ்" if curr_lang == 'en' else "🌐 English")
+        self.lang_btn.setObjectName("lang_btn")
         self.lang_btn.setToolTip("Switch Language / மொழி மாற்றம் (English ⇄ தமிழ்)")
         self.lang_btn.setCursor(Qt.PointingHandCursor)
         self.lang_btn.setFixedHeight(34)
-        self.lang_btn.setStyleSheet(
-            "background-color: #8fd53b; color: #0f172a; border: none; "
-            "border-radius: 17px; padding: 4px 18px; font-weight: bold; font-size: 12px;"
-        )
         self.lang_btn.clicked.connect(self.toggle_language)
         header_layout.addWidget(self.lang_btn)
 
@@ -253,15 +252,56 @@ class MainWindow(QMainWindow):
 
     def update_shop_name(self):
         from database import Session, Setting
+        from utils.ui_helpers import get_circular_pixmap
+        import os
         session = Session()
         try:
             shop_name_setting = session.query(Setting).filter_by(key='shop_name').first()
-            name = shop_name_setting.value.upper() if shop_name_setting else "SUN COMPUTERS,"
+            name = shop_name_setting.value.upper() if shop_name_setting and shop_name_setting.value else "SUN COMPUTERS,"
             self.logo_label.setText(name)
+
+            # Update shop logo / emblem
+            logo_setting = session.query(Setting).filter_by(key='shop_logo').first()
+            logo_path = logo_setting.value if logo_setting and logo_setting.value else None
+            if logo_path and os.path.exists(logo_path):
+                circ_pix = get_circular_pixmap(logo_path, size=48)
+                if circ_pix and not circ_pix.isNull():
+                    self.logo_icon.setPixmap(circ_pix)
+                    self.logo_icon.setFixedSize(48, 48)
+                    self.logo_icon.setAlignment(Qt.AlignCenter)
+                    self.logo_icon.setStyleSheet("border-radius: 24px; background-color: #ffffff; border: 2px solid #ffffff;")
+                else:
+                    self._reset_default_emblem()
+            else:
+                self._reset_default_emblem()
         except Exception:
             self.logo_label.setText("SUN COMPUTERS,")
+            self._reset_default_emblem()
         finally:
             session.close()
+
+    def _reset_default_emblem(self):
+        self.logo_icon.clear()
+        self.logo_icon.setText("☀️")
+        self.logo_icon.setFixedSize(48, 48)
+        self.logo_icon.setAlignment(Qt.AlignCenter)
+        self.logo_icon.setStyleSheet("""
+            QLabel#shop_emblem {
+                background-color: #f59e0b;
+                color: #ffffff;
+                font-size: 22px;
+                font-weight: bold;
+                border-radius: 24px;
+                border: 2px solid #ffffff;
+            }
+        """)
+
+    def update_theme(self, color_hex):
+        from styles import get_theme_stylesheet
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(get_theme_stylesheet(color_hex))
+        self.update_shop_name()
 
     def switch_view(self, index):
         # Prevent switching to hidden sidebar buttons (via shortcuts)

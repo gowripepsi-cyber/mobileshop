@@ -1,8 +1,11 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
+from PySide6.QtWidgets import (QApplication, QWidget, QColorDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                              QPushButton, QMessageBox, QFrame, QFormLayout, QTabWidget, QFileDialog,
                              QCheckBox, QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
                              QScrollArea, QGridLayout, QSizePolicy)
+import os
+import shutil
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from database import Session, Setting, User, get_hash, engine, init_db
 from utils.db_backup import backup_db, restore_db
 from utils.ui_helpers import setup_password_toggle
@@ -181,6 +184,9 @@ class LicenseInfoCard(QFrame):
 class SettingsView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.selected_logo_path = None
+        self.logo_removed = False
+        self.selected_theme_color = "#8fd53b"
         self.init_ui()
 
     def init_ui(self):
@@ -233,20 +239,214 @@ class SettingsView(QWidget):
         self.tabs.setTabText(5, tr("Language Dictionary"))
 
     def setup_shop_tab(self):
-        layout = QVBoxLayout(self.shop_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
+        tab_layout = QVBoxLayout(self.shop_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
 
-        form_frame = QFrame()
-        form_frame.setProperty("class", "CardFrame")
-        form_frame.setMinimumWidth(700)
-        form_frame.setMaximumWidth(800)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setContentsMargins(20, 20, 20, 20)
-        form_layout.setSpacing(15)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; } QScrollArea > QWidget > QWidget { background: transparent; }")
 
-        title = QLabel("Modify Shop Business Profile")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
-        form_layout.addRow(title)
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(10, 10, 10, 10)
+        container_layout.setSpacing(14)
+        container_layout.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+
+        card = QFrame()
+        card.setProperty("class", "CardFrame")
+        card.setMinimumWidth(820)
+        card.setMaximumWidth(880)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setSpacing(16)
+
+        # ---------------------------------------------------------------------
+        # Top Row: Shop Logo (Left) and Theme Color Picker (Right) Side-by-Side
+        # ---------------------------------------------------------------------
+        top_row = QHBoxLayout()
+        top_row.setSpacing(14)
+
+        # 1. Shop Logo Section (Centered Inside Card)
+        logo_section = QFrame()
+        logo_section.setObjectName("logo_section")
+        logo_section.setStyleSheet("""
+            QFrame#logo_section {
+                background-color: #f8fafc;
+                border: 1.5px dashed #cbd5e1;
+                border-radius: 14px;
+            }
+        """)
+        logo_section_layout = QVBoxLayout(logo_section)
+        logo_section_layout.setContentsMargins(14, 14, 14, 14)
+        logo_section_layout.setAlignment(Qt.AlignCenter)
+        logo_section_layout.setSpacing(8)
+
+        lbl_logo_sec_title = QLabel("Shop Logo / Emblem (கடை லோகோ)")
+        lbl_logo_sec_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #334155;")
+        lbl_logo_sec_title.setAlignment(Qt.AlignCenter)
+        logo_section_layout.addWidget(lbl_logo_sec_title, alignment=Qt.AlignCenter)
+
+        # Centered Circular Logo Preview (68x68)
+        self.logo_preview_lbl = QLabel("☀️")
+        self.logo_preview_lbl.setFixedSize(68, 68)
+        self.logo_preview_lbl.setAlignment(Qt.AlignCenter)
+        self.logo_preview_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #fffbeb;
+                border: 2.5px dashed #f59e0b;
+                border-radius: 34px;
+                font-size: 30px;
+            }
+        """)
+        logo_section_layout.addWidget(self.logo_preview_lbl, alignment=Qt.AlignCenter)
+
+        # Centered Buttons Row (Upload & Remove)
+        logo_btn_row = QHBoxLayout()
+        logo_btn_row.setAlignment(Qt.AlignCenter)
+        logo_btn_row.setSpacing(8)
+
+        self.btn_upload_logo = QPushButton("📁 Upload Logo")
+        self.btn_upload_logo.setObjectName("btn_theme_primary")
+        self.btn_upload_logo.setProperty("class", "btn-success")
+        self.btn_upload_logo.setCursor(Qt.PointingHandCursor)
+        self.btn_upload_logo.setFixedHeight(32)
+        self.btn_upload_logo.clicked.connect(self.choose_shop_logo)
+
+        self.btn_remove_logo = QPushButton("✖ Remove")
+        self.btn_remove_logo.setProperty("class", "btn-danger")
+        self.btn_remove_logo.setCursor(Qt.PointingHandCursor)
+        self.btn_remove_logo.setFixedHeight(32)
+        self.btn_remove_logo.clicked.connect(self.remove_shop_logo)
+
+        logo_btn_row.addWidget(self.btn_upload_logo)
+        logo_btn_row.addWidget(self.btn_remove_logo)
+        logo_section_layout.addLayout(logo_btn_row)
+
+        lbl_hint = QLabel("PNG, JPG, WEBP. Centered on sidebar & PDF.")
+        lbl_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        lbl_hint.setAlignment(Qt.AlignCenter)
+        logo_section_layout.addWidget(lbl_hint, alignment=Qt.AlignCenter)
+
+        top_row.addWidget(logo_section, 1)
+
+        # 2. Software Theme Color Section (Color Picker Option)
+        theme_section = QFrame()
+        theme_section.setObjectName("theme_section")
+        theme_section.setStyleSheet("""
+            QFrame#theme_section {
+                background-color: #f8fafc;
+                border: 1.5px solid #e2e8f0;
+                border-radius: 14px;
+            }
+        """)
+        theme_section_layout = QVBoxLayout(theme_section)
+        theme_section_layout.setContentsMargins(14, 14, 14, 14)
+        theme_section_layout.setSpacing(10)
+
+        theme_header = QHBoxLayout()
+        lbl_theme_title = QLabel("🎨 Theme Color (தீம் நிறம்)")
+        lbl_theme_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
+        theme_header.addWidget(lbl_theme_title)
+        theme_header.addStretch()
+
+        self.theme_preview_badge = QLabel("Theme Preview")
+        self.theme_preview_badge.setFixedHeight(24)
+        self.theme_preview_badge.setAlignment(Qt.AlignCenter)
+        self.theme_preview_badge.setStyleSheet(
+            "background-color: #8fd53b; color: #0f172a; font-weight: bold; font-size: 11px; padding: 2px 12px; border-radius: 12px;"
+        )
+        theme_header.addWidget(self.theme_preview_badge)
+        theme_section_layout.addLayout(theme_header)
+
+        # Color controls row
+        picker_row = QHBoxLayout()
+        picker_row.setSpacing(8)
+
+        self.color_swatch = QLabel()
+        self.color_swatch.setFixedSize(32, 32)
+        self.color_swatch.setCursor(Qt.PointingHandCursor)
+        self.color_swatch.setStyleSheet("background-color: #8fd53b; border: 2px solid #cbd5e1; border-radius: 16px;")
+
+        self.hex_input = QLineEdit("#8fd53b")
+        self.hex_input.setFixedWidth(85)
+        self.hex_input.setFixedHeight(32)
+        self.hex_input.setAlignment(Qt.AlignCenter)
+        self.hex_input.setStyleSheet("font-family: monospace; font-size: 12px; font-weight: bold;")
+        self.hex_input.textChanged.connect(self.on_hex_input_changed)
+
+        self.btn_pick_color = QPushButton("🎨 Pick")
+        self.btn_pick_color.setToolTip("Open Color Picker Dialog")
+        self.btn_pick_color.setProperty("class", "btn-secondary")
+        self.btn_pick_color.setCursor(Qt.PointingHandCursor)
+        self.btn_pick_color.setFixedHeight(32)
+        self.btn_pick_color.clicked.connect(self.open_color_picker)
+
+        self.btn_apply_theme = QPushButton("⚡ Apply")
+        self.btn_apply_theme.setToolTip("Apply Theme Color to Entire Software")
+        self.btn_apply_theme.setObjectName("btn_theme_primary")
+        self.btn_apply_theme.setProperty("class", "btn-success")
+        self.btn_apply_theme.setCursor(Qt.PointingHandCursor)
+        self.btn_apply_theme.setFixedHeight(32)
+        self.btn_apply_theme.clicked.connect(self.apply_selected_theme)
+
+        self.btn_reset_theme = QPushButton("↺")
+        self.btn_reset_theme.setToolTip("Reset to Default Lime Green (#8fd53b)")
+        self.btn_reset_theme.setProperty("class", "btn-secondary")
+        self.btn_reset_theme.setCursor(Qt.PointingHandCursor)
+        self.btn_reset_theme.setFixedSize(32, 32)
+        self.btn_reset_theme.clicked.connect(lambda: self.set_theme_color("#8fd53b"))
+
+        picker_row.addWidget(self.color_swatch)
+        picker_row.addWidget(self.hex_input)
+        picker_row.addWidget(self.btn_pick_color)
+        picker_row.addWidget(self.btn_apply_theme)
+        picker_row.addWidget(self.btn_reset_theme)
+        picker_row.addStretch()
+        theme_section_layout.addLayout(picker_row)
+
+        # Quick Preset Palette Chips
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(6)
+        lbl_presets = QLabel("Presets:")
+        lbl_presets.setStyleSheet("font-size: 11px; color: #64748b; font-weight: 600;")
+        preset_row.addWidget(lbl_presets)
+
+        presets = [
+            ("#8fd53b", "Fresh Lime"),
+            ("#10b981", "Emerald Green"),
+            ("#2563eb", "Royal Blue"),
+            ("#7c3aed", "Modern Violet"),
+            ("#f59e0b", "Warm Amber"),
+            ("#ef4444", "Crimson Red"),
+            ("#06b6d4", "Ocean Cyan"),
+            ("#334155", "Slate Charcoal"),
+        ]
+        for hex_val, name in presets:
+            chip = QPushButton()
+            chip.setFixedSize(22, 22)
+            chip.setCursor(Qt.PointingHandCursor)
+            chip.setToolTip(f"{name} ({hex_val})")
+            chip.setStyleSheet(f"background-color: {hex_val}; border-radius: 11px; border: 1.5px solid #cbd5e1;")
+            chip.clicked.connect(lambda _, c=hex_val: self.set_theme_color(c))
+            preset_row.addWidget(chip)
+        preset_row.addStretch()
+        theme_section_layout.addLayout(preset_row)
+
+        top_row.addWidget(theme_section, 1)
+        card_layout.addLayout(top_row)
+
+        # ---------------------------------------------------------------------
+        # Bottom: Shop Profile Details Form
+        # ---------------------------------------------------------------------
+        form_layout = QFormLayout()
+        form_layout.setContentsMargins(0, 4, 0, 0)
+        form_layout.setSpacing(12)
+
+        lbl_profile_title = QLabel("Modify Shop Business Profile")
+        lbl_profile_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 4px;")
+        form_layout.addRow(lbl_profile_title)
 
         self.shop_name_input = QLineEdit()
         self.shop_contact_input = QLineEdit()
@@ -261,12 +461,18 @@ class SettingsView(QWidget):
         form_layout.addRow("", self.enable_gst_checkbox)
 
         self.save_shop_btn = QPushButton("Save Details")
+        self.save_shop_btn.setObjectName("btn_theme_primary")
         self.save_shop_btn.setProperty("class", "btn-success")
+        self.save_shop_btn.setFixedHeight(36)
         self.save_shop_btn.clicked.connect(self.save_shop_details)
         form_layout.addRow("", self.save_shop_btn)
 
-        layout.addWidget(form_frame, 0, Qt.AlignCenter)
-        layout.addStretch()
+        card_layout.addLayout(form_layout)
+        container_layout.addWidget(card)
+        scroll.setWidget(container)
+
+        tab_layout.addWidget(scroll)
+        self.update_theme_ui_elements()
 
     def setup_security_tab(self):
         layout = QVBoxLayout(self.security_tab)
@@ -357,6 +563,22 @@ class SettingsView(QWidget):
             s_gst = session.query(Setting).filter_by(key='shop_gst').first()
             enable_gst_setting = session.query(Setting).filter_by(key='enable_gst').first()
 
+            s_logo = session.query(Setting).filter_by(key='shop_logo').first()
+            if s_logo and s_logo.value and os.path.exists(s_logo.value):
+                self.selected_logo_path = s_logo.value
+                self.logo_removed = False
+                self.update_logo_preview(s_logo.value)
+            else:
+                self.selected_logo_path = ""
+                self.logo_removed = False
+                self.update_logo_preview(None)
+
+            s_theme = session.query(Setting).filter_by(key='theme_color').first()
+            if s_theme and s_theme.value:
+                self.set_theme_color(s_theme.value)
+            else:
+                self.set_theme_color("#8fd53b")
+
             if s_name: self.shop_name_input.setText(s_name.value)
             if s_contact: self.shop_contact_input.setText(s_contact.value)
             if s_address: self.shop_address_input.setText(s_address.value)
@@ -394,7 +616,35 @@ class SettingsView(QWidget):
             s_contact.value = contact
             s_address.value = address
             s_gst.value = gst
+
+            # Save Shop Logo
+            s_logo = session.query(Setting).filter_by(key='shop_logo').first()
+            if not s_logo:
+                s_logo = Setting(key='shop_logo', value='')
+                session.add(s_logo)
+
+            if getattr(self, 'logo_removed', False):
+                s_logo.value = ''
+                self.selected_logo_path = ''
+            elif getattr(self, 'selected_logo_path', None) and os.path.exists(self.selected_logo_path):
+                os.makedirs("assets", exist_ok=True)
+                ext = os.path.splitext(self.selected_logo_path)[1].lower() or ".png"
+                dest_path = os.path.abspath(f"assets/shop_logo{ext}")
+                if os.path.abspath(self.selected_logo_path) != dest_path:
+                    import shutil
+                    shutil.copy2(self.selected_logo_path, dest_path)
+                s_logo.value = dest_path
+                self.selected_logo_path = dest_path
             
+            # Save theme color
+            s_theme = session.query(Setting).filter_by(key='theme_color').first()
+            theme_val = getattr(self, 'selected_theme_color', '#8fd53b') or '#8fd53b'
+            if not s_theme:
+                s_theme = Setting(key='theme_color', value=theme_val)
+                session.add(s_theme)
+            else:
+                s_theme.value = theme_val
+
             if not enable_gst_setting:
                 enable_gst_setting = Setting(key='enable_gst', value='false')
                 session.add(enable_gst_setting)
@@ -402,17 +652,190 @@ class SettingsView(QWidget):
 
             session.commit()
             QMessageBox.information(self, "Success", "Shop profile details updated successfully.")
-            self.refresh_data()
 
-            # Update shop name in main window sidebar dynamically
+            # Apply theme globally across application
+            from styles import get_theme_stylesheet
+            app = QApplication.instance()
+            if app:
+                app.setStyleSheet(get_theme_stylesheet(theme_val))
+
+            # Update shop name and theme in main window sidebar dynamically
             main_window = self.window()
-            if hasattr(main_window, 'update_shop_name'):
-                main_window.update_shop_name()
+            if main_window:
+                if hasattr(main_window, 'update_theme'):
+                    main_window.update_theme(theme_val)
+                elif hasattr(main_window, 'update_shop_name'):
+                    main_window.update_shop_name()
+
+            self.refresh_data()
         except Exception as e:
             session.rollback()
             QMessageBox.critical(self, "Error", f"Failed to save details: {e}")
         finally:
             session.close()
+
+    def update_theme_ui_elements(self):
+        theme_hex = getattr(self, 'selected_theme_color', '#8fd53b') or '#8fd53b'
+        c = QColor(theme_hex)
+        if not c.isValid():
+            c = QColor('#8fd53b')
+        lum = (0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()) / 255.0
+        text_c = "#0f172a" if lum > 0.55 else "#ffffff"
+        hover_c = c.darker(110).name()
+
+        primary_btn_css = f"""
+            QPushButton {{
+                background-color: {theme_hex};
+                color: {text_c};
+                font-weight: bold;
+                border: none;
+                border-radius: 10px;
+                padding: 6px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_c};
+            }}
+        """
+
+        if hasattr(self, 'btn_upload_logo'):
+            self.btn_upload_logo.setStyleSheet(primary_btn_css)
+        if hasattr(self, 'btn_apply_theme'):
+            self.btn_apply_theme.setStyleSheet(primary_btn_css)
+        if hasattr(self, 'save_shop_btn'):
+            self.save_shop_btn.setStyleSheet(primary_btn_css)
+        if hasattr(self, 'color_swatch'):
+            self.color_swatch.setStyleSheet(f"background-color: {theme_hex}; border: 2px solid #cbd5e1; border-radius: 16px;")
+        if hasattr(self, 'theme_preview_badge'):
+            self.theme_preview_badge.setStyleSheet(
+                f"background-color: {theme_hex}; color: {text_c}; "
+                f"font-weight: bold; font-size: 11px; padding: 2px 12px; border-radius: 12px;"
+            )
+        self.update_logo_preview(self.selected_logo_path if not getattr(self, 'logo_removed', False) else None)
+
+    def on_hex_input_changed(self, text):
+        val = text.strip()
+        if not val.startswith('#'):
+            val = '#' + val
+        c = QColor(val)
+        if c.isValid():
+            self.selected_theme_color = c.name()
+            self.color_swatch.setStyleSheet(f"background-color: {self.selected_theme_color}; border: 2px solid #cbd5e1; border-radius: 17px;")
+            lum = (0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()) / 255.0
+            text_c = "#0f172a" if lum > 0.55 else "#ffffff"
+            self.theme_preview_badge.setStyleSheet(
+                f"background-color: {self.selected_theme_color}; color: {text_c}; "
+                f"font-weight: bold; font-size: 11px; padding: 3px 14px; border-radius: 13px;"
+            )
+            self.update_theme_ui_elements()
+
+    def set_theme_color(self, hex_val):
+        c = QColor(hex_val)
+        if c.isValid():
+            self.selected_theme_color = c.name()
+            if hasattr(self, 'hex_input') and self.hex_input.text() != self.selected_theme_color:
+                self.hex_input.setText(self.selected_theme_color)
+            self.update_theme_ui_elements()
+
+    def open_color_picker(self):
+        curr = QColor(getattr(self, 'selected_theme_color', '#8fd53b') or "#8fd53b")
+        picked = QColorDialog.getColor(curr, self, "Select Software Theme Color")
+        if picked.isValid():
+            self.set_theme_color(picked.name())
+
+    def apply_selected_theme(self):
+        theme_hex = self.hex_input.text().strip()
+        if not theme_hex.startswith('#'):
+            theme_hex = '#' + theme_hex
+        c = QColor(theme_hex)
+        if not c.isValid():
+            QMessageBox.warning(self, "Invalid Color", "Please enter a valid hex color code (e.g. #8FD53B).")
+            return
+        
+        self.selected_theme_color = c.name()
+
+        # Save to database
+        session = Session()
+        try:
+            t_setting = session.query(Setting).filter_by(key='theme_color').first()
+            if not t_setting:
+                t_setting = Setting(key='theme_color', value=self.selected_theme_color)
+                session.add(t_setting)
+            else:
+                t_setting.value = self.selected_theme_color
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to save theme: {e}")
+            return
+        finally:
+            session.close()
+
+        # Apply globally
+        from styles import get_theme_stylesheet
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(get_theme_stylesheet(self.selected_theme_color))
+
+        main_window = self.window()
+        if main_window:
+            if hasattr(main_window, 'update_theme'):
+                main_window.update_theme(self.selected_theme_color)
+            elif hasattr(main_window, 'update_shop_name'):
+                main_window.update_shop_name()
+
+        self.update_logo_preview(self.selected_logo_path if not getattr(self, 'logo_removed', False) else None)
+        QMessageBox.information(self, "Theme Applied", f"Software theme color updated to {self.selected_theme_color} successfully!")
+
+    def choose_shop_logo(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Shop Logo", "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.ico *.webp)"
+        )
+        if file_path:
+            from utils.ui_helpers import get_circular_pixmap
+            circ_pix = get_circular_pixmap(file_path, size=72)
+            if circ_pix and not circ_pix.isNull():
+                self.selected_logo_path = file_path
+                self.logo_removed = False
+                border_c = getattr(self, 'selected_theme_color', '#8fd53b') or '#8fd53b'
+                self.logo_preview_lbl.clear()
+                self.logo_preview_lbl.setPixmap(circ_pix)
+                self.logo_preview_lbl.setStyleSheet(f"border: 2.5px solid {border_c}; border-radius: 36px; background-color: #ffffff;")
+                self.btn_remove_logo.setEnabled(True)
+            else:
+                QMessageBox.warning(self, "Invalid Image", "Could not load the selected image file.")
+
+    def remove_shop_logo(self):
+        self.selected_logo_path = ""
+        self.logo_removed = True
+        self.update_logo_preview(None)
+
+    def update_logo_preview(self, logo_path):
+        border_c = getattr(self, 'selected_theme_color', '#8fd53b') or '#8fd53b'
+        if hasattr(self, 'logo_preview_lbl'):
+            if logo_path and os.path.exists(logo_path):
+                from utils.ui_helpers import get_circular_pixmap
+                circ_pix = get_circular_pixmap(logo_path, size=72)
+                if circ_pix and not circ_pix.isNull():
+                    self.logo_preview_lbl.clear()
+                    self.logo_preview_lbl.setPixmap(circ_pix)
+                    self.logo_preview_lbl.setStyleSheet(f"border: 2.5px solid {border_c}; border-radius: 36px; background-color: #ffffff;")
+                    if hasattr(self, 'btn_remove_logo'):
+                        self.btn_remove_logo.setEnabled(True)
+                    return
+            self.logo_preview_lbl.clear()
+            self.logo_preview_lbl.setText("☀️")
+            self.logo_preview_lbl.setStyleSheet("""
+                QLabel {
+                    background-color: #fffbeb;
+                    border: 2.5px dashed #f59e0b;
+                    border-radius: 36px;
+                    font-size: 32px;
+                }
+            """)
+            if hasattr(self, 'btn_remove_logo'):
+                self.btn_remove_logo.setEnabled(False)
+
 
     def update_password(self):
         old_pass = self.old_pass_input.text()

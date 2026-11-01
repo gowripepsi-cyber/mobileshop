@@ -1,9 +1,55 @@
-GLOBAL_STYLE = """
+from PySide6.QtGui import QColor
+
+def get_theme_palette(primary_hex="#8fd53b"):
+    """
+    Computes a cohesive UI color palette from a single primary hex color.
+    """
+    if not primary_hex or not isinstance(primary_hex, str):
+        primary_hex = "#8fd53b"
+    primary_hex = primary_hex.strip()
+    if not primary_hex.startswith("#"):
+        primary_hex = "#" + primary_hex
+    
+    c = QColor(primary_hex)
+    if not c.isValid():
+        c = QColor("#8fd53b")
+
+    primary = c.name()
+    hover = c.darker(110).name()
+    pressed = c.darker(122).name()
+    border = c.darker(118).name()
+    grad_start = c.lighter(106).name()
+    grad_end = c.darker(108).name()
+
+    # Relative luminance formula for WCAG contrast
+    lum = (0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()) / 255.0
+    text_primary = "#0f172a" if lum > 0.55 else "#ffffff"
+    sidebar_text = "#142b05" if lum > 0.55 else "#ffffff"
+    sidebar_subtext = "rgba(20, 43, 5, 0.65)" if lum > 0.55 else "rgba(255, 255, 255, 0.70)"
+
+    light_bg = f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.08)"
+    light_hover = f"rgba({c.red()}, {c.green()}, {c.blue()}, 0.04)"
+
+    return {
+        "primary": primary,
+        "hover": hover,
+        "pressed": pressed,
+        "border": border,
+        "grad_start": grad_start,
+        "grad_end": grad_end,
+        "text_primary": text_primary,
+        "sidebar_text": sidebar_text,
+        "sidebar_subtext": sidebar_subtext,
+        "light_bg": light_bg,
+        "light_hover": light_hover,
+    }
+
+THEME_STYLESHEET_TEMPLATE = """
 /* =========================================================================
    Global Theme: Modern Fresh Lime & Sunny Ivory
    Inspired by clean, organic, rounded capsule design:
    - Soft porcelain canvas (#f6f8fa)
-   - Encapsulated floating lime pill sidebar (#95da4c -> #84cc34)
+   - Encapsulated floating lime pill sidebar (__THEME_GRAD_START__ -> __THEME_GRAD_END__)
    - Warm sunny golden-amber accents (#f6c944 / #f59e0b)
    - Deep rich slate typography (#0f172a) for high readability
    ========================================================================= */
@@ -23,7 +69,7 @@ QWidget {
    Sidebar Styling (Floating Lime Capsule Dock)
    ========================================================================= */
 #sidebar {
-    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #95da4c, stop:1 #84cc34);
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 __THEME_GRAD_START__, stop:1 __THEME_GRAD_END__);
     border: none;
     border-radius: 24px;
     min-width: 250px;
@@ -36,21 +82,24 @@ QWidget {
     color: #ffffff;
     font-size: 22px;
     font-weight: bold;
-    border-radius: 22px;
-    min-width: 44px;
-    max-width: 44px;
-    min-height: 44px;
-    max-height: 44px;
+    border-radius: 24px;
+    min-width: 48px;
+    max-width: 48px;
+    min-height: 48px;
+    max-height: 48px;
     border: 2px solid #ffffff;
+    qproperty-alignment: AlignCenter;
 }
 
 #shop_title {
-    color: #142b05;
+    color: __THEME_SIDEBAR_TEXT__;
     font-size: 15px;
     font-weight: 800;
     margin-top: 4px;
     margin-bottom: 8px;
     letter-spacing: 0.5px;
+    qproperty-alignment: AlignCenter;
+    text-align: center;
 }
 
 #sidebar QPushButton {
@@ -75,7 +124,7 @@ QWidget {
 }
 
 #sidebar QPushButton QLabel#btn_label {
-    color: #142b05;
+    color: __THEME_SIDEBAR_TEXT__;
     font-size: 13px;
     font-weight: 600;
 }
@@ -177,8 +226,8 @@ QWidget {
 }
 
 .ClickableMetricCard:hover {
-    background-color: #fbfdf9;
-    border: 1.5px solid #8fd53b;
+    background-color: __THEME_LIGHT_BG__;
+    border: 1.5px solid __THEME_PRIMARY__;
 }
 
 .MetricTitle {
@@ -205,17 +254,17 @@ QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit {
     padding: 6px 12px;
     min-height: 28px;
     color: #0f172a;
-    selection-background-color: #8fd53b;
+    selection-background-color: __THEME_PRIMARY__;
     selection-color: #0f172a;
 }
 
 QLineEdit:hover, QPlainTextEdit:hover, QTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {
-    border: 1.5px solid #94d743;
+    border: 1.5px solid __THEME_HOVER__;
 }
 
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
-    border: 2px solid #8fd53b;
-    background-color: #fbfdf9;
+    border: 2px solid __THEME_PRIMARY__;
+    background-color: __THEME_LIGHT_BG__;
 }
 
 QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QDateEdit:disabled {
@@ -232,7 +281,7 @@ QComboBox {
     padding: 4px 10px;
     min-height: 28px;
     color: #0f172a;
-    selection-background-color: #8fd53b;
+    selection-background-color: __THEME_PRIMARY__;
     selection-color: #0f172a;
 }
 
@@ -244,12 +293,12 @@ QComboBox:editable {
 }
 
 QComboBox:hover, QComboBox:editable:hover {
-    border: 1.5px solid #8fd53b;
+    border: 1.5px solid __THEME_PRIMARY__;
 }
 
 QComboBox:focus, QComboBox:on, QComboBox:editable:focus {
-    border: 2px solid #8fd53b;
-    background-color: #fbfdf9;
+    border: 2px solid __THEME_PRIMARY__;
+    background-color: __THEME_LIGHT_BG__;
 }
 
 QComboBox:disabled {
@@ -269,7 +318,7 @@ QComboBox::drop-down {
 }
 
 QComboBox::drop-down:hover {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
 }
 
 QComboBox::down-arrow {
@@ -294,10 +343,10 @@ QComboBox QLineEdit:focus {
 
 QComboBox QAbstractItemView, QListView {
     background-color: #ffffff;
-    border: 1.5px solid #8fd53b;
+    border: 1.5px solid __THEME_PRIMARY__;
     border-radius: 8px;
     color: #0f172a;
-    selection-background-color: #8fd53b;
+    selection-background-color: __THEME_PRIMARY__;
     selection-color: #0f172a;
     padding: 4px;
 }
@@ -310,13 +359,13 @@ QComboBox QAbstractItemView::item, QListView::item {
 }
 
 QComboBox QAbstractItemView::item:selected, QListView::item:selected {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-weight: bold;
 }
 
 QComboBox QAbstractItemView::item:hover, QListView::item:hover {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
     color: #0f172a;
 }
 
@@ -353,9 +402,9 @@ QAbstractSpinBox::up-arrow, QAbstractSpinBox::down-arrow {
    Standard Buttons
    ========================================================================= */
 QPushButton, QToolButton {
-    background-color: #8fd53b;
+    background-color: __THEME_PRIMARY__;
     border: none;
-    color: #0f172a;
+    color: __THEME_TEXT_PRIMARY__;
     padding: 6px 18px;
     min-height: 28px;
     font-weight: bold;
@@ -364,54 +413,66 @@ QPushButton, QToolButton {
 }
 
 QPushButton:hover, QToolButton:hover {
-    background-color: #7ec72e;
+    background-color: __THEME_HOVER__;
 }
 
 QPushButton:focus, QToolButton:focus {
-    background-color: #7ec72e;
-    border: 1.5px solid #63a820;
+    background-color: __THEME_HOVER__;
+    border: 1.5px solid __THEME_BORDER__;
     outline: none;
 }
 
 QPushButton:pressed, QToolButton:pressed {
-    background-color: #6eb520;
+    background-color: __THEME_PRESSED__;
 }
 
 /* Secondary Button style */
-.btn-secondary {
-    background-color: #e2e8f0;
+.btn-secondary, QPushButton[class="btn-secondary"] {
+    background-color: #f1f5f9;
     color: #1e293b;
-    border: 1px solid #cbd5e1;
+    font-weight: 600;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 6px 14px;
 }
 
-.btn-secondary:hover {
-    background-color: #cbd5e1;
+.btn-secondary:hover, QPushButton[class="btn-secondary"]:hover {
+    background-color: #e2e8f0;
     color: #0f172a;
+    border-color: #94a3b8;
 }
 
 /* Action Alert/Danger button */
-.btn-danger {
-    background-color: #ef4444;
-    color: #ffffff;
+.btn-danger, QPushButton[class="btn-danger"] {
+    background-color: #fef2f2;
+    color: #ef4444;
+    font-weight: 600;
+    border: 1.5px solid #fecaca;
+    border-radius: 10px;
+    padding: 6px 14px;
 }
 
-.btn-danger:hover {
-    background-color: #dc2626;
+.btn-danger:hover, QPushButton[class="btn-danger"]:hover {
+    background-color: #fee2e2;
+    border-color: #f87171;
 }
 
 /* Success Button */
-.btn-success {
-    background-color: #8fd53b;
-    color: #0f172a;
+.btn-success, QPushButton[class="btn-success"], #btn_theme_primary {
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    padding: 6px 16px;
 }
 
-.btn-success:hover {
-    background-color: #7ec72e;
+.btn-success:hover, QPushButton[class="btn-success"]:hover, #btn_theme_primary:hover {
+    background-color: __THEME_HOVER__;
 }
 
-.btn-success:pressed {
-    background-color: #6eb520;
+.btn-success:pressed, QPushButton[class="btn-success"]:pressed, #btn_theme_primary:pressed {
+    background-color: __THEME_PRESSED__;
 }
 
 /* Warning Button (Warm Honey Amber) */
@@ -427,8 +488,8 @@ QPushButton:pressed, QToolButton:pressed {
 
 /* Quick-Add Plus Button */
 .btn-quick-add {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     padding: 0px;
     font-size: 18px;
     font-weight: bold;
@@ -439,7 +500,7 @@ QPushButton:pressed, QToolButton:pressed {
 }
 
 .btn-quick-add:hover {
-    background-color: #7ec72e;
+    background-color: __THEME_HOVER__;
 }
 
 /* =========================================================================
@@ -469,7 +530,7 @@ QTableWidget::item:focus, QTableView::item:focus {
 }
 
 QHeaderView::section {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
     color: #334155;
     padding: 9px;
     font-weight: bold;
@@ -532,7 +593,7 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
    ========================================================================= */
 QDialog {
     background-color: #ffffff;
-    border: 1.5px solid #8fd53b;
+    border: 1.5px solid __THEME_PRIMARY__;
     border-radius: 18px;
 }
 
@@ -562,8 +623,8 @@ QTabBar::tab:focus {
 }
 
 QTabBar::tab:selected {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-weight: bold;
 }
 
@@ -580,7 +641,7 @@ QTabBar QToolButton {
 }
 
 QTabBar QToolButton:hover {
-    background-color: #8fd53b;
+    background-color: __THEME_PRIMARY__;
 }
 
 /* =========================================================================
@@ -599,13 +660,13 @@ QListWidget::item {
 }
 
 QListWidget::item:hover {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
     color: #0f172a;
 }
 
 QListWidget::item:selected {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-weight: bold;
 }
 
@@ -625,7 +686,7 @@ QCalendarWidget QWidget {
 }
 
 QCalendarWidget QWidget#qt_calendar_navigationbar {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
     border-bottom: 1px solid #e2e8f0;
 }
 
@@ -644,7 +705,7 @@ QCalendarWidget QToolButton:hover {
 }
 
 QCalendarWidget QToolButton:pressed {
-    background-color: #8fd53b;
+    background-color: __THEME_PRIMARY__;
 }
 
 QCalendarWidget QMenu {
@@ -654,7 +715,7 @@ QCalendarWidget QMenu {
 }
 
 QCalendarWidget QMenu::item:selected {
-    background-color: #8fd53b;
+    background-color: __THEME_PRIMARY__;
     color: #0f172a;
 }
 
@@ -663,13 +724,13 @@ QCalendarWidget QSpinBox {
     border: 1px solid #cbd5e1;
     border-radius: 6px;
     color: #0f172a;
-    selection-background-color: #8fd53b;
+    selection-background-color: __THEME_PRIMARY__;
 }
 
 QCalendarWidget QAbstractItemView {
     background-color: #ffffff;
     color: #0f172a;
-    selection-background-color: #8fd53b;
+    selection-background-color: __THEME_PRIMARY__;
     selection-color: #0f172a;
 }
 
@@ -764,8 +825,8 @@ QPushButton[class="btn-action-delete"]:hover {
 }
 
 QPushButton[class="btn-action-success"] {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-size: 11px;
     font-weight: bold;
     border-radius: 8px;
@@ -776,10 +837,10 @@ QPushButton[class="btn-action-success"] {
     border: none;
 }
 QPushButton[class="btn-action-success"]:hover {
-    background-color: #7ec72e;
+    background-color: __THEME_HOVER__;
 }
 QPushButton[class="btn-action-success"]:pressed {
-    background-color: #6eb520;
+    background-color: __THEME_PRESSED__;
 }
 
 /* Compact Table Action Icon Buttons */
@@ -801,8 +862,8 @@ QPushButton[class="btn-action-icon-view"]:hover {
 }
 
 QPushButton[class="btn-action-icon-success"] {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-size: 13px;
     font-weight: bold;
     border-radius: 8px;
@@ -814,10 +875,10 @@ QPushButton[class="btn-action-icon-success"] {
     padding: 0px !important;
 }
 QPushButton[class="btn-action-icon-success"]:hover {
-    background-color: #7ec72e;
+    background-color: __THEME_HOVER__;
 }
 QPushButton[class="btn-action-icon-success"]:pressed {
-    background-color: #6eb520;
+    background-color: __THEME_PRESSED__;
 }
 
 QPushButton[class="btn-action-icon-edit"] {
@@ -902,13 +963,13 @@ QTreeWidget::item, QTreeView::item {
 }
 
 QTreeWidget::item:hover, QTreeView::item:hover {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
     color: #0f172a;
 }
 
 QTreeWidget::item:selected, QTreeView::item:selected {
-    background-color: #8fd53b;
-    color: #0f172a;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-weight: bold;
 }
 
@@ -917,11 +978,11 @@ QTreeWidget::branch, QTreeView::branch {
 }
 
 QTreeWidget::branch:selected, QTreeView::branch:selected {
-    background-color: #8fd53b;
+    background-color: __THEME_PRIMARY__;
 }
 
 QTreeWidget::branch:hover, QTreeView::branch:hover {
-    background-color: #f4faee;
+    background-color: __THEME_LIGHT_HOVER__;
 }
 
 /* Checkbox / Indicator */
@@ -934,13 +995,13 @@ QTreeWidget::indicator, QCheckBox::indicator {
 }
 
 QTreeWidget::indicator:hover, QCheckBox::indicator:hover {
-    border: 1.5px solid #8fd53b;
-    background-color: #f4faee;
+    border: 1.5px solid __THEME_PRIMARY__;
+    background-color: __THEME_LIGHT_HOVER__;
 }
 
 QTreeWidget::indicator:checked, QCheckBox::indicator:checked {
-    background-color: #8fd53b;
-    border: 1.5px solid #7ec72e;
+    background-color: __THEME_PRIMARY__;
+    border: 1.5px solid __THEME_HOVER__;
 }
 
 QTreeWidget::indicator:unchecked, QCheckBox::indicator:unchecked {
@@ -952,4 +1013,46 @@ QTreeWidget::indicator:disabled, QCheckBox::indicator:disabled {
     background-color: #f1f5f9;
     border: 1px solid #e2e8f0;
 }
+
+/* =========================================================================
+   Top Bar Language Toggle Button
+   ========================================================================= */
+#lang_btn {
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
+    border: none;
+    border-radius: 17px;
+    padding: 4px 18px;
+    font-weight: bold;
+    font-size: 12px;
+}
+#lang_btn:hover {
+    background-color: __THEME_HOVER__;
+}
 """
+
+def get_theme_stylesheet(primary_hex="#8fd53b"):
+    """
+    Generates the complete application stylesheet customized for the specified theme color.
+    """
+    palette = get_theme_palette(primary_hex)
+    css = THEME_STYLESHEET_TEMPLATE
+    replacements = {
+        "__THEME_PRIMARY__": palette["primary"],
+        "__THEME_HOVER__": palette["hover"],
+        "__THEME_PRESSED__": palette["pressed"],
+        "__THEME_BORDER__": palette["border"],
+        "__THEME_GRAD_START__": palette["grad_start"],
+        "__THEME_GRAD_END__": palette["grad_end"],
+        "__THEME_TEXT_PRIMARY__": palette["text_primary"],
+        "__THEME_SIDEBAR_TEXT__": palette["sidebar_text"],
+        "__THEME_SIDEBAR_SUBTEXT__": palette["sidebar_subtext"],
+        "__THEME_LIGHT_BG__": palette["light_bg"],
+        "__THEME_LIGHT_HOVER__": palette["light_hover"],
+    }
+    for token, val in replacements.items():
+        css = css.replace(token, val)
+    return css
+
+# Default global style for backwards-compatibility
+GLOBAL_STYLE = get_theme_stylesheet("#8fd53b")

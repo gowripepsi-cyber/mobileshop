@@ -1065,9 +1065,12 @@ class SalesView(QWidget):
             s_contact = session.query(Setting).filter_by(key='shop_contact').first().value
             s_address = session.query(Setting).filter_by(key='shop_address').first().value
             s_gst = session.query(Setting).filter_by(key='shop_gst').first().value
+            s_logo_setting = session.query(Setting).filter_by(key='shop_logo').first()
+            s_logo_val = s_logo_setting.value if s_logo_setting and s_logo_setting.value and os.path.exists(s_logo_setting.value) else None
 
             # Prepare Invoice PDF data
             pdf_data = {
+                "shop_logo": s_logo_val,
                 "shop_name": s_name,
                 "shop_contact": s_contact,
                 "shop_address": s_address,
@@ -1344,8 +1347,12 @@ class SalesView(QWidget):
                     "total": (taxable_val + tax_amt) if gst_active else ((item.qty * item.rate) - item.discount)
                 })
 
+            s_logo_setting = session.query(Setting).filter_by(key='shop_logo').first()
+            s_logo_val = s_logo_setting.value if s_logo_setting and s_logo_setting.value and os.path.exists(s_logo_setting.value) else None
+
             # Prepare Invoice PDF data
             pdf_data = {
+                "shop_logo": s_logo_val,
                 "shop_name": s_name,
                 "shop_contact": s_contact,
                 "shop_address": s_address,

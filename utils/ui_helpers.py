@@ -1,3 +1,4 @@
+import os
 from PySide6.QtCore import QObject, QEvent, QTimer, Qt, QByteArray, QSize, QItemSelectionModel
 from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpinBox, 
                              QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter,
@@ -679,3 +680,40 @@ class SearchableProductComboBox(AutoClearSearchableComboBox):
             parent_view = parent_view.parent()
         if parent_view:
             parent_view.update_rate_on_product_change()
+
+
+def get_circular_pixmap(src, size=44):
+    """
+    Returns an anti-aliased circular-cropped QPixmap from a file path or existing QPixmap.
+    """
+    if isinstance(src, str):
+        if not src or not os.path.exists(src):
+            return None
+        pix = QPixmap(src)
+    elif isinstance(src, QPixmap):
+        pix = src
+    else:
+        return None
+
+    if pix.isNull():
+        return None
+
+    scaled = pix.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    out = QPixmap(size, size)
+    out.fill(Qt.transparent)
+
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+    from PySide6.QtGui import QPainterPath
+    path = QPainterPath()
+    path.addEllipse(0, 0, size, size)
+    painter.setClipPath(path)
+
+    x = (size - scaled.width()) // 2
+    y = (size - scaled.height()) // 2
+    painter.drawPixmap(x, y, scaled)
+    painter.end()
+
+    return out

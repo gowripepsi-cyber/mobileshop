@@ -64,6 +64,17 @@ def main():
 
     # 3. Initialize DB Schema and Seed Records (only if licensed/trial)
     init_db()
+    # Apply persisted theme color if configured
+    try:
+        from database import Session, Setting
+        from styles import get_theme_stylesheet
+        _db_sess = Session()
+        _theme_set = _db_sess.query(Setting).filter_by(key='theme_color').first()
+        if _theme_set and _theme_set.value:
+            app.setStyleSheet(get_theme_stylesheet(_theme_set.value))
+        _db_sess.close()
+    except Exception:
+        pass
 
     # 4. Authenticate User
     login = LoginWindow()
