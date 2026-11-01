@@ -763,70 +763,82 @@ QToolTip {
 }
 
 /* =========================================================================
-   Table Action Buttons
+   Table Action Buttons (Harmonized with Dynamic Theme Palette)
    ========================================================================= */
 QPushButton[class="btn-action-view"] {
-    background-color: #3b82f6;
-    color: #ffffff;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-size: 11px;
     font-weight: bold;
-    border-radius: 8px;
-    padding: 2px 10px !important;
+    border-radius: 6px;
+    padding: 2px 8px !important;
     min-height: 24px !important;
     max-height: 24px !important;
-    min-width: 65px !important;
+    min-width: 55px !important;
     border: none;
 }
 QPushButton[class="btn-action-view"]:hover {
-    background-color: #2563eb;
+    background-color: __THEME_HOVER__;
+}
+QPushButton[class="btn-action-view"]:pressed {
+    background-color: __THEME_PRESSED__;
 }
 
 QPushButton[class="btn-action-print"] {
-    background-color: #64748b;
-    color: #ffffff;
+    background-color: #f1f5f9;
+    color: #334155;
     font-size: 11px;
     font-weight: bold;
-    border-radius: 8px;
-    padding: 2px 10px !important;
+    border-radius: 6px;
+    padding: 2px 8px !important;
     min-height: 24px !important;
     max-height: 24px !important;
-    min-width: 65px !important;
-    border: none;
+    min-width: 55px !important;
+    border: 1px solid #cbd5e1;
 }
 QPushButton[class="btn-action-print"]:hover {
-    background-color: #475569;
+    background-color: #e2e8f0;
+    color: #0f172a;
 }
 
 QPushButton[class="btn-action-edit"] {
-    background-color: #f59e0b;
-    color: #ffffff;
+    background-color: #fef3c7;
+    color: #b45309;
     font-size: 11px;
     font-weight: bold;
-    border-radius: 8px;
-    padding: 2px 10px !important;
+    border-radius: 6px;
+    padding: 2px 8px !important;
     min-height: 24px !important;
     max-height: 24px !important;
-    min-width: 65px !important;
-    border: none;
+    min-width: 55px !important;
+    border: 1px solid #fde68a;
 }
 QPushButton[class="btn-action-edit"]:hover {
-    background-color: #d97706;
+    background-color: #f59e0b;
+    color: #ffffff;
+    border: 1px solid #f59e0b;
 }
 
 QPushButton[class="btn-action-delete"] {
-    background-color: #ef4444;
-    color: #ffffff;
+    background-color: #fee2e2;
+    color: #dc2626;
     font-size: 11px;
     font-weight: bold;
-    border-radius: 8px;
-    padding: 2px 10px !important;
+    border-radius: 6px;
+    padding: 2px 8px !important;
     min-height: 24px !important;
     max-height: 24px !important;
-    min-width: 75px !important;
-    border: none;
+    min-width: 58px !important;
+    border: 1px solid #fecaca;
 }
 QPushButton[class="btn-action-delete"]:hover {
+    background-color: #ef4444;
+    color: #ffffff;
+    border: 1px solid #ef4444;
+}
+QPushButton[class="btn-action-delete"]:pressed {
     background-color: #dc2626;
+    color: #ffffff;
 }
 
 QPushButton[class="btn-action-success"] {
@@ -834,11 +846,11 @@ QPushButton[class="btn-action-success"] {
     color: __THEME_TEXT_PRIMARY__;
     font-size: 11px;
     font-weight: bold;
-    border-radius: 8px;
-    padding: 2px 10px !important;
+    border-radius: 6px;
+    padding: 2px 8px !important;
     min-height: 24px !important;
     max-height: 24px !important;
-    min-width: 65px !important;
+    min-width: 55px !important;
     border: none;
 }
 QPushButton[class="btn-action-success"]:hover {
@@ -850,8 +862,8 @@ QPushButton[class="btn-action-success"]:pressed {
 
 /* Compact Table Action Icon Buttons */
 QPushButton[class="btn-action-icon-view"] {
-    background-color: #3b82f6;
-    color: #ffffff;
+    background-color: __THEME_PRIMARY__;
+    color: __THEME_TEXT_PRIMARY__;
     font-size: 13px;
     font-weight: bold;
     border-radius: 8px;
@@ -863,7 +875,10 @@ QPushButton[class="btn-action-icon-view"] {
     padding: 0px !important;
 }
 QPushButton[class="btn-action-icon-view"]:hover {
-    background-color: #2563eb;
+    background-color: __THEME_HOVER__;
+}
+QPushButton[class="btn-action-icon-view"]:pressed {
+    background-color: __THEME_PRESSED__;
 }
 
 QPushButton[class="btn-action-icon-success"] {
@@ -887,8 +902,8 @@ QPushButton[class="btn-action-icon-success"]:pressed {
 }
 
 QPushButton[class="btn-action-icon-edit"] {
-    background-color: #f59e0b;
-    color: #ffffff;
+    background-color: #fef3c7;
+    color: #b45309;
     font-size: 13px;
     font-weight: bold;
     border-radius: 8px;
@@ -896,16 +911,18 @@ QPushButton[class="btn-action-icon-edit"] {
     max-height: 28px !important;
     min-width: 34px !important;
     max-width: 34px !important;
-    border: none;
+    border: 1px solid #fde68a;
     padding: 0px !important;
 }
 QPushButton[class="btn-action-icon-edit"]:hover {
-    background-color: #d97706;
+    background-color: #f59e0b;
+    color: #ffffff;
+    border: 1px solid #f59e0b;
 }
 
 QPushButton[class="btn-action-icon-delete"] {
-    background-color: #ef4444;
-    color: #ffffff;
+    background-color: #fee2e2;
+    color: #dc2626;
     font-size: 13px;
     font-weight: bold;
     border-radius: 8px;
@@ -913,11 +930,17 @@ QPushButton[class="btn-action-icon-delete"] {
     max-height: 28px !important;
     min-width: 34px !important;
     max-width: 34px !important;
-    border: none;
+    border: 1px solid #fecaca;
     padding: 0px !important;
 }
 QPushButton[class="btn-action-icon-delete"]:hover {
+    background-color: #ef4444;
+    color: #ffffff;
+    border: 1px solid #ef4444;
+}
+QPushButton[class="btn-action-icon-delete"]:pressed {
     background-color: #dc2626;
+    color: #ffffff;
 }
 
 /* =========================================================================

@@ -11,6 +11,24 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QClipboard
 
+from PySide6.QtGui import QColor, QFont
+from styles import get_theme_palette
+
+def get_active_theme_palette():
+    try:
+        from database import Session
+        from models import Setting
+        session = Session()
+        try:
+            s = session.query(Setting).filter_by(key='theme_color').first()
+            if s and s.value:
+                return get_theme_palette(s.value)
+        finally:
+            session.close()
+    except Exception:
+        pass
+    return get_theme_palette("#8fd53b")
+
 from licensing import manager
 from licensing import crypto_utils
 from utils.ui_helpers import setup_password_toggle
@@ -112,28 +130,31 @@ class TrialStatusDialog(BaseLicensedDialog):
         layout.addWidget(title)
 
         # Radial / Display box for remaining days
+        palette = get_active_theme_palette()
+        primary = palette.get("primary", "#8fd53b")
+
         days_box = QFrame()
         days_box.setFrameShape(QFrame.StyledPanel)
-        days_box.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px;")
+        days_box.setStyleSheet("background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;")
         box_layout = QVBoxLayout(days_box)
         box_layout.setContentsMargins(15, 15, 15, 15)
 
         lbl_num = QLabel(str(self.days_remaining))
         lbl_num.setAlignment(Qt.AlignCenter)
-        lbl_color = "#8fd53b" if self.days_remaining > 7 else "#f59e0b"
+        lbl_color = "#15803d" if self.days_remaining > 7 else "#d97706"
         lbl_num.setStyleSheet(f"font-size: 48px; font-weight: bold; color: {lbl_color};")
         box_layout.addWidget(lbl_num)
 
         lbl_text = QLabel("Days Remaining")
         lbl_text.setAlignment(Qt.AlignCenter)
-        lbl_text.setStyleSheet("font-size: 13px; color: #94a3b8; font-weight: bold;")
+        lbl_text.setStyleSheet("font-size: 13px; color: #475569; font-weight: bold;")
         box_layout.addWidget(lbl_text)
 
         layout.addWidget(days_box)
 
         info_lbl = QLabel("You can use all software features during the 30-day trial.\nDouble click here to enter Vendor Activation.")
         info_lbl.setAlignment(Qt.AlignCenter)
-        info_lbl.setStyleSheet("font-size: 11px; color: #64748b;")
+        info_lbl.setStyleSheet("font-size: 12px; color: #64748b;")
         layout.addWidget(info_lbl)
 
         # Buttons
@@ -185,7 +206,7 @@ class ActivationDialog(BaseLicensedDialog):
         desc = QLabel(desc_text)
         desc.setWordWrap(True)
         desc.setAlignment(Qt.AlignCenter)
-        desc.setStyleSheet("font-size: 13px; color: #e2e8f0;")
+        desc.setStyleSheet("font-size: 13px; color: #334155;")
         layout.addWidget(desc)
 
         # Machine ID Box
@@ -195,13 +216,13 @@ class ActivationDialog(BaseLicensedDialog):
         
         self.mid_edit = QLineEdit(manager.generate_machine_id())
         self.mid_edit.setReadOnly(True)
-        self.mid_edit.setFixedHeight(35)
-        self.mid_edit.setStyleSheet("background-color: #141426; border: 1px solid #2c2c54; padding: 5px; font-family: monospace; font-size: 14px; color: #38bdf8;")
+        self.mid_edit.setFixedHeight(36)
+        self.mid_edit.setStyleSheet("background-color: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 5px; font-family: monospace; font-size: 14px; color: #0f172a; font-weight: bold;")
         
         btn_copy = QPushButton("Copy")
         btn_copy.setFixedWidth(60)
-        btn_copy.setFixedHeight(35)
-        btn_copy.setStyleSheet("background-color: #334155; font-size: 11px;")
+        btn_copy.setFixedHeight(36)
+        btn_copy.setStyleSheet("background-color: #0f172a; color: #ffffff; font-size: 11px; font-weight: bold; border-radius: 8px;")
         btn_copy.clicked.connect(self.copy_machine_id)
         
         mid_layout.addWidget(mid_label)
@@ -292,13 +313,17 @@ class VendorLoginDialog(QDialog):
         layout.addWidget(self.err_lbl)
 
         btn_layout = QHBoxLayout()
+        palette = get_active_theme_palette()
+        primary = palette.get("primary", "#8fd53b")
+
         btn_login = QPushButton("Log In")
         btn_login.setFixedHeight(36)
+        btn_login.setStyleSheet(f"background-color: {primary}; color: #0f172a; font-weight: bold; border-radius: 8px;")
         btn_login.clicked.connect(self.handle_login)
         
         btn_cancel = QPushButton("Cancel")
         btn_cancel.setFixedHeight(36)
-        btn_cancel.setStyleSheet("background-color: #334155;")
+        btn_cancel.setStyleSheet("background-color: #e2e8f0; color: #0f172a; font-weight: bold; border-radius: 8px; border: 1px solid #cbd5e1;")
         btn_cancel.clicked.connect(self.reject)
 
         btn_layout.addWidget(btn_login)
@@ -331,36 +356,66 @@ class VendorGeneratorDialog(QDialog):
         self.init_ui()
 
     def init_ui(self):
+        palette = get_active_theme_palette()
+        primary = palette.get("primary", "#8fd53b")
+        hover = palette.get("hover", "#78b82e")
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(25, 20, 25, 20)
         layout.setSpacing(12)
 
         title = QLabel("VENDOR ACTIVATION MANAGEMENT")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #f59e0b; letter-spacing: 1px;")
+        title.setStyleSheet(f"font-size: 16px; font-weight: 800; color: {primary}; letter-spacing: 1px;")
         layout.addWidget(title)
 
         # Section 1: Generate Key
         gen_frame = QFrame()
-        gen_frame.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px;")
+        gen_frame.setStyleSheet("background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;")
         gen_layout = QVBoxLayout(gen_frame)
         gen_layout.setContentsMargins(15, 12, 15, 12)
         gen_layout.setSpacing(8)
 
         sec_lbl = QLabel("Generate Activation Key")
-        sec_lbl.setStyleSheet("font-weight: bold; color: #ffffff; font-size: 12px;")
+        sec_lbl.setStyleSheet("font-weight: 700; color: #0f172a; font-size: 13px; border: none; background: transparent;")
         gen_layout.addWidget(sec_lbl)
 
         h_layout = QHBoxLayout()
         self.mid_input = QLineEdit()
         self.mid_input.setPlaceholderText("Enter Machine ID (XXXX-XXXX-XXXX-XXXX)")
-        self.mid_input.setFixedHeight(35)
-        self.mid_input.setStyleSheet("font-family: monospace; font-size: 13px;")
+        self.mid_input.setFixedHeight(36)
+        self.mid_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #ffffff;
+                border: 1.5px solid #cbd5e1;
+                border-radius: 8px;
+                color: #0f172a;
+                font-family: monospace;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 4px 10px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {primary};
+            }}
+        """)
         
         btn_gen = QPushButton("Generate Key")
         btn_gen.setFixedWidth(120)
-        btn_gen.setFixedHeight(35)
-        btn_gen.setStyleSheet("background-color: #f59e0b;")
+        btn_gen.setFixedHeight(36)
+        btn_gen.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+            }
+        """)
         btn_gen.clicked.connect(self.generate_key)
         
         h_layout.addWidget(self.mid_input)
@@ -371,13 +426,36 @@ class VendorGeneratorDialog(QDialog):
         self.key_output = QLineEdit()
         self.key_output.setPlaceholderText("Generated Activation Key")
         self.key_output.setReadOnly(True)
-        self.key_output.setFixedHeight(35)
-        self.key_output.setStyleSheet("font-family: monospace; font-size: 12px; color: #8fd53b; background-color: #141426;")
+        self.key_output.setFixedHeight(36)
+        self.key_output.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #f0fdf4;
+                border: 1.5px solid {primary};
+                border-radius: 8px;
+                color: #15803d;
+                font-family: monospace;
+                font-size: 13px;
+                font-weight: bold;
+                padding: 4px 10px;
+            }}
+        """)
         
         btn_copy = QPushButton("Copy Key")
         btn_copy.setFixedWidth(100)
-        btn_copy.setFixedHeight(35)
-        btn_copy.setStyleSheet("background-color: #334155;")
+        btn_copy.setFixedHeight(36)
+        btn_copy.setStyleSheet("""
+            QPushButton {
+                background-color: #0f172a;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #334155;
+            }
+        """)
         btn_copy.clicked.connect(self.copy_key)
 
         key_layout.addWidget(self.key_output)
@@ -388,30 +466,63 @@ class VendorGeneratorDialog(QDialog):
 
         # Section 2: Feature Adaptability Settings
         feat_frame = QFrame()
-        feat_frame.setStyleSheet("background-color: #1b1b32; border: 1px solid #28284e; border-radius: 8px;")
+        feat_frame.setStyleSheet("background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;")
         feat_layout = QVBoxLayout(feat_frame)
         feat_layout.setContentsMargins(15, 12, 15, 12)
         feat_layout.setSpacing(8)
 
         feat_lbl = QLabel("Feature Adaptability Settings")
-        feat_lbl.setStyleSheet("font-weight: bold; color: #ffffff; font-size: 12px;")
+        feat_lbl.setStyleSheet("font-weight: 700; color: #0f172a; font-size: 13px; border: none; background: transparent;")
         feat_layout.addWidget(feat_lbl)
 
         self.chk_repair = QCheckBox("Enable Repair Service Desk (Shows/hides Service Cards UI)")
         self.chk_money = QCheckBox("Enable Financial Remittance (Shows/hides UPI/Money Transfer UI)")
         self.chk_imei = QCheckBox("Enable Unique Identifier Tracking (Shows/hides IMEI/Serial Number inputs)")
 
-        self.chk_repair.setStyleSheet("color: #ffffff; font-size: 12px;")
-        self.chk_money.setStyleSheet("color: #ffffff; font-size: 12px;")
-        self.chk_imei.setStyleSheet("color: #ffffff; font-size: 12px;")
+        chk_css = f"""
+            QCheckBox {{
+                color: #0f172a;
+                font-size: 13px;
+                font-weight: 500;
+                spacing: 8px;
+                border: none;
+                background: transparent;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+                border: 1.5px solid #cbd5e1;
+                background-color: #ffffff;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {primary};
+                border-color: {primary};
+            }}
+        """
+        self.chk_repair.setStyleSheet(chk_css)
+        self.chk_money.setStyleSheet(chk_css)
+        self.chk_imei.setStyleSheet(chk_css)
 
         feat_layout.addWidget(self.chk_repair)
         feat_layout.addWidget(self.chk_money)
         feat_layout.addWidget(self.chk_imei)
 
         btn_save_feat = QPushButton("Save Feature Settings")
-        btn_save_feat.setFixedHeight(32)
-        btn_save_feat.setStyleSheet("background-color: #8fd53b; color: #0f172a; font-weight: bold;")
+        btn_save_feat.setFixedHeight(34)
+        btn_save_feat.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {primary};
+                color: #0f172a;
+                font-weight: bold;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {hover};
+            }}
+        """)
         btn_save_feat.clicked.connect(self.save_feature_settings)
         feat_layout.addWidget(btn_save_feat)
 
@@ -419,14 +530,39 @@ class VendorGeneratorDialog(QDialog):
 
         # Section 3: Activation History Table
         hist_lbl = QLabel("Activation Key History")
-        hist_lbl.setStyleSheet("font-weight: bold; color: #94a3b8; font-size: 12px;")
+        hist_lbl.setStyleSheet("font-weight: 700; color: #334155; font-size: 13px;")
         layout.addWidget(hist_lbl)
 
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["Timestamp", "Machine ID", "Activation Key"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setStyleSheet("QTableWidget { background-color: #1b1b32; border: 1px solid #28284e; } QHeaderView::section { background-color: #141426; }")
+        self.table.setStyleSheet("""
+            QTableWidget {
+                background-color: #ffffff;
+                border: 1.5px solid #e2e8f0;
+                border-radius: 10px;
+                gridline-color: #f1f5f9;
+                color: #0f172a;
+                selection-background-color: #dcfce7;
+                selection-color: #0f172a;
+            }
+            QTableWidget::item {
+                color: #0f172a;
+                font-size: 12px;
+                padding: 6px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            QHeaderView::section {
+                background-color: #f1f5f9;
+                color: #334155;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 8px;
+                border: none;
+                border-bottom: 2px solid #e2e8f0;
+            }
+        """)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
 
@@ -436,19 +572,55 @@ class VendorGeneratorDialog(QDialog):
 
         btn_revoke_lic = QPushButton("Revoke Active License")
         btn_revoke_lic.setFixedHeight(38)
-        btn_revoke_lic.setStyleSheet("background-color: #dc2626; color: #ffffff; font-weight: bold;")
+        btn_revoke_lic.setStyleSheet("""
+            QPushButton {
+                background-color: #dc2626;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #b91c1c;
+            }
+        """)
         btn_revoke_lic.clicked.connect(self.handle_revoke_license)
         btn_layout.addWidget(btn_revoke_lic)
 
         btn_reset_trial = QPushButton("Reset Trial Period")
         btn_reset_trial.setFixedHeight(38)
-        btn_reset_trial.setStyleSheet("background-color: #ef4444; color: #ffffff;")
+        btn_reset_trial.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+            }
+        """)
         btn_reset_trial.clicked.connect(self.handle_reset_trial)
         btn_layout.addWidget(btn_reset_trial)
 
         btn_close = QPushButton("Close Panel")
         btn_close.setFixedHeight(38)
-        btn_close.setStyleSheet("background-color: #334155;")
+        btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #e2e8f0;
+                color: #0f172a;
+                font-weight: bold;
+                font-size: 13px;
+                border-radius: 8px;
+                border: 1px solid #cbd5e1;
+            }
+            QPushButton:hover {
+                background-color: #cbd5e1;
+            }
+        """)
         btn_close.clicked.connect(self.accept)
         btn_layout.addWidget(btn_close)
         
@@ -557,9 +729,20 @@ class VendorGeneratorDialog(QDialog):
             except Exception:
                 ts_str = timestamp
                 
-            self.table.setItem(idx, 0, QTableWidgetItem(ts_str))
-            self.table.setItem(idx, 1, QTableWidgetItem(mid))
-            self.table.setItem(idx, 2, QTableWidgetItem(key[:15] + "..."))
+            item_ts = QTableWidgetItem(ts_str)
+            item_ts.setForeground(QColor("#475569"))
+            
+            item_mid = QTableWidgetItem(mid)
+            item_mid.setForeground(QColor("#0f172a"))
+            item_mid.setFont(QFont("monospace", 10, QFont.Bold))
+            
+            item_key = QTableWidgetItem(key[:18] + "...")
+            item_key.setForeground(QColor("#15803d"))
+            item_key.setFont(QFont("monospace", 10, QFont.Bold))
+            
+            self.table.setItem(idx, 0, item_ts)
+            self.table.setItem(idx, 1, item_mid)
+            self.table.setItem(idx, 2, item_key)
             
             # Align items
             for col in range(3):

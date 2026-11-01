@@ -131,6 +131,35 @@ def init_db():
     if 'sales_id' not in pay_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE payments ADD COLUMN sales_id INTEGER REFERENCES sales_master(id)"))
+    if 'job_id' not in pay_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE payments ADD COLUMN job_id INTEGER REFERENCES service_jobs(id)"))
+        # Backfill existing service payments for jobs with paid_amount > 0
+        try:
+            import datetime
+            from models import ServiceJob, Payment, Customer
+            s = Session()
+            jobs_with_pay = s.query(ServiceJob).filter(ServiceJob.paid_amount > 0).all()
+            for j in jobs_with_pay:
+                existing_p = s.query(Payment).filter_by(job_id=j.id).first()
+                if not existing_p:
+                    cust = s.query(Customer).filter_by(mobile=j.mobile).first()
+                    cust_id = cust.id if cust else 1
+                    j_date = j.created_at.date() if isinstance(j.created_at, datetime.datetime) else datetime.date.today()
+                    p = Payment(
+                        date=j_date,
+                        party_type='customer',
+                        party_id=cust_id,
+                        amount=j.paid_amount,
+                        payment_mode='Cash',
+                        job_id=j.id,
+                        remarks=f"Payment for repair job card {j.job_number}"
+                    )
+                    s.add(p)
+            s.commit()
+            s.close()
+        except Exception as err:
+            print(f"Service payment backfill notice: {err}")
 
     # Schema migration: check and add columns to users table
     user_columns = [c['name'] for c in inspector.get_columns('users')]

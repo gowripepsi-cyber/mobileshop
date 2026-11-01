@@ -180,6 +180,7 @@ class ServiceJob(Base):
     
     parts = relationship("ServicePart", back_populates="job", cascade="all, delete-orphan")
     status_history = relationship("ServiceJobStatusHistory", back_populates="job", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="job", cascade="all, delete-orphan")
 
 class ServiceJobStatusHistory(Base):
     __tablename__ = 'service_job_status_history'
@@ -213,11 +214,13 @@ class Payment(Base):
     bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
     purchase_id = Column(Integer, ForeignKey('purchase_master.id'), nullable=True)
     sales_id = Column(Integer, ForeignKey('sales_master.id'), nullable=True)
+    job_id = Column(Integer, ForeignKey('service_jobs.id'), nullable=True)
     remarks = Column(Text)
     
     bank_account = relationship("BankAccount")
     purchase = relationship("PurchaseMaster")
     sales = relationship("SalesMaster")
+    job = relationship("ServiceJob", back_populates="payments")
 
 class CashTransaction(Base):
     __tablename__ = 'cash_transactions'

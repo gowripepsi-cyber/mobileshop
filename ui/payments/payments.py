@@ -273,7 +273,7 @@ class PaymentsView(QWidget):
         
         # Actions column for View, Print, Delete
         self.history_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-        self.history_table.setColumnWidth(7, 180)
+        self.history_table.setColumnWidth(7, 200)
         
         self.history_table.verticalHeader().setVisible(False)
         self.history_table.verticalHeader().setDefaultSectionSize(54)
@@ -948,22 +948,33 @@ class PaymentsView(QWidget):
                             remarks_text = f"{remarks_text} {invoice_suffix}"
                         else:
                             remarks_text = invoice_suffix.strip()
+                elif p.party_type == 'customer' and getattr(p, 'job_id', None):
+                    from models import ServiceJob
+                    job = session.query(ServiceJob).get(p.job_id)
+                    if job:
+                        invoice_suffix = f" [Against Job Card: {job.job_number}]"
+                        if remarks_text:
+                            remarks_text = f"{remarks_text} {invoice_suffix}"
+                        else:
+                            remarks_text = invoice_suffix.strip()
                 self.history_table.setItem(i, 6, QTableWidgetItem(remarks_text))
                 
                 # Action Buttons
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 2, 6, 2)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(6)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
                 view_btn = QPushButton("View")
                 view_btn.setProperty("class", "btn-action-view")
+                view_btn.setCursor(Qt.PointingHandCursor)
                 view_btn.clicked.connect(lambda checked, pid=p.id: self.view_payment_details(pid))
                 actions_layout.addWidget(view_btn)
                 
                 del_btn = QPushButton("Delete")
                 del_btn.setProperty("class", "btn-action-delete")
+                del_btn.setCursor(Qt.PointingHandCursor)
                 del_btn.clicked.connect(lambda checked, pid=p.id: self.delete_payment_record(pid))
                 actions_layout.addWidget(del_btn)
                 
@@ -1011,12 +1022,13 @@ class PaymentsView(QWidget):
                 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 2, 6, 2)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(6)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
                 del_btn = QPushButton("Delete")
                 del_btn.setProperty("class", "btn-action-delete")
+                del_btn.setCursor(Qt.PointingHandCursor)
                 del_btn.clicked.connect(lambda checked, tid=t.id: self.delete_fund_transfer_record(tid))
                 actions_layout.addWidget(del_btn)
                 
@@ -1066,12 +1078,13 @@ class PaymentsView(QWidget):
                 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(6, 2, 6, 2)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(6)
                 actions_layout.setAlignment(Qt.AlignCenter)
                 
                 del_btn = QPushButton("Delete")
                 del_btn.setProperty("class", "btn-action-delete")
+                del_btn.setCursor(Qt.PointingHandCursor)
                 del_btn.clicked.connect(lambda checked, tid=t.id: self.delete_direct_transaction_record(tid))
                 actions_layout.addWidget(del_btn)
                 
@@ -1139,26 +1152,52 @@ class PaymentsView(QWidget):
         if cust_id:
             session = Session()
             try:
-                from models import SalesMaster
+                from models import SalesMaster, ServiceJob
+                cust = session.query(Customer).get(cust_id)
                 invoices = session.query(SalesMaster).filter(
                     SalesMaster.customer_id == cust_id,
                     SalesMaster.balance_receivable > 0
                 ).order_by(SalesMaster.date.desc()).all()
                 for inv in invoices:
-                    self.c_sales_combo.addItem(f"{inv.invoice_number} (Bal: ₹{inv.balance_receivable:,.2f})", inv.id)
+                    self.c_sales_combo.addItem(f"Sales: {inv.invoice_number} (Bal: ₹{inv.balance_receivable:,.2f})", {"type": "sale", "id": inv.id})
+
+                if cust and cust.mobile:
+                    jobs = session.query(ServiceJob).filter(
+                        ServiceJob.mobile == cust.mobile,
+                        ServiceJob.balance > 0
+                    ).order_by(ServiceJob.created_at.desc()).all()
+                    for j in jobs:
+                        self.c_sales_combo.addItem(f"Repair Job: {j.job_number} - {j.device_model} (Bal: ₹{j.balance:,.2f})", {"type": "job", "id": j.id})
             except Exception as e:
-                print(f"Error loading customer invoices: {e}")
+                print(f"Error loading customer invoices and jobs: {e}")
             finally:
                 session.close()
         self.c_sales_combo.blockSignals(False)
 
     def handle_cust_sales_selection(self):
-        sales_id = self.c_sales_combo.currentData()
-        if sales_id:
+        selection = self.c_sales_combo.currentData()
+        if selection and isinstance(selection, dict):
+            session = Session()
+            try:
+                if selection.get("type") == "sale":
+                    from models import SalesMaster
+                    s = session.query(SalesMaster).get(selection["id"])
+                    if s:
+                        self.c_amount.setValue(s.balance_receivable)
+                elif selection.get("type") == "job":
+                    from models import ServiceJob
+                    j = session.query(ServiceJob).get(selection["id"])
+                    if j:
+                        self.c_amount.setValue(j.balance)
+            except Exception as e:
+                print(f"Error reading bill details: {e}")
+            finally:
+                session.close()
+        elif selection:
             session = Session()
             try:
                 from models import SalesMaster
-                s = session.query(SalesMaster).get(sales_id)
+                s = session.query(SalesMaster).get(selection)
                 if s:
                     self.c_amount.setValue(s.balance_receivable)
             except Exception as e:
@@ -1259,7 +1298,16 @@ class PaymentsView(QWidget):
         mode = self.c_mode.currentText()
         bank_id = self.c_bank.currentData() if mode == "Bank" else None
         remarks = self.c_remarks.text().strip() or None
-        sales_id = self.c_sales_combo.currentData()
+        selection = self.c_sales_combo.currentData()
+        sales_id = None
+        job_id = None
+        if isinstance(selection, dict):
+            if selection.get("type") == "sale":
+                sales_id = selection["id"]
+            elif selection.get("type") == "job":
+                job_id = selection["id"]
+        elif selection:
+            sales_id = selection
 
         if not cust_id:
             QMessageBox.warning(self, "Validation Error", "Please select a Customer.")
@@ -1274,8 +1322,9 @@ class PaymentsView(QWidget):
 
         session = Session()
         try:
-            from models import SalesMaster
+            from models import SalesMaster, ServiceJob
             s = None
+            j = None
             if sales_id:
                 s = session.query(SalesMaster).get(sales_id)
                 if s:
@@ -1285,6 +1334,15 @@ class PaymentsView(QWidget):
                         return
                     s.balance_receivable -= amount
                     s.paid_amount += amount
+            elif job_id:
+                j = session.query(ServiceJob).get(job_id)
+                if j:
+                    if amount > j.balance + 0.01:
+                        QMessageBox.warning(self, "Validation Error", f"Collection amount (₹{amount:,.2f}) cannot exceed the job card's pending balance (₹{j.balance:,.2f}).")
+                        session.close()
+                        return
+                    j.balance -= amount
+                    j.paid_amount += amount
 
             # 1. Update Customer outstanding
             cust = session.query(Customer).get(cust_id)
@@ -1294,7 +1352,7 @@ class PaymentsView(QWidget):
             payment = Payment(
                 date=tx_date, party_type='customer', party_id=cust_id,
                 amount=amount, payment_mode=mode, bank_id=bank_id,
-                sales_id=sales_id, remarks=remarks
+                sales_id=sales_id, job_id=job_id, remarks=remarks
             )
             session.add(payment)
             session.flush() # Generate payment.id
@@ -1302,6 +1360,8 @@ class PaymentsView(QWidget):
             # 3. Log Cash/Bank Ledger
             if s:
                 desc = f"Collection from customer {cust.name} against invoice {s.invoice_number}. Details: {remarks or '-'}"
+            elif j:
+                desc = f"Collection from customer {cust.name} against repair job card {j.job_number}. Details: {remarks or '-'}"
             else:
                 desc = f"Collection from customer {cust.name}. Details: {remarks or '-'}"
 
@@ -1477,6 +1537,16 @@ class PaymentsView(QWidget):
                 if bank:
                     info_layout.addRow("Bank Account:", QLabel(f"{bank.bank_name} ({bank.account_name})"))
                     
+            if getattr(payment, 'job_id', None):
+                from models import ServiceJob
+                job_rec = session.query(ServiceJob).get(payment.job_id)
+                if job_rec:
+                    info_layout.addRow("Repair Job Card:", QLabel(f"{job_rec.job_number} ({job_rec.device_model})"))
+            elif getattr(payment, 'sales_id', None):
+                from models import SalesMaster
+                s_rec = session.query(SalesMaster).get(payment.sales_id)
+                if s_rec:
+                    info_layout.addRow("Sales Invoice:", QLabel(f"{s_rec.invoice_number}"))
             info_layout.addRow("Remarks / Notes:", QLabel(payment.remarks or "-"))
             dlg_layout.addWidget(info_frame)
             
@@ -1591,6 +1661,12 @@ class PaymentsView(QWidget):
                     if s:
                         s.balance_receivable += payment.amount
                         s.paid_amount -= payment.amount
+                elif getattr(payment, 'job_id', None):
+                    from models import ServiceJob
+                    j_rec = session.query(ServiceJob).get(payment.job_id)
+                    if j_rec:
+                        j_rec.balance += payment.amount
+                        j_rec.paid_amount -= payment.amount
             else:
                 supp = session.query(Supplier).get(payment.party_id)
                 if supp:

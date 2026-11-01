@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
 from PySide6.QtCore import Qt, QObject, QEvent, QTimer
 from PySide6.QtWidgets import QCompleter
 from database import Session, Setting
-from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product
+from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product, Payment
 from utils.pdf_generator import generate_service_pdf
 from utils.ui_helpers import enable_quick_add_auto_select
 
@@ -312,8 +312,14 @@ class BillingDialog(QDialog):
     def __init__(self, job, parent=None):
         super().__init__(parent)
         self.job = job
+        self.job_id = job.id
+        self.job_number = job.job_number
+        self.job_status = job.status
+        self.job_paid_amount = float(job.paid_amount or 0.0)
+        self.job_created_date = job.created_at.strftime("%Y-%m-%d") if getattr(job, 'created_at', None) else ""
         self.parts_list = []  # list of dicts: {"name": str, "cost": float}
-        self.setWindowTitle(f"Billing for Job: {job.job_number}")
+        self.total_paid_so_far = 0.0
+        self.setWindowTitle(f"Billing for Job: {self.job_number}")
         # Make the dialog top-level frameless and show fullscreen
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.showFullScreen()
@@ -348,24 +354,11 @@ class BillingDialog(QDialog):
         
         main_layout.addLayout(header_bar)
 
-        # 2. Scroll Area for Responsive Middle Content
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
-        if scroll_area.viewport():
-            scroll_area.viewport().setStyleSheet("background-color: transparent;")
-        
-        # Scroll Content Widget
-        scroll_content = QWidget()
-        scroll_content.setStyleSheet("background-color: transparent;")
-        
-        # Split Layout inside the Scroll Content
-        content_layout = QHBoxLayout(scroll_content)
+        # 2. Middle Section: Fixed Left Column & Self-Scrolling Right Column
+        content_layout = QHBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(20)
+        main_layout.addLayout(content_layout, 1)
 
         # LEFT COLUMN: Service Info & Spare Parts
         left_card = QFrame()
@@ -483,94 +476,202 @@ class BillingDialog(QDialog):
 
         content_layout.addWidget(left_card, 3)
 
-        # RIGHT COLUMN: Payment Summary (Fixed/Max width for visual balance)
+        # RIGHT COLUMN: Settlement & Invoice Summary (Dedicated Scrollable Card)
         right_card = QFrame()
         right_card.setProperty("class", "CardFrame")
-        right_card.setFixedWidth(380)
+        right_card.setFixedWidth(465)
         right_layout = QVBoxLayout(right_card)
-        right_layout.setContentsMargins(15, 15, 15, 15)
-        right_layout.setSpacing(15)
+        right_layout.setContentsMargins(15, 12, 10, 12)
+        right_layout.setSpacing(10)
 
+        # Pinned Header for Settlement Block
         right_title = QLabel("Settlement & Invoice Summary")
         right_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #8fd53b; border-bottom: 1px solid #28284e; padding-bottom: 6px;")
         right_layout.addWidget(right_title)
 
+        # Internal Scroll Area for ONLY the Settlement & Summary contents
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.NoFrame)
+        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        right_scroll.setStyleSheet("""
+            QScrollArea { background-color: transparent; border: none; }
+            QScrollArea > QWidget > QWidget { background-color: transparent; }
+            QScrollBar:vertical {
+                border: none;
+                background-color: #f1f5f9;
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #cbd5e1;
+                min-height: 25px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #94a3b8;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+        """)
+        if right_scroll.viewport():
+            right_scroll.viewport().setStyleSheet("background-color: transparent;")
+
+        right_scroll_content = QWidget()
+        right_scroll_content.setStyleSheet("background-color: transparent;")
+        right_content_layout = QVBoxLayout(right_scroll_content)
+        right_content_layout.setContentsMargins(0, 4, 12, 4)
+        right_content_layout.setSpacing(10)
+
         totals_form = QFormLayout()
-        totals_form.setSpacing(8)
+        totals_form.setSpacing(4)
         
         self.parts_cost_lbl = QLabel("₹0.00")
-        self.parts_cost_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #0f172a;")
+        self.parts_cost_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
         totals_form.addRow("Spare Parts Total Cost:", self.parts_cost_lbl)
-        
-        right_layout.addLayout(totals_form)
+        right_content_layout.addLayout(totals_form)
 
         # Net Total Card
         total_card = QFrame()
-        total_card.setStyleSheet("background-color: #fbfdf9; border: 2px solid #8fd53b; border-radius: 12px; padding: 10px;")
+        total_card.setStyleSheet("background-color: #fbfdf9; border: 2px solid #8fd53b; border-radius: 10px; padding: 6px;")
         total_card_layout = QVBoxLayout(total_card)
-        total_card_layout.setSpacing(2)
+        total_card_layout.setContentsMargins(8, 6, 8, 6)
+        total_card_layout.setSpacing(1)
         
         total_title = QLabel("NET TOTAL AMOUNT DUE")
-        total_title.setStyleSheet("font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase;")
+        total_title.setStyleSheet("font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase;")
         
         self.total_lbl = QLabel("₹0.00")
-        self.total_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: #8fd53b;")
+        self.total_lbl.setStyleSheet("font-size: 22px; font-weight: bold; color: #8fd53b;")
         
         total_card_layout.addWidget(total_title)
         total_card_layout.addWidget(self.total_lbl)
-        right_layout.addWidget(total_card)
+        right_content_layout.addWidget(total_card)
 
-        # Payment Input Form
-        payment_form = QFormLayout()
-        payment_form.setSpacing(10)
+        # Balances Row (Already Paid + Remaining Balance)
+        bal_row = QHBoxLayout()
+        bal_row.setSpacing(8)
+        
+        # Already Paid Box
+        paid_card = QFrame()
+        paid_card.setStyleSheet("background-color: #f0fdf4; border: 1.5px solid #86efac; border-left: 5px solid #16a34a; border-radius: 10px; padding: 6px 10px;")
+        paid_card_layout = QVBoxLayout(paid_card)
+        paid_card_layout.setContentsMargins(4, 4, 4, 4)
+        paid_card_layout.setSpacing(2)
+        paid_title = QLabel("PAID SO FAR")
+        paid_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #15803d; text-transform: uppercase;")
+        self.already_paid_lbl = QLabel("₹0.00")
+        self.already_paid_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #16a34a;")
+        paid_card_layout.addWidget(paid_title)
+        paid_card_layout.addWidget(self.already_paid_lbl)
+        bal_row.addWidget(paid_card, 1)
+
+        # Remaining Balance Box
+        self.balance_card = QFrame()
+        self.balance_card.setStyleSheet("background-color: #fef2f2; border: 1.5px solid #fecaca; border-left: 5px solid #ef4444; border-radius: 10px; padding: 6px 10px;")
+        balance_card_layout = QVBoxLayout(self.balance_card)
+        balance_card_layout.setContentsMargins(4, 4, 4, 4)
+        balance_card_layout.setSpacing(2)
+        self.balance_title = QLabel("BALANCE DUE")
+        self.balance_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #dc2626; text-transform: uppercase;")
+        self.balance_lbl = QLabel("₹0.00")
+        self.balance_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #ef4444;")
+        balance_card_layout.addWidget(self.balance_title)
+        balance_card_layout.addWidget(self.balance_lbl)
+        bal_row.addWidget(self.balance_card, 1)
+
+        right_content_layout.addLayout(bal_row)
+
+        # 1. Record New Payment Sub-Card (Positioned directly under Balances for easy entry)
+        new_pay_box = QFrame()
+        new_pay_box.setStyleSheet("background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px;")
+        new_pay_layout = QVBoxLayout(new_pay_box)
+        new_pay_layout.setContentsMargins(8, 8, 8, 8)
+        new_pay_layout.setSpacing(6)
+
+        new_pay_title = QLabel("Record New Payment / Installment")
+        new_pay_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e293b;")
+        new_pay_layout.addWidget(new_pay_title)
+
+        pay_form = QFormLayout()
+        pay_form.setSpacing(6)
+
+        # Amount Paying Now with Quick Balance button
+        pay_amt_layout = QHBoxLayout()
+        self.paying_now_input = QDoubleSpinBox()
+        self.paying_now_input.setRange(0.0, 999999.0)
+        self.paying_now_input.setValue(0.0)
+        self.paying_now_input.setDecimals(2)
+        self.paying_now_input.setPrefix("₹ ")
+        self.paying_now_input.setStyleSheet("font-size: 13px; font-weight: bold;")
+        self.paying_now_input.valueChanged.connect(self.recalculate_totals)
+        pay_amt_layout.addWidget(self.paying_now_input, 2)
+
+        self.btn_pay_full = QPushButton("Pay Balance")
+        self.btn_pay_full.setProperty("class", "btn-secondary")
+        self.btn_pay_full.setCursor(Qt.PointingHandCursor)
+        self.btn_pay_full.setStyleSheet("font-size: 11px; padding: 4px 8px;")
+        self.btn_pay_full.setToolTip("Auto-fill with remaining balance")
+        self.btn_pay_full.clicked.connect(self.fill_full_balance)
+        pay_amt_layout.addWidget(self.btn_pay_full, 1)
+
+        pay_form.addRow("Amount Paying Now *:", pay_amt_layout)
 
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank)
+        pay_form.addRow("Payment Mode:", self.pay_mode_combo)
 
         self.bank_combo = QComboBox()
         self.bank_combo.setEnabled(False)
+        pay_form.addRow("Select Bank A/c:", self.bank_combo)
 
-        self.paid_input = QDoubleSpinBox()
-        self.paid_input.setRange(0, 999999)
-        self.paid_input.setValue(self.job.paid_amount)
-        self.paid_input.setStyleSheet("QDoubleSpinBox { font-size: 14px; font-weight: bold; }")
-        self.paid_input.setPrefix("₹ ")
-        self.paid_input.valueChanged.connect(self.recalculate_totals)
+        self.pay_remarks_input = QLineEdit()
+        self.pay_remarks_input.setPlaceholderText("e.g. Advance, 2nd installment, GPay")
+        pay_form.addRow("Payment Note:", self.pay_remarks_input)
 
-        payment_form.addRow("Payment Mode:", self.pay_mode_combo)
-        payment_form.addRow("Select Bank A/c:", self.bank_combo)
-        payment_form.addRow("Amount Paid Now (₹) *:", self.paid_input)
-        right_layout.addLayout(payment_form)
+        new_pay_layout.addLayout(pay_form)
 
-        # Balance Receivable Card
-        balance_card = QFrame()
-        balance_card.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 1.5px solid #e2e8f0;
-                border-left: 5px solid #ef4444;
-                border-radius: 14px;
-            }
-        """)
-        balance_card_layout = QVBoxLayout(balance_card)
-        balance_card_layout.setContentsMargins(14, 10, 14, 10)
-        balance_card_layout.setSpacing(4)
-        
-        balance_title = QLabel("BALANCE RECEIVABLE (OUTSTANDING)")
-        balance_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; border: none; background: transparent;")
-        
-        self.balance_lbl = QLabel("₹0.00")
-        self.balance_lbl.setStyleSheet("font-size: 20px; font-weight: 800; color: #ef4444; border: none; background: transparent;")
-        
-        balance_card_layout.addWidget(balance_title)
-        balance_card_layout.addWidget(self.balance_lbl)
-        right_layout.addWidget(balance_card)
+        # Projected balance preview
+        self.projected_balance_lbl = QLabel("")
+        self.projected_balance_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #475569;")
+        new_pay_layout.addWidget(self.projected_balance_lbl)
 
-        content_layout.addWidget(right_card, 2)
+        # Quick record payment button
+        self.btn_record_now = QPushButton("Add Payment Now")
+        self.btn_record_now.setProperty("class", "btn-action-view")
+        self.btn_record_now.setCursor(Qt.PointingHandCursor)
+        self.btn_record_now.setStyleSheet("font-size: 12px; font-weight: bold; padding: 6px 12px;")
+        self.btn_record_now.clicked.connect(self.record_payment_immediate)
+        new_pay_layout.addWidget(self.btn_record_now)
 
-        scroll_area.setWidget(scroll_content)
-        main_layout.addWidget(scroll_area, 1)
+        right_content_layout.addWidget(new_pay_box)
+
+        # 2. Payment History Section (Positioned at the Bottom)
+        hist_header = QLabel("Payment History (Installments)")
+        hist_header.setStyleSheet("font-size: 12px; font-weight: bold; color: #0f172a; margin-top: 6px;")
+        right_content_layout.addWidget(hist_header)
+
+        self.payments_table = QTableWidget()
+        self.payments_table.setColumnCount(4)
+        self.payments_table.setHorizontalHeaderLabels(["Date", "Mode", "Amount (₹)", "Remarks"])
+        self.payments_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.payments_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.payments_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.payments_table.verticalHeader().setVisible(False)
+        self.payments_table.setFixedHeight(110)
+        self.payments_table.setStyleSheet("QTableWidget { font-size: 11px; border: 1px solid #e2e8f0; border-radius: 6px; }")
+        right_content_layout.addWidget(self.payments_table)
+
+        right_scroll.setWidget(right_scroll_content)
+        right_layout.addWidget(right_scroll, 1)
+
+        content_layout.addWidget(right_card, 0)
 
         # Status Update Panel with Radio Buttons
         from PySide6.QtWidgets import QRadioButton, QButtonGroup
@@ -671,6 +772,8 @@ class BillingDialog(QDialog):
         session.close()
 
         self.update_parts_table()
+        self.load_payments_history()
+        self.recalculate_totals()
 
     def toggle_bank(self, mode):
         self.bank_combo.setEnabled(mode == "Bank")
@@ -792,6 +895,48 @@ class BillingDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to update parts table: {e}")
 
+    def load_payments_history(self):
+        session = Session()
+        try:
+            from sqlalchemy import func
+            payments = session.query(Payment).filter_by(job_id=self.job_id).order_by(Payment.id.asc()).all()
+            self.payments_table.setRowCount(len(payments))
+            total_paid = 0.0
+            for i, p in enumerate(payments):
+                self.payments_table.setItem(i, 0, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
+                self.payments_table.setItem(i, 1, QTableWidgetItem(p.payment_mode))
+                amt_item = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                amt_item.setForeground(Qt.darkGreen)
+                self.payments_table.setItem(i, 2, amt_item)
+                self.payments_table.setItem(i, 3, QTableWidgetItem(p.remarks or "-"))
+                total_paid += p.amount
+
+            # If no Payment rows yet but job_paid_amount > 0, fallback display
+            if not payments and getattr(self, 'job_paid_amount', 0.0) > 0:
+                total_paid = self.job_paid_amount
+                self.payments_table.setRowCount(1)
+                self.payments_table.setItem(0, 0, QTableWidgetItem(getattr(self, 'job_created_date', '')))
+                self.payments_table.setItem(0, 1, QTableWidgetItem("Cash"))
+                amt_item = QTableWidgetItem(f"₹{total_paid:,.2f}")
+                amt_item.setForeground(Qt.darkGreen)
+                self.payments_table.setItem(0, 2, amt_item)
+                self.payments_table.setItem(0, 3, QTableWidgetItem("Initial Payment / Advance"))
+
+            self.total_paid_so_far = total_paid
+            self.already_paid_lbl.setText(f"₹{total_paid:,.2f}")
+        except Exception as e:
+            print(f"Error loading payments history: {e}")
+        finally:
+            session.close()
+
+    def fill_full_balance(self):
+        parts_total = sum(p["cost"] * p["qty"] for p in self.parts_list)
+        service_charge = self.service_charge_input.value()
+        net_total = parts_total + service_charge
+        already_paid = getattr(self, 'total_paid_so_far', 0.0)
+        rem = max(0.0, net_total - already_paid)
+        self.paying_now_input.setValue(rem)
+
     def recalculate_totals(self):
         parts_total = sum(p["cost"] * p["qty"] for p in self.parts_list)
         self.parts_cost_lbl.setText(f"₹{parts_total:,.2f}")
@@ -800,37 +945,213 @@ class BillingDialog(QDialog):
         net_total = parts_total + service_charge
         self.total_lbl.setText(f"₹{net_total:,.2f}")
 
-        paid = self.paid_input.value()
-        balance = net_total - paid
-        if balance < 0:
-            balance = 0.0
-        self.balance_lbl.setText(f"₹{balance:,.2f}")
+        already_paid = getattr(self, 'total_paid_so_far', 0.0)
+        self.already_paid_lbl.setText(f"₹{already_paid:,.2f}")
+
+        paying_now = self.paying_now_input.value()
+        projected_paid = already_paid + paying_now
+        remaining_balance = net_total - projected_paid
+        if remaining_balance < 0:
+            remaining_balance = 0.0
+
+        self.balance_lbl.setText(f"₹{remaining_balance:,.2f}")
+
+        # Balance badge styling
+        if remaining_balance == 0 and net_total > 0:
+            self.balance_title.setText("BALANCE DUE (FULLY SETTLED)")
+            self.balance_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #16a34a; text-transform: uppercase; border: none; background: transparent;")
+            self.balance_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #16a34a; border: none; background: transparent;")
+            self.balance_card.setStyleSheet("background-color: #f0fdf4; border: 1.5px solid #86efac; border-left: 5px solid #22c55e; border-radius: 10px; padding: 6px 10px;")
+        else:
+            self.balance_title.setText("BALANCE DUE (OUTSTANDING)")
+            self.balance_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #dc2626; text-transform: uppercase; border: none; background: transparent;")
+            self.balance_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #ef4444; border: none; background: transparent;")
+            self.balance_card.setStyleSheet("background-color: #fef2f2; border: 1.5px solid #fecaca; border-left: 5px solid #ef4444; border-radius: 10px; padding: 6px 10px;")
+
+        if paying_now > 0:
+            self.projected_balance_lbl.setText(f"After paying ₹{paying_now:,.2f} now: Balance will be ₹{remaining_balance:,.2f}")
+            self.projected_balance_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #15803d;")
+        else:
+            self.projected_balance_lbl.setText(f"No payment currently entered. Balance: ₹{remaining_balance:,.2f}")
+            self.projected_balance_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #64748b;")
+
+    def record_payment_immediate(self):
+        paying_now = self.paying_now_input.value()
+        if paying_now <= 0:
+            QMessageBox.warning(self, "Validation Error", "Please enter an amount greater than zero.")
+            return
+
+        parts_total = sum(p["cost"] * p["qty"] for p in self.parts_list)
+        service_charge = self.service_charge_input.value()
+        net_total = parts_total + service_charge
+        current_rem = max(0.0, net_total - self.total_paid_so_far)
+        if paying_now > current_rem + 0.01:
+            QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{paying_now:,.2f}) cannot exceed pending balance (₹{current_rem:,.2f}).")
+            return
+
+        pay_mode = self.pay_mode_combo.currentText()
+        bank_id = self.bank_combo.currentData() if pay_mode == "Bank" else None
+        remarks = self.pay_remarks_input.text().strip() or None
+
+        session = Session()
+        try:
+            from sqlalchemy import func
+            job = session.query(ServiceJob).get(self.job.id)
+            cust = session.query(Customer).filter_by(mobile=job.mobile).first()
+            cust_id = cust.id if cust else 1
+
+            p = Payment(
+                date=datetime.date.today(),
+                party_type='customer',
+                party_id=cust_id,
+                amount=paying_now,
+                payment_mode=pay_mode,
+                bank_id=bank_id,
+                job_id=job.id,
+                remarks=remarks or f"Installment payment for job card {job.job_number}"
+            )
+            session.add(p)
+            session.flush()
+
+            desc = f"Payment for repair job card {job.job_number}"
+            if remarks:
+                desc += f" ({remarks})"
+
+            if pay_mode == "Cash":
+                tx = CashTransaction(
+                    date=datetime.date.today(),
+                    transaction_type='in', amount=paying_now,
+                    source_type='service', source_id=job.id, description=desc
+                )
+                session.add(tx)
+            else:
+                tx = BankTransaction(
+                    date=datetime.date.today(),
+                    transaction_type='deposit', account_id=bank_id,
+                    amount=paying_now, source_type='service',
+                    source_id=job.id, description=desc
+                )
+                session.add(tx)
+                bank = session.query(BankAccount).get(bank_id)
+                if bank:
+                    bank.balance += paying_now
+
+            # Recompute total paid and balance
+            all_payments = session.query(func.sum(Payment.amount)).filter_by(job_id=job.id).scalar() or 0.0
+            job.paid_amount = all_payments
+            job.total_amount = net_total
+            new_balance = max(0.0, net_total - all_payments)
+            job.balance = new_balance
+
+            if cust and cust.outstanding_balance >= paying_now:
+                cust.outstanding_balance -= paying_now
+
+            session.commit()
+            session.close()
+
+            self.paying_now_input.setValue(0.0)
+            self.pay_remarks_input.clear()
+            self.load_payments_history()
+            self.recalculate_totals()
+            QMessageBox.information(self, "Success", f"Payment installment of ₹{paying_now:,.2f} recorded successfully.\nRemaining Balance: ₹{new_balance:,.2f}")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Failed to record payment: {e}")
+        finally:
+            session.close()
 
     def handle_billing_save(self):
         parts_total = sum(p["cost"] * p["qty"] for p in self.parts_list)
         service_charge = self.service_charge_input.value()
         net_total = parts_total + service_charge
-        paid = self.paid_input.value()
-        balance = net_total - paid
-        if balance < 0:
-            balance = 0.0
+
+        paying_now = self.paying_now_input.value()
+        current_rem = max(0.0, net_total - self.total_paid_so_far)
+        if paying_now > current_rem + 0.01:
+            QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{paying_now:,.2f}) cannot exceed pending balance (₹{current_rem:,.2f}).")
+            return
 
         pay_mode = self.pay_mode_combo.currentText()
         bank_id = self.bank_combo.currentData() if pay_mode == "Bank" else None
+        remarks = self.pay_remarks_input.text().strip() or None
 
         session = Session()
         try:
+            from sqlalchemy import func
             # 1. Update job details
             job = session.query(ServiceJob).get(self.job.id)
-            
-            # Determine if new payment occurred
-            payment_diff = paid - job.paid_amount
+            cust = session.query(Customer).filter_by(mobile=job.mobile).first()
+            cust_id = cust.id if cust else 1
 
-            job.service_charge = service_charge
-            job.total_amount = net_total
-            job.paid_amount = paid
-            job.balance = balance
-            # Set status based on selected radio button
+            # 2. Record new payment if entered
+            if paying_now > 0:
+                p = Payment(
+                    date=datetime.date.today(),
+                    party_type='customer',
+                    party_id=cust_id,
+                    amount=paying_now,
+                    payment_mode=pay_mode,
+                    bank_id=bank_id,
+                    job_id=job.id,
+                    remarks=remarks or f"Payment for repair job card {job.job_number}"
+                )
+                session.add(p)
+                session.flush()
+
+                desc = f"Payment for repair job card {job.job_number}"
+                if remarks:
+                    desc += f" ({remarks})"
+
+                if pay_mode == "Cash":
+                    tx = CashTransaction(
+                        date=datetime.date.today(),
+                        transaction_type='in', amount=paying_now,
+                        source_type='service', source_id=job.id, description=desc
+                    )
+                    session.add(tx)
+                else:
+                    tx = BankTransaction(
+                        date=datetime.date.today(),
+                        transaction_type='deposit', account_id=bank_id,
+                        amount=paying_now, source_type='service',
+                        source_id=job.id, description=desc
+                    )
+                    session.add(tx)
+                    bank = session.query(BankAccount).get(bank_id)
+                    if bank:
+                        bank.balance += paying_now
+
+                if cust and cust.outstanding_balance >= paying_now:
+                    cust.outstanding_balance -= paying_now
+
+            # 3. Restore stock for original parts and rewrite parts
+            original_parts = session.query(ServicePart).filter_by(job_id=job.id).all()
+            for op in original_parts:
+                if op.product_id:
+                    prod = session.query(Product).get(op.product_id)
+                    if prod:
+                        prod.stock_qty += op.qty
+
+            job.parts.clear()
+            for p_item in self.parts_list:
+                part = ServicePart(
+                    job_id=job.id,
+                    product_id=p_item["product_id"],
+                    part_name=p_item["name"],
+                    qty=p_item["qty"],
+                    cost=p_item["cost"]
+                )
+                session.add(part)
+
+                # Deduct stock
+                if p_item["product_id"]:
+                    prod = session.query(Product).get(p_item["product_id"])
+                    if prod:
+                        prod.stock_qty -= p_item["qty"]
+                        if prod.stock_qty < 0:
+                            raise ValueError(f"Insufficient stock for {prod.name}")
+
+            # 4. Update status based on selected radio button
             selected_status = "Received"
             if self.radio_received.isChecked():
                 selected_status = "Received"
@@ -844,7 +1165,6 @@ class BillingDialog(QDialog):
             status_changed = (job.status != selected_status)
             job.status = selected_status
 
-            # Log status change with timestamp
             if status_changed:
                 from models import ServiceJobStatusHistory
                 history_entry = ServiceJobStatusHistory(
@@ -854,65 +1174,21 @@ class BillingDialog(QDialog):
                 )
                 session.add(history_entry)
 
-            # 2. Restore stock for original parts
-            original_parts = session.query(ServicePart).filter_by(job_id=job.id).all()
-            for op in original_parts:
-                if op.product_id:
-                    prod = session.query(Product).get(op.product_id)
-                    if prod:
-                        prod.stock_qty += op.qty
+            # 5. Compute exact totals and balances
+            job.service_charge = service_charge
+            job.total_amount = net_total
+            all_payments_sum = session.query(func.sum(Payment.amount)).filter_by(job_id=job.id).scalar() or 0.0
+            job.paid_amount = all_payments_sum
+            final_bal = max(0.0, net_total - all_payments_sum)
+            job.balance = final_bal
 
-            # Reset and rewrite parts list
-            job.parts.clear()
-            for p in self.parts_list:
-                part = ServicePart(
-                    job_id=job.id,
-                    product_id=p["product_id"],
-                    part_name=p["name"],
-                    qty=p["qty"],
-                    cost=p["cost"]
-                )
-                session.add(part)
-                
-                # Deduct stock
-                if p["product_id"]:
-                    prod = session.query(Product).get(p["product_id"])
-                    if prod:
-                        prod.stock_qty -= p["qty"]
-                        if prod.stock_qty < 0:
-                            raise ValueError(f"Insufficient stock for {prod.name}")
-
-            # 3. Log payment differences in Ledger
-            if payment_diff > 0:
-                desc = f"Payment for repair job card {job.job_number}"
-                if pay_mode == "Cash":
-                    tx = CashTransaction(
-                        transaction_type='in', amount=payment_diff,
-                        source_type='service', source_id=job.id, description=desc
-                    )
-                    session.add(tx)
-                else:
-                    tx = BankTransaction(
-                        transaction_type='deposit', account_id=bank_id,
-                        amount=payment_diff, source_type='service',
-                        source_id=job.id, description=desc
-                    )
-                    session.add(tx)
-                    
-                    # Update bank accounts balance
-                    bank = session.query(BankAccount).get(bank_id)
-                    bank.balance += payment_diff
-
-            # 4. If there's outstanding balance, sync to Customer profile
-            cust = session.query(Customer).filter_by(mobile=job.mobile).first()
-            if cust:
-                # Outstanding balance is recalculated based on net transactions or set manually
-                # For simplicity, we add the remaining balance receivable to customer profile outstanding
-                if balance > 0:
-                    cust.outstanding_balance += balance
+            final_total = float(net_total)
+            final_paid = float(all_payments_sum)
 
             session.commit()
-            QMessageBox.information(self, "Success", "Repair invoice details and billing saved.")
+            session.close()
+            msg = f"Repair invoice details saved.\nTotal: ₹{final_total:,.2f}\nTotal Paid: ₹{final_paid:,.2f}\nBalance Remaining: ₹{final_bal:,.2f}"
+            QMessageBox.information(self, "Success", msg)
             self.accept()
         except Exception as e:
             session.rollback()
@@ -1219,6 +1495,31 @@ class ServicesView(QWidget):
             totals_layout.addRow("Paid Amount:", QLabel(f"₹{job.paid_amount:,.2f}"))
             totals_layout.addRow("Balance Due:", QLabel(f"₹{job.balance:,.2f}"))
             dlg_layout.addWidget(totals_frame)
+
+            # Payment History Installments
+            job_payments = session.query(Payment).filter_by(job_id=job.id).order_by(Payment.id.asc()).all()
+            if job_payments:
+                hist_lbl = QLabel("<b>Payment History (Installments):</b>")
+                hist_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a; margin-top: 6px;")
+                dlg_layout.addWidget(hist_lbl)
+
+                pay_table = QTableWidget()
+                pay_table.setColumnCount(4)
+                pay_table.setHorizontalHeaderLabels(["Date", "Payment Mode", "Amount (₹)", "Remarks / Note"])
+                pay_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+                pay_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                pay_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+                pay_table.verticalHeader().setVisible(False)
+                pay_table.setRowCount(len(job_payments))
+                for idx, jp in enumerate(job_payments):
+                    pay_table.setItem(idx, 0, QTableWidgetItem(jp.date.strftime("%Y-%m-%d")))
+                    pay_table.setItem(idx, 1, QTableWidgetItem(jp.payment_mode))
+                    amt_item = QTableWidgetItem(f"₹{jp.amount:,.2f}")
+                    amt_item.setForeground(Qt.darkGreen)
+                    pay_table.setItem(idx, 2, amt_item)
+                    pay_table.setItem(idx, 3, QTableWidgetItem(jp.remarks or "-"))
+                pay_table.setFixedHeight(min(140, 36 * len(job_payments) + 32))
+                dlg_layout.addWidget(pay_table)
             
             # Bottom Buttons (Print & Close)
             btn_layout = QHBoxLayout()
@@ -1265,6 +1566,17 @@ class ServicesView(QWidget):
                     "total": item.qty * item.cost
                 })
 
+            # Payment installments for PDF
+            pdf_payments = []
+            job_payments = session.query(Payment).filter_by(job_id=job.id).order_by(Payment.id.asc()).all()
+            for jp in job_payments:
+                pdf_payments.append({
+                    "date": jp.date.strftime("%Y-%m-%d"),
+                    "mode": jp.payment_mode,
+                    "amount": jp.amount,
+                    "remarks": jp.remarks or "-"
+                })
+
             # Prepare Service PDF data
             pdf_data = {
                 "shop_name": s_name,
@@ -1282,6 +1594,7 @@ class ServicesView(QWidget):
                 "technician": job.technician,
                 "service_charge": job.service_charge,
                 "parts": pdf_parts,
+                "payments": pdf_payments,
                 "total_amount": job.total_amount,
                 "paid_amount": job.paid_amount,
                 "balance": job.balance

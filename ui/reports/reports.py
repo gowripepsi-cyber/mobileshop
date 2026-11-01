@@ -1355,21 +1355,36 @@ class ReportsView(QWidget):
             jobs = session.query(ServiceJob).filter_by(mobile=customer.mobile).all()
             for j in jobs:
                 j_date = j.created_at.date() if isinstance(j.created_at, datetime.datetime) else j.created_at
+                has_tracked = session.query(Payment).filter_by(job_id=j.id).first() is not None
+                credit_val = 0.0 if has_tracked else j.paid_amount
                 transactions.append({
                     "date": j_date,
                     "ref": j.job_number,
                     "desc": f"Repair Svc: {j.device_model}",
                     "debit": j.total_amount,
-                    "credit": j.paid_amount
+                    "credit": credit_val
                 })
 
             # 3. Custom payment collections (Payment Table)
             payments = session.query(Payment).filter_by(party_type='customer', party_id=cust_id).all()
             for p in payments:
+                desc_text = p.remarks or "Payment Collection"
+                if getattr(p, 'job_id', None):
+                    j_rec = session.query(ServiceJob).get(p.job_id)
+                    if j_rec:
+                        desc_text = f"Payment for repair job {j_rec.job_number} ({j_rec.device_model})"
+                        if p.remarks:
+                            desc_text += f" - {p.remarks}"
+                elif getattr(p, 'sales_id', None):
+                    sal = session.query(SalesMaster).get(p.sales_id)
+                    if sal:
+                        desc_text = f"Collection against invoice {sal.invoice_number}"
+                        if p.remarks:
+                            desc_text += f" ({p.remarks})"
                 transactions.append({
                     "date": p.date,
                     "ref": f"Receipt #{p.id}",
-                    "desc": p.remarks or "Payment Collection",
+                    "desc": desc_text,
                     "debit": 0.0,
                     "credit": p.amount
                 })

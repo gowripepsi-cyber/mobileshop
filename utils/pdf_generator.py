@@ -206,6 +206,35 @@ def generate_sales_pdf(invoice_data, file_path):
     story.append(items_table)
     story.append(Spacer(1, 15))
 
+    # 3b. Payment History Installments block
+    if service_data.get('payments'):
+        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+        story.append(Spacer(1, 4))
+        pay_table_data = [[
+            Paragraph("<b>Date</b>", style_bold),
+            Paragraph("<b>Payment Mode</b>", style_bold),
+            Paragraph("<b>Amount (Rs.)</b>", style_bold),
+            Paragraph("<b>Remarks</b>", style_bold)
+        ]]
+        for p in service_data['payments']:
+            pay_table_data.append([
+                Paragraph(p['date'], style_sub),
+                Paragraph(p['mode'], style_sub),
+                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(p['remarks'], style_sub)
+            ])
+        p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
+        p_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        story.append(p_table)
+        story.append(Spacer(1, 12))
+
     # 4. Summary / Totals block
     summary_data = []
     if invoice_data.get('gst_enabled'):
@@ -436,6 +465,35 @@ def generate_purchase_pdf(purchase_data, file_path):
     story.append(items_table)
     story.append(Spacer(1, 15))
 
+    # 3b. Payment History Installments block
+    if service_data.get('payments'):
+        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+        story.append(Spacer(1, 4))
+        pay_table_data = [[
+            Paragraph("<b>Date</b>", style_bold),
+            Paragraph("<b>Payment Mode</b>", style_bold),
+            Paragraph("<b>Amount (Rs.)</b>", style_bold),
+            Paragraph("<b>Remarks</b>", style_bold)
+        ]]
+        for p in service_data['payments']:
+            pay_table_data.append([
+                Paragraph(p['date'], style_sub),
+                Paragraph(p['mode'], style_sub),
+                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(p['remarks'], style_sub)
+            ])
+        p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
+        p_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        story.append(p_table)
+        story.append(Spacer(1, 12))
+
     # 4. Summary / Totals block
     summary_data = []
     if purchase_data.get('gst_enabled'):
@@ -658,6 +716,35 @@ def generate_service_pdf(service_data, file_path):
     ]))
     story.append(items_table)
     story.append(Spacer(1, 15))
+
+    # 3b. Payment History Installments block
+    if service_data.get('payments'):
+        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+        story.append(Spacer(1, 4))
+        pay_table_data = [[
+            Paragraph("<b>Date</b>", style_bold),
+            Paragraph("<b>Payment Mode</b>", style_bold),
+            Paragraph("<b>Amount (Rs.)</b>", style_bold),
+            Paragraph("<b>Remarks</b>", style_bold)
+        ]]
+        for p in service_data['payments']:
+            pay_table_data.append([
+                Paragraph(p['date'], style_sub),
+                Paragraph(p['mode'], style_sub),
+                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(p['remarks'], style_sub)
+            ])
+        p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
+        p_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        story.append(p_table)
+        story.append(Spacer(1, 12))
 
     # 4. Summary / Totals block
     summary_data = [
@@ -1624,6 +1711,35 @@ def generate_sales_return_pdf(return_data, file_path):
     story.append(items_table)
     story.append(Spacer(1, 15))
 
+    # 3b. Payment History Installments block
+    if service_data.get('payments'):
+        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+        story.append(Spacer(1, 4))
+        pay_table_data = [[
+            Paragraph("<b>Date</b>", style_bold),
+            Paragraph("<b>Payment Mode</b>", style_bold),
+            Paragraph("<b>Amount (Rs.)</b>", style_bold),
+            Paragraph("<b>Remarks</b>", style_bold)
+        ]]
+        for p in service_data['payments']:
+            pay_table_data.append([
+                Paragraph(p['date'], style_sub),
+                Paragraph(p['mode'], style_sub),
+                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(p['remarks'], style_sub)
+            ])
+        p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
+        p_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        story.append(p_table)
+        story.append(Spacer(1, 12))
+
     # 4. Summary / Totals block
     summary_data = [
         [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {return_data['total_amount']:,.2f}", style_bold)],
@@ -1800,6 +1916,35 @@ def generate_purchase_return_pdf(return_data, file_path):
     ]))
     story.append(items_table)
     story.append(Spacer(1, 15))
+
+    # 3b. Payment History Installments block
+    if service_data.get('payments'):
+        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+        story.append(Spacer(1, 4))
+        pay_table_data = [[
+            Paragraph("<b>Date</b>", style_bold),
+            Paragraph("<b>Payment Mode</b>", style_bold),
+            Paragraph("<b>Amount (Rs.)</b>", style_bold),
+            Paragraph("<b>Remarks</b>", style_bold)
+        ]]
+        for p in service_data['payments']:
+            pay_table_data.append([
+                Paragraph(p['date'], style_sub),
+                Paragraph(p['mode'], style_sub),
+                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(p['remarks'], style_sub)
+            ])
+        p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
+        p_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        story.append(p_table)
+        story.append(Spacer(1, 12))
 
     # 4. Summary / Totals block
     summary_data = [
