@@ -1,3 +1,4 @@
+import os
 from PySide6.QtGui import QColor
 
 def get_theme_palette(primary_hex="#8fd53b"):
@@ -247,7 +248,7 @@ QWidget {
 /* =========================================================================
    Form Inputs & Controls
    ========================================================================= */
-QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit {
+QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox {
     background-color: #ffffff;
     border: 1.5px solid #cbd5e1;
     border-radius: 10px;
@@ -258,16 +259,16 @@ QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit {
     selection-color: #0f172a;
 }
 
-QLineEdit:hover, QPlainTextEdit:hover, QTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QDateEdit:hover {
+QLineEdit:hover, QPlainTextEdit:hover, QTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover {
     border: 1.5px solid __THEME_HOVER__;
 }
 
-QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {
     border: 2px solid __THEME_PRIMARY__;
     background-color: __THEME_LIGHT_BG__;
 }
 
-QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QDateEdit:disabled {
+QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
     background-color: #f1f5f9;
     border: 1px solid #e2e8f0;
     color: #94a3b8;
@@ -374,10 +375,62 @@ QComboBox QAbstractItemView::item:disabled, QListView::item:disabled {
     background-color: #ffffff;
 }
 
-/* Remove spin up/down arrows from text boxes */
+/* =========================================================================
+   Date & Time Inputs with Styled Calendar Drop-Down
+   ========================================================================= */
+QDateEdit, QDateTimeEdit {
+    background-color: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 4px 10px;
+    min-height: 28px;
+    color: #0f172a;
+    selection-background-color: __THEME_PRIMARY__;
+    selection-color: #0f172a;
+}
+
+QDateEdit:hover, QDateTimeEdit:hover {
+    border: 1.5px solid __THEME_PRIMARY__;
+}
+
+QDateEdit:focus, QDateTimeEdit:focus {
+    border: 2px solid __THEME_PRIMARY__;
+    background-color: __THEME_LIGHT_BG__;
+}
+
+QDateEdit:disabled, QDateTimeEdit:disabled {
+    background-color: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #94a3b8;
+}
+
+QDateEdit::drop-down, QDateTimeEdit::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 28px;
+    border-left: 1px solid #e2e8f0;
+    border-top-right-radius: 9px;
+    border-bottom-right-radius: 9px;
+    background-color: #f8fafc;
+}
+
+QDateEdit::drop-down:hover, QDateTimeEdit::drop-down:hover {
+    background-color: __THEME_LIGHT_HOVER__;
+}
+
+QDateEdit::down-arrow, QDateTimeEdit::down-arrow {
+    image: url("__CALENDAR_ICON__");
+    width: 16px;
+    height: 16px;
+}
+
+QDateEdit::down-arrow:disabled, QDateTimeEdit::down-arrow:disabled {
+    image: none;
+}
+
+/* Remove spin up/down arrows from numeric spin boxes */
 QSpinBox::up-button, QSpinBox::down-button,
-QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
-QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
     subcontrol-origin: border;
     subcontrol-position: none;
     width: 0px;
@@ -389,8 +442,7 @@ QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
 }
 
 QSpinBox::up-arrow, QSpinBox::down-arrow,
-QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow,
-QAbstractSpinBox::up-arrow, QAbstractSpinBox::down-arrow {
+QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
     image: none;
     width: 0px;
     height: 0px;
@@ -1065,7 +1117,9 @@ def get_theme_stylesheet(primary_hex="#8fd53b"):
     """
     palette = get_theme_palette(primary_hex)
     css = THEME_STYLESHEET_TEMPLATE
+    cal_icon = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "calendar.png").replace("\\", "/")
     replacements = {
+        "__CALENDAR_ICON__": cal_icon,
         "__THEME_PRIMARY__": palette["primary"],
         "__THEME_HOVER__": palette["hover"],
         "__THEME_PRESSED__": palette["pressed"],

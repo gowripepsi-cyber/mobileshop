@@ -5,7 +5,9 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                              QFrame, QFormLayout, QDialog, QTextEdit, QDoubleSpinBox, QSpacerItem, QSizePolicy,
                              QApplication, QScrollArea, QSpinBox, QDialogButtonBox)
 from PySide6.QtCore import Qt, QObject, QEvent, QTimer
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QCompleter
+from sqlalchemy import case
 from database import Session, Setting
 from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product, Payment
 from utils.pdf_generator import generate_service_pdf
@@ -1209,56 +1211,124 @@ class ServicesView(QWidget):
 
         # Top bar
         top_bar = QHBoxLayout()
+        top_bar.setSpacing(10)
+
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search job cards by Job #, Customer, Mobile, or Device Detail...")
+        self.search_input.setPlaceholderText("Search job cards by Job #, Customer, Mobile, or Device...")
         self.search_input.textChanged.connect(self.refresh_data)
-        top_bar.addWidget(self.search_input, 4)
+        top_bar.addWidget(self.search_input, 3)
 
+        # Status Filter
         self.status_filter = QComboBox()
-        self.status_filter.addItems(["All Statuses", "Received", "Under Repair", "Ready", "Delivered"])
+        self.status_filter.addItems([
+            "All Statuses", 
+            "Received", 
+            "Under Repair", 
+            "Ready", 
+            "Delivered",
+            "Has Balance (Unpaid)"
+        ])
         self.status_filter.currentIndexChanged.connect(self.refresh_data)
-        top_bar.addWidget(self.status_filter, 1.2)
+        top_bar.addWidget(self.status_filter, 1)
 
-        self.add_btn = QPushButton("New Job Card")
+        # Sort Filter Option (Date, Days, Status, Total, Balance)
+        self.sort_filter = QComboBox()
+        self.sort_filter.addItems([
+            "Sort: Date (Newest First)",
+            "Sort: Date (Oldest First)",
+            "Sort: Days (Most Overdue First)",
+            "Sort: Days (Fewest Days First)",
+            "Sort: Status (Active First)",
+            "Sort: Total (Highest First)",
+            "Sort: Total (Lowest First)",
+            "Sort: Balance (Highest Due First)",
+            "Sort: Balance (Lowest Due First)",
+        ])
+        self.sort_filter.currentIndexChanged.connect(self.refresh_data)
+        top_bar.addWidget(self.sort_filter, 1.4)
+
+        self.add_btn = QPushButton("+ New Job Card")
+        self.add_btn.setCursor(Qt.PointingHandCursor)
         self.add_btn.clicked.connect(self.add_job)
         top_bar.addWidget(self.add_btn, 1)
 
         layout.addLayout(top_bar)
 
-        # Table
+        # Table with 11 columns (includes new "Days" column)
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
-            "Job #", "Created Date", "Customer", "Mobile", "Device Detail", 
+            "Job #", "Date", "Days", "Customer", "Mobile", "Device Detail", 
             "Status", "Labor (₹)", "Total (₹)", "Balance (₹)", "Actions"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         
-        # Reduce width of Labor, Total, and Balance columns
+        # Days column: fixed width with centered text
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.table.setColumnWidth(2, 90)
+
+        # Mobile column
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+
+        # Status column
         self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
-        self.table.setColumnWidth(6, 80)
+        self.table.setColumnWidth(6, 110)
+        
+        # Reduce width of Labor, Total, and Balance columns
         self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
-        self.table.setColumnWidth(7, 90)
+        self.table.setColumnWidth(7, 85)
         self.table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Fixed)
-        self.table.setColumnWidth(8, 90)
+        self.table.setColumnWidth(8, 95)
+        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
+        self.table.setColumnWidth(9, 95)
         
         # Actions column with compact logo buttons
-        self.table.horizontalHeader().setSectionResizeMode(9, QHeaderView.Fixed)
-        self.table.setColumnWidth(9, 180)
+        self.table.horizontalHeader().setSectionResizeMode(10, QHeaderView.Fixed)
+        self.table.setColumnWidth(10, 180)
         
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(54)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.doubleClicked.connect(self.edit_job)
+        
+        # Allow clicking column headers to sort quickly
+        self.table.horizontalHeader().setSectionsClickable(True)
+        self.table.horizontalHeader().sectionClicked.connect(self.handle_header_click)
+        
         layout.addWidget(self.table)
 
         # Lazy loading state
         self.jobs_offset = 0
         self.has_more_jobs = True
         self.table.verticalScrollBar().valueChanged.connect(self.handle_jobs_scroll)
+
+    def handle_header_click(self, col):
+        current = self.sort_filter.currentText() if hasattr(self, 'sort_filter') else ""
+        if col == 1:  # Date
+            if "Date (Newest" in current:
+                self.sort_filter.setCurrentText("Sort: Date (Oldest First)")
+            else:
+                self.sort_filter.setCurrentText("Sort: Date (Newest First)")
+        elif col == 2:  # Days
+            if "Days (Most Overdue" in current:
+                self.sort_filter.setCurrentText("Sort: Days (Fewest Days First)")
+            else:
+                self.sort_filter.setCurrentText("Sort: Days (Most Overdue First)")
+        elif col == 6:  # Status
+            self.sort_filter.setCurrentText("Sort: Status (Active First)")
+        elif col == 8:  # Total
+            if "Total (Highest" in current:
+                self.sort_filter.setCurrentText("Sort: Total (Lowest First)")
+            else:
+                self.sort_filter.setCurrentText("Sort: Total (Highest First)")
+        elif col == 9:  # Balance
+            if "Balance (Highest" in current:
+                self.sort_filter.setCurrentText("Sort: Balance (Lowest Due First)")
+            else:
+                self.sort_filter.setCurrentText("Sort: Balance (Highest Due First)")
 
     def handle_jobs_scroll(self, value):
         scrollbar = self.table.verticalScrollBar()
@@ -1278,6 +1348,8 @@ class ServicesView(QWidget):
 
         search_txt = self.search_input.text().strip()
         selected_status = self.status_filter.currentText() if hasattr(self, 'status_filter') else "All Statuses"
+        sort_choice = self.sort_filter.currentText() if hasattr(self, 'sort_filter') else "Sort: Date (Newest First)"
+
         session = Session()
         try:
             query = session.query(ServiceJob)
@@ -1290,35 +1362,106 @@ class ServicesView(QWidget):
                     ServiceJob.imei.like(f"%{search_txt}%") |
                     ServiceJob.status.like(f"%{search_txt}%")
                 )
-            if selected_status != "All Statuses":
+            if selected_status == "Has Balance (Unpaid)":
+                query = query.filter(ServiceJob.balance > 0)
+            elif selected_status != "All Statuses":
                 query = query.filter(ServiceJob.status == selected_status)
             
-            jobs = query.order_by(ServiceJob.created_at.desc()).offset(self.jobs_offset).limit(25).all()
+            # Status custom order: Received (1) -> Under Repair (2) -> Ready (3) -> Delivered (4)
+            status_order = case(
+                (ServiceJob.status == 'Received', 1),
+                (ServiceJob.status == 'Under Repair', 2),
+                (ServiceJob.status == 'Ready', 3),
+                (ServiceJob.status == 'Delivered', 4),
+                else_=5
+            )
+
+            # Apply user-selected sort
+            if "Date (Oldest First)" in sort_choice:
+                order_by = [ServiceJob.created_at.asc()]
+            elif "Days (Most Overdue First)" in sort_choice or "Days (Highest First)" in sort_choice:
+                # Most days waiting = oldest created date first
+                order_by = [ServiceJob.created_at.asc()]
+            elif "Days (Fewest Days First)" in sort_choice or "Days (Lowest First)" in sort_choice:
+                # Fewest days waiting = newest created date first
+                order_by = [ServiceJob.created_at.desc()]
+            elif "Status" in sort_choice:
+                order_by = [status_order, ServiceJob.created_at.desc()]
+            elif "Total (Highest First)" in sort_choice:
+                order_by = [ServiceJob.total_amount.desc(), ServiceJob.created_at.desc()]
+            elif "Total (Lowest First)" in sort_choice:
+                order_by = [ServiceJob.total_amount.asc(), ServiceJob.created_at.desc()]
+            elif "Balance (Highest Due First)" in sort_choice:
+                order_by = [ServiceJob.balance.desc(), ServiceJob.created_at.desc()]
+            elif "Balance (Lowest Due First)" in sort_choice:
+                order_by = [ServiceJob.balance.asc(), ServiceJob.created_at.desc()]
+            else:  # Default: Date (Newest First)
+                order_by = [ServiceJob.created_at.desc()]
+
+            jobs = query.order_by(*order_by).offset(self.jobs_offset).limit(25).all()
 
             if len(jobs) < 25:
                 self.has_more_jobs = False
 
             start_row = self.table.rowCount()
             self.table.setRowCount(start_row + len(jobs))
+            today = datetime.date.today()
+
             for offset_idx, j in enumerate(jobs):
                 i = start_row + offset_idx
+                # Col 0: Job #
                 self.table.setItem(i, 0, QTableWidgetItem(j.job_number))
 
-                # Column 1: Created Date (2nd Column)
+                # Col 1: Created Date
                 if j.created_at:
                     date_str = j.created_at.strftime("%Y-%m-%d %H:%M") if hasattr(j.created_at, 'strftime') else str(j.created_at)
+                    jdt = j.created_at.date() if hasattr(j.created_at, 'date') else j.created_at
+                    diff_days = max(0, (today - jdt).days)
                 else:
                     date_str = ""
+                    diff_days = 0
                 date_item = QTableWidgetItem(date_str)
                 date_item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(i, 1, date_item)
 
-                self.table.setItem(i, 2, QTableWidgetItem(j.customer_name))
-                self.table.setItem(i, 3, QTableWidgetItem(j.mobile))
-                self.table.setItem(i, 4, QTableWidgetItem(j.device_model))
+                # Col 2: Days (how many days after received device)
+                if diff_days == 0:
+                    days_text = "0 d (Today)"
+                elif diff_days == 1:
+                    days_text = "1 Day"
+                else:
+                    days_text = f"{diff_days} Days"
+
+                days_item = QTableWidgetItem(days_text)
+                days_item.setTextAlignment(Qt.AlignCenter)
+
+                # Alert styling for days waiting in shop
+                if j.status == "Delivered":
+                    days_item.setForeground(Qt.gray)
+                elif diff_days >= 7:
+                    days_item.setForeground(QColor("#dc2626"))  # Red for 7+ days (high delay)
+                    font = days_item.font()
+                    font.setBold(True)
+                    days_item.setFont(font)
+                elif diff_days >= 3:
+                    days_item.setForeground(QColor("#d97706"))  # Amber for 3-6 days
+                    font = days_item.font()
+                    font.setBold(True)
+                    days_item.setFont(font)
+                else:
+                    days_item.setForeground(QColor("#16a34a"))  # Green for 0-2 days
+                self.table.setItem(i, 2, days_item)
+
+                # Col 3: Customer
+                self.table.setItem(i, 3, QTableWidgetItem(j.customer_name or ""))
+                # Col 4: Mobile
+                self.table.setItem(i, 4, QTableWidgetItem(j.mobile or ""))
+                # Col 5: Device Detail
+                self.table.setItem(i, 5, QTableWidgetItem(j.device_model or ""))
                 
-                status_item = QTableWidgetItem(j.status)
-                # Color status tags
+                # Col 6: Status
+                status_item = QTableWidgetItem(j.status or "")
+                status_item.setTextAlignment(Qt.AlignCenter)
                 if j.status == "Received":
                     status_item.setForeground(Qt.cyan)
                 elif j.status == "Under Repair":
@@ -1327,17 +1470,29 @@ class ServicesView(QWidget):
                     status_item.setForeground(Qt.green)
                 elif j.status == "Delivered":
                     status_item.setForeground(Qt.gray)
-                self.table.setItem(i, 5, status_item)
+                self.table.setItem(i, 6, status_item)
 
-                self.table.setItem(i, 6, QTableWidgetItem(f"₹{j.service_charge:,.2f}"))
-                self.table.setItem(i, 7, QTableWidgetItem(f"₹{j.total_amount:,.2f}"))
+                # Col 7: Labor
+                labor_item = QTableWidgetItem(f"₹{j.service_charge:,.2f}")
+                labor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.table.setItem(i, 7, labor_item)
+
+                # Col 8: Total
+                tot_item = QTableWidgetItem(f"₹{j.total_amount:,.2f}")
+                tot_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.table.setItem(i, 8, tot_item)
                 
+                # Col 9: Balance
                 bal_item = QTableWidgetItem(f"₹{j.balance:,.2f}")
+                bal_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if j.balance > 0:
                     bal_item.setForeground(Qt.red)
-                self.table.setItem(i, 8, bal_item)
+                    font = bal_item.font()
+                    font.setBold(True)
+                    bal_item.setFont(font)
+                self.table.setItem(i, 9, bal_item)
 
-                # Action Buttons (Logos)
+                # Col 10: Action Buttons (Logos)
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
                 actions_layout.setContentsMargins(4, 2, 4, 2)
@@ -1372,7 +1527,7 @@ class ServicesView(QWidget):
                 del_btn.clicked.connect(lambda checked, jnum=j.job_number: self.delete_job_invoice(jnum))
                 actions_layout.addWidget(del_btn)
                 
-                self.table.setCellWidget(i, 9, actions_widget)
+                self.table.setCellWidget(i, 10, actions_widget)
 
         except Exception as e:
             print(f"Error loading service jobs: {e}")
@@ -1453,7 +1608,20 @@ class ServicesView(QWidget):
             info_frame.setProperty("class", "CardFrame")
             info_layout = QFormLayout(info_frame)
             info_layout.addRow("Job Number:", QLabel(job.job_number))
-            info_layout.addRow("Date Created:", QLabel(job.created_at.strftime("%Y-%m-%d %H:%M")))
+            info_layout.addRow("Date Created:", QLabel(job.created_at.strftime("%Y-%m-%d %H:%M") if job.created_at else "-"))
+            if job.created_at:
+                diff_days = max(0, (datetime.date.today() - job.created_at.date()).days)
+                days_lbl = QLabel(f"{diff_days} Days")
+                if job.status != "Delivered":
+                    if diff_days >= 7:
+                        days_lbl.setStyleSheet("font-weight: bold; color: #dc2626;")
+                    elif diff_days >= 3:
+                        days_lbl.setStyleSheet("font-weight: bold; color: #d97706;")
+                    else:
+                        days_lbl.setStyleSheet("font-weight: bold; color: #16a34a;")
+            else:
+                days_lbl = QLabel("-")
+            info_layout.addRow("Days Since Received:", days_lbl)
             info_layout.addRow("Customer Name:", QLabel(job.customer_name))
             info_layout.addRow("Customer Contact:", QLabel(job.mobile))
             info_layout.addRow("Device Detail:", QLabel(job.device_model))
