@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
             h_layout.addWidget(lbl_title)
             h_layout.addStretch()
 
-            lbl_arrow = QLabel("▾")
+            lbl_arrow = QLabel("▸")
             lbl_arrow.setObjectName("sidebar_group_arrow")
             lbl_arrow.setAttribute(Qt.WA_TransparentForMouseEvents)
             h_layout.addWidget(lbl_arrow)
@@ -157,6 +157,7 @@ class MainWindow(QMainWindow):
             # Container for group buttons
             group_container = QWidget()
             group_container.setStyleSheet("background: transparent;")
+            group_container.setVisible(False)
             group_layout = QVBoxLayout(group_container)
             group_layout.setContentsMargins(0, 0, 0, 0)
             group_layout.setSpacing(2)
@@ -196,7 +197,7 @@ class MainWindow(QMainWindow):
 
             scroll_layout.addWidget(group_container)
 
-            header_btn.is_expanded = True
+            header_btn.is_expanded = False
             header_btn.arrow_lbl = lbl_arrow
             header_btn.clicked.connect(lambda checked, c=group_container, h=header_btn: self.toggle_nav_group(c, h))
             self.nav_groups.append((header_btn, group_container, group_btns))
@@ -328,7 +329,7 @@ class MainWindow(QMainWindow):
                     default_index = idx
                     break
         self.apply_language_change()
-        self.switch_view(default_index)
+        self.switch_view(default_index, auto_expand=False)
 
     def update_shop_name(self):
         from database import Session, Setting
@@ -387,14 +388,14 @@ class MainWindow(QMainWindow):
         if force_state is not None:
             new_state = force_state
         else:
-            new_state = not getattr(header_btn, 'is_expanded', True)
+            new_state = not getattr(header_btn, 'is_expanded', False)
 
         header_btn.is_expanded = new_state
         container.setVisible(new_state)
         if hasattr(header_btn, 'arrow_lbl'):
             header_btn.arrow_lbl.setText("▾" if new_state else "▸")
 
-    def switch_view(self, index):
+    def switch_view(self, index, auto_expand=True):
         # Prevent switching to hidden sidebar buttons (via shortcuts)
         if index in self.nav_buttons and self.nav_buttons[index].isHidden():
             return
@@ -406,10 +407,10 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(index)
 
         # Auto-expand active group if it was collapsed
-        if hasattr(self, 'nav_groups'):
+        if auto_expand and hasattr(self, 'nav_groups'):
             for header_btn, container, group_btns in self.nav_groups:
                 if any(self.nav_buttons.get(index) == b for b in group_btns):
-                    if not getattr(header_btn, 'is_expanded', True):
+                    if not getattr(header_btn, 'is_expanded', False):
                         self.toggle_nav_group(container, header_btn, force_state=True)
         
         # Update Header Title
