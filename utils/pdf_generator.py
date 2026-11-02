@@ -127,7 +127,7 @@ def generate_sales_pdf(invoice_data, file_path):
         ],
         [
             Paragraph(invoice_data['customer_address'] or "N/A", style_sub),
-            Paragraph(f"Customer GST: {invoice_data['customer_gst'] or '-'}", style_sub)
+            Paragraph(f"Customer GST: {invoice_data.get('customer_gst') or '-'}", style_sub)
         ]
     ]
     bill_to_table = Table(bill_to_data, colWidths=[270, 270])
@@ -207,7 +207,7 @@ def generate_sales_pdf(invoice_data, file_path):
     story.append(Spacer(1, 15))
 
     # 3b. Payment History Installments block
-    if service_data.get('payments'):
+    if invoice_data.get('payments'):
         story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
         story.append(Spacer(1, 4))
         pay_table_data = [[
@@ -216,7 +216,7 @@ def generate_sales_pdf(invoice_data, file_path):
             Paragraph("<b>Amount (Rs.)</b>", style_bold),
             Paragraph("<b>Remarks</b>", style_bold)
         ]]
-        for p in service_data['payments']:
+        for p in invoice_data['payments']:
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
@@ -466,8 +466,8 @@ def generate_purchase_pdf(purchase_data, file_path):
     story.append(Spacer(1, 15))
 
     # 3b. Payment History Installments block
-    if service_data.get('payments'):
-        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+    if purchase_data.get('payments'):
+        story.append(Paragraph("<b>Payment Installments Made:</b>", style_bold))
         story.append(Spacer(1, 4))
         pay_table_data = [[
             Paragraph("<b>Date</b>", style_bold),
@@ -475,7 +475,7 @@ def generate_purchase_pdf(purchase_data, file_path):
             Paragraph("<b>Amount (Rs.)</b>", style_bold),
             Paragraph("<b>Remarks</b>", style_bold)
         ]]
-        for p in service_data['payments']:
+        for p in purchase_data['payments']:
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
@@ -1712,8 +1712,8 @@ def generate_sales_return_pdf(return_data, file_path):
     story.append(Spacer(1, 15))
 
     # 3b. Payment History Installments block
-    if service_data.get('payments'):
-        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+    if return_data.get('payments'):
+        story.append(Paragraph("<b>Refund Details:</b>", style_bold))
         story.append(Spacer(1, 4))
         pay_table_data = [[
             Paragraph("<b>Date</b>", style_bold),
@@ -1721,7 +1721,7 @@ def generate_sales_return_pdf(return_data, file_path):
             Paragraph("<b>Amount (Rs.)</b>", style_bold),
             Paragraph("<b>Remarks</b>", style_bold)
         ]]
-        for p in service_data['payments']:
+        for p in return_data['payments']:
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
@@ -1918,8 +1918,8 @@ def generate_purchase_return_pdf(return_data, file_path):
     story.append(Spacer(1, 15))
 
     # 3b. Payment History Installments block
-    if service_data.get('payments'):
-        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
+    if return_data.get('payments'):
+        story.append(Paragraph("<b>Refund Details:</b>", style_bold))
         story.append(Spacer(1, 4))
         pay_table_data = [[
             Paragraph("<b>Date</b>", style_bold),
@@ -1927,7 +1927,7 @@ def generate_purchase_return_pdf(return_data, file_path):
             Paragraph("<b>Amount (Rs.)</b>", style_bold),
             Paragraph("<b>Remarks</b>", style_bold)
         ]]
-        for p in service_data['payments']:
+        for p in return_data['payments']:
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
