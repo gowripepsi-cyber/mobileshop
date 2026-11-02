@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QDoubleSpinBox, QPushButton, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, QDialogButtonBox,
-                             QStackedWidget)
+                             QStackedWidget, QGridLayout)
 from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from sqlalchemy import func
@@ -52,22 +52,40 @@ class PaymentsView(QWidget):
         layout.addWidget(self.tabs)
 
     def setup_cust_tab(self):
-        layout = QHBoxLayout(self.cust_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(20)
+        # Vertical stacked layout: Top = Receive Customer Outstanding, Bottom = Pending Invoices & Ledger Helper
+        layout = QVBoxLayout(self.cust_tab)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # Form Card
+        # Top Block: Receive Customer Outstanding Card
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setFixedWidth(320)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setContentsMargins(15, 15, 15, 15)
-        form_layout.setSpacing(12)
+        form_layout = QVBoxLayout(form_frame)
+        form_layout.setContentsMargins(16, 12, 16, 14)
+        form_layout.setSpacing(10)
 
+        # Header Row: Title on Left, Outstanding Balance Badge on Right
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel("Receive Customer Outstanding")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
-        form_layout.addRow(lbl)
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
+        header_row.addWidget(lbl)
+        header_row.addStretch()
 
+        self.c_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
+        self.c_outstanding_lbl.setStyleSheet("""
+            font-size: 13px;
+            font-weight: bold;
+            color: #d97706;
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+            padding: 4px 12px;
+        """)
+        header_row.addWidget(self.c_outstanding_lbl)
+        form_layout.addLayout(header_row)
+
+        # Customer selector & Add button
         self.c_customer_combo = AutoClearSearchableComboBox()
         self.c_customer_combo.currentTextChanged.connect(self.check_c_customer_match)
         if self.c_customer_combo.lineEdit():
@@ -75,23 +93,14 @@ class PaymentsView(QWidget):
             self.c_customer_combo.lineEdit().textChanged.connect(self.check_c_customer_match)
         self.c_customer_combo.currentIndexChanged.connect(self.update_cust_outstanding_lbl)
 
-        c_cust_layout = QHBoxLayout()
-        c_cust_layout.setContentsMargins(0, 0, 0, 0)
-        c_cust_layout.setSpacing(6)
-        c_cust_layout.addWidget(self.c_customer_combo, 1)
-
         self.add_c_cust_btn = QPushButton("+")
         self.add_c_cust_btn.setToolTip("Add new customer")
         self.add_c_cust_btn.setProperty("class", "btn-quick-add")
-        self.add_c_cust_btn.setFixedWidth(40)
+        self.add_c_cust_btn.setFixedWidth(36)
         self.add_c_cust_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
         self.add_c_cust_btn.setCursor(Qt.PointingHandCursor)
         self.add_c_cust_btn.clicked.connect(self.handle_add_c_customer_click)
         self.add_c_cust_btn.hide()
-        c_cust_layout.addWidget(self.add_c_cust_btn)
-
-        self.c_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
-        self.c_outstanding_lbl.setStyleSheet("font-weight: bold; color: #f59e0b;")
 
         self.c_sales_combo = QComboBox()
         self.c_sales_combo.currentIndexChanged.connect(self.handle_cust_sales_selection)
@@ -104,6 +113,7 @@ class PaymentsView(QWidget):
         self.c_amount.setRange(0.0, 9999999.0)
         self.c_amount.setValue(0.0)
         self.c_amount.setDecimals(2)
+        self.c_amount.valueChanged.connect(self.update_cust_live_calc)
 
         self.c_mode = QComboBox()
         self.c_mode.addItems(["Cash", "Bank"])
@@ -115,60 +125,435 @@ class PaymentsView(QWidget):
         self.c_remarks = QLineEdit()
         self.c_remarks.setPlaceholderText("Remarks (optional)")
 
-        form_layout.addRow("Select Customer *:", c_cust_layout)
-        form_layout.addRow("", self.c_outstanding_lbl)
-        form_layout.addRow("Collect Against Invoice:", self.c_sales_combo)
-        form_layout.addRow("Payment Date:", self.c_date)
-        form_layout.addRow("Amount Received (₹) *:", self.c_amount)
-        form_layout.addRow("Payment Mode:", self.c_mode)
-        form_layout.addRow("Select Bank Account:", self.c_bank)
-        form_layout.addRow("Remarks:", self.c_remarks)
-
         self.c_save_btn = QPushButton("Save Collection")
         self.c_save_btn.setProperty("class", "btn-success")
+        self.c_save_btn.setFixedHeight(34)
+        self.c_save_btn.setCursor(Qt.PointingHandCursor)
         self.c_save_btn.clicked.connect(self.save_customer_collection)
-        form_layout.addRow("", self.c_save_btn)
 
+        # 4 Columns x 2 Rows Grid for Compact Top Block
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+
+        def make_field(label_text, widget):
+            w = QWidget()
+            vl = QVBoxLayout(w)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(4)
+            lbl_f = QLabel(label_text)
+            lbl_f.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+            vl.addWidget(lbl_f)
+            vl.addWidget(widget)
+            return w
+
+        # Customer widget
+        cust_w = QWidget()
+        cust_w_l = QHBoxLayout(cust_w)
+        cust_w_l.setContentsMargins(0, 0, 0, 0)
+        cust_w_l.setSpacing(6)
+        cust_w_l.addWidget(self.c_customer_combo, 1)
+        cust_w_l.addWidget(self.add_c_cust_btn)
+
+        f_cust = make_field("Select Customer *", cust_w)
+        f_sales = make_field("Collect Against Invoice / Job", self.c_sales_combo)
+        f_date = make_field("Payment Date", self.c_date)
+        f_amt = make_field("Amount Received (₹) *", self.c_amount)
+
+        f_mode = make_field("Payment Mode", self.c_mode)
+        f_bank = make_field("Select Bank Account", self.c_bank)
+        f_rem = make_field("Remarks", self.c_remarks)
+
+        # Save Button widget (aligned in Row 1, Col 3)
+        btn_w = QWidget()
+        btn_w_l = QVBoxLayout(btn_w)
+        btn_w_l.setContentsMargins(0, 0, 0, 0)
+        btn_w_l.setSpacing(4)
+        lbl_spacer = QLabel(" ")
+        lbl_spacer.setStyleSheet("font-size: 11.5px;")
+        btn_w_l.addWidget(lbl_spacer)
+        btn_w_l.addWidget(self.c_save_btn)
+
+        grid.addWidget(f_cust, 0, 0)
+        grid.addWidget(f_sales, 0, 1)
+        grid.addWidget(f_date, 0, 2)
+        grid.addWidget(f_amt, 0, 3)
+
+        grid.addWidget(f_mode, 1, 0)
+        grid.addWidget(f_bank, 1, 1)
+        grid.addWidget(f_rem, 1, 2)
+        grid.addWidget(btn_w, 1, 3)
+
+        form_layout.addLayout(grid)
         layout.addWidget(form_frame)
 
-        # Info Frame
-        info_frame = QFrame()
-        info_frame.setProperty("class", "CardFrame")
-        info_layout = QVBoxLayout(info_frame)
-        info_lbl = QLabel("Customer Ledger Helper")
-        info_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
-        info_layout.addWidget(info_lbl)
-        
-        info_txt = QLabel(
-            "Use this form when customers clear their outstanding balances outside standard Sales Invoices.\n\n"
-            "Logging a transaction here will:\n"
-            "  1. Reduce the Customer Outstanding balance immediately.\n"
-            "  2. Add a positive transaction (+) in the Cash Book or Bank ledger.\n"
-            "  3. Keep the cash-in-hand and bank balances accurately synchronized."
+        # Bottom Block: Helper Frame (Dynamic Customer Ledger & Invoice History Helper)
+        self.cust_helper_frame = QFrame()
+        self.cust_helper_frame.setProperty("class", "CardFrame")
+        helper_layout = QVBoxLayout(self.cust_helper_frame)
+        helper_layout.setContentsMargins(12, 12, 12, 12)
+        helper_layout.setSpacing(10)
+
+        self.cust_helper_stack = QStackedWidget()
+        helper_layout.addWidget(self.cust_helper_stack)
+
+        # Page 0: Welcome / Default Guidance Page
+        self.setup_cust_welcome_page()
+
+        # Page 1: Customer Pending Invoices & Jobs Page
+        self.setup_cust_pending_page()
+
+        # Page 2: Single Invoice / Job Payment Ledger Page
+        self.setup_cust_bill_page()
+
+        layout.addWidget(self.cust_helper_frame, 1)
+
+    def setup_cust_welcome_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(16)
+
+        title = QLabel("Customer Ledger Helper")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
+        layout.addWidget(title)
+
+        info_box = QFrame()
+        info_box.setStyleSheet("background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;")
+        ib_layout = QVBoxLayout(info_box)
+        ib_layout.setSpacing(10)
+
+        guide_header = QLabel("📌 How to use this ledger helper:")
+        guide_header.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #334155;")
+        ib_layout.addWidget(guide_header)
+
+        guide_txt = QLabel(
+            "1. Select a Customer from the dropdown above to immediately inspect all their open sales invoices, repair service jobs, dates, and pending balances.\n\n"
+            "2. Select an Invoice or Job in 'Collect Against Invoice / Job' (or click 'Collect' on any row) to drill down into that bill's complete collection ledger.\n\n"
+            "3. Logging a collection automatically reduces the customer's outstanding balance and accurately records an entry in the Cash Drawer or Bank Book."
         )
-        info_txt.setWordWrap(True)
-        info_txt.setStyleSheet("color: #94a3b8; line-height: 20px;")
-        info_layout.addWidget(info_txt)
-        info_layout.addStretch()
-        layout.addWidget(info_frame)
+        guide_txt.setWordWrap(True)
+        guide_txt.setStyleSheet("color: #64748b; font-size: 13px; line-height: 22px;")
+        ib_layout.addWidget(guide_txt)
+        layout.addWidget(info_box)
+
+        prompt_card = QFrame()
+        prompt_card.setStyleSheet("background-color: #fffbeb; border: 1px dashed #fde68a; border-radius: 10px; padding: 20px;")
+        pc_layout = QVBoxLayout(prompt_card)
+        pc_layout.setAlignment(Qt.AlignCenter)
+        
+        prompt_lbl = QLabel("☝️ Select a customer above to view pending invoices, repair jobs, and collection history.")
+        prompt_lbl.setAlignment(Qt.AlignCenter)
+        prompt_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #b45309;")
+        pc_layout.addWidget(prompt_lbl)
+
+        layout.addWidget(prompt_card)
+        layout.addStretch()
+        self.cust_helper_stack.addWidget(page)
+
+    def setup_cust_pending_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # Header with Customer Title & KPI Chips
+        header_bar = QHBoxLayout()
+        header_bar.setContentsMargins(0, 0, 0, 0)
+        header_bar.setSpacing(10)
+
+        self.cust_pending_title = QLabel("Pending Invoices & Jobs")
+        self.cust_pending_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
+        header_bar.addWidget(self.cust_pending_title)
+        header_bar.addStretch()
+
+        self.cust_pending_count_chip = QLabel("0 Receivables")
+        self.cust_pending_count_chip.setStyleSheet("""
+            background-color: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+        """)
+        header_bar.addWidget(self.cust_pending_count_chip)
+
+        self.cust_pending_total_chip = QLabel("Total Due: ₹0.00")
+        self.cust_pending_total_chip.setStyleSheet("""
+            background-color: #fffbeb;
+            color: #d97706;
+            font-size: 12.5px;
+            font-weight: bold;
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: 1px solid #fde68a;
+        """)
+        header_bar.addWidget(self.cust_pending_total_chip)
+        layout.addLayout(header_bar)
+
+        # Tab Widget: Pending Receivables / Past Collection Vouchers
+        self.cust_pending_tab_widget = QTabWidget()
+        
+        # Tab 1: Pending Receivables
+        pending_tab = QWidget()
+        pt_layout = QVBoxLayout(pending_tab)
+        pt_layout.setContentsMargins(4, 8, 4, 4)
+        pt_layout.setSpacing(6)
+
+        self.cust_pending_table = QTableWidget()
+        self.cust_pending_table.setColumnCount(7)
+        self.cust_pending_table.setHorizontalHeaderLabels([
+            "Ref #", "Date", "Type", "Total (₹)", "Received (₹)", "Bal Due (₹)", "Action"
+        ])
+        header = self.cust_pending_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(0, QHeaderView.Stretch) # Ref #
+        header.setSectionResizeMode(1, QHeaderView.Fixed)   # Date
+        header.setSectionResizeMode(2, QHeaderView.Fixed)   # Type
+        header.setSectionResizeMode(3, QHeaderView.Fixed)   # Total
+        header.setSectionResizeMode(4, QHeaderView.Fixed)   # Received
+        header.setSectionResizeMode(5, QHeaderView.Fixed)   # Bal Due
+        header.setSectionResizeMode(6, QHeaderView.Fixed)   # Action
+        self.cust_pending_table.setColumnWidth(1, 110) # Date
+        self.cust_pending_table.setColumnWidth(2, 95)  # Type
+        self.cust_pending_table.setColumnWidth(3, 125) # Total
+        self.cust_pending_table.setColumnWidth(4, 125) # Received
+        self.cust_pending_table.setColumnWidth(5, 125) # Bal Due
+        self.cust_pending_table.setColumnWidth(6, 110) # Action
+        self.cust_pending_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.cust_pending_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.cust_pending_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.cust_pending_table.verticalHeader().setVisible(False)
+        self.cust_pending_table.verticalHeader().setDefaultSectionSize(40)
+        self.cust_pending_table.cellDoubleClicked.connect(self.handle_cust_pending_table_double_click)
+        pt_layout.addWidget(self.cust_pending_table)
+
+        tip_lbl = QLabel("💡 Double-click any row or click 'Collect' to select and drill into that bill's collection history ledger.")
+        tip_lbl.setStyleSheet("color: #64748b; font-size: 11.5px; font-style: italic;")
+        pt_layout.addWidget(tip_lbl)
+
+        # No Pending Box (Hidden by default)
+        self.cust_no_pending_box = QFrame()
+        self.cust_no_pending_box.setStyleSheet("background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px;")
+        np_layout = QVBoxLayout(self.cust_no_pending_box)
+        np_layout.setAlignment(Qt.AlignCenter)
+        np_lbl = QLabel("✅ All invoices and repair jobs are fully settled! No pending receivables for this customer.")
+        np_lbl.setStyleSheet("color: #16a34a; font-size: 13px; font-weight: bold;")
+        np_layout.addWidget(np_lbl)
+        pt_layout.addWidget(self.cust_no_pending_box)
+        self.cust_no_pending_box.hide()
+
+        self.cust_pending_tab_widget.addTab(pending_tab, "Pending Receivables")
+
+        # Tab 2: Past Collection Vouchers History
+        vouchers_tab = QWidget()
+        vt_layout = QVBoxLayout(vouchers_tab)
+        vt_layout.setContentsMargins(4, 8, 4, 4)
+        vt_layout.setSpacing(6)
+
+        self.cust_vouchers_table = QTableWidget()
+        self.cust_vouchers_table.setColumnCount(6)
+        self.cust_vouchers_table.setHorizontalHeaderLabels([
+            "Receipt #", "Date", "Mode", "Amount (₹)", "Invoice / Job Reference", "Remarks"
+        ])
+        v_header = self.cust_vouchers_table.horizontalHeader()
+        v_header.setSectionResizeMode(QHeaderView.Interactive)
+        v_header.setSectionResizeMode(0, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(1, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(2, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(3, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(4, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(5, QHeaderView.Stretch)
+        self.cust_vouchers_table.setColumnWidth(0, 110) # Receipt #
+        self.cust_vouchers_table.setColumnWidth(1, 120) # Date
+        self.cust_vouchers_table.setColumnWidth(2, 100) # Mode
+        self.cust_vouchers_table.setColumnWidth(3, 140) # Amount (₹)
+        self.cust_vouchers_table.setColumnWidth(4, 180) # Invoice / Job Reference
+        self.cust_vouchers_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.cust_vouchers_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.cust_vouchers_table.verticalHeader().setVisible(False)
+        self.cust_vouchers_table.verticalHeader().setDefaultSectionSize(36)
+        vt_layout.addWidget(self.cust_vouchers_table)
+
+        self.cust_pending_tab_widget.addTab(vouchers_tab, "Collection Receipts History")
+
+        layout.addWidget(self.cust_pending_tab_widget)
+        self.cust_helper_stack.addWidget(page)
+
+    def setup_cust_bill_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # Header with Back Button, Title & Status Badge
+        header_bar = QHBoxLayout()
+        header_bar.setContentsMargins(0, 0, 0, 0)
+        header_bar.setSpacing(10)
+
+        self.back_to_invoices_btn = QPushButton("← View All Pending Invoices")
+        self.back_to_invoices_btn.setCursor(Qt.PointingHandCursor)
+        self.back_to_invoices_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #334155;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 6px 14px;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+                color: #0f172a;
+            }
+        """)
+        self.back_to_invoices_btn.clicked.connect(lambda: self.c_sales_combo.setCurrentIndex(0))
+        header_bar.addWidget(self.back_to_invoices_btn)
+
+        self.cust_bill_title = QLabel("Invoice Payment Ledger")
+        self.cust_bill_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
+        header_bar.addWidget(self.cust_bill_title)
+        header_bar.addStretch()
+
+        self.cust_bill_status_badge = QLabel("UNPAID")
+        self.cust_bill_status_badge.setStyleSheet("""
+            background-color: #fef2f2;
+            color: #dc2626;
+            font-size: 11.5px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid #fecaca;
+        """)
+        header_bar.addWidget(self.cust_bill_status_badge)
+        layout.addLayout(header_bar)
+
+        # KPI Metric Cards Strip
+        kpi_strip = QHBoxLayout()
+        kpi_strip.setContentsMargins(0, 0, 0, 0)
+        kpi_strip.setSpacing(10)
+
+        def make_kpi(label_text, border_color="#e2e8f0", val_color="#0f172a"):
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #ffffff;
+                    border: 1px solid {border_color};
+                    border-radius: 8px;
+                }}
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(8, 6, 8, 6)
+            c_layout.setSpacing(2)
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px;")
+            val = QLabel("-")
+            val.setStyleSheet(f"font-size: 13px; font-weight: 800; color: {val_color};")
+            c_layout.addWidget(lbl)
+            c_layout.addWidget(val)
+            return card, val
+
+        c1, self.cust_kpi_date = make_kpi("INVOICE DATE", "#cbd5e1", "#334155")
+        c2, self.cust_kpi_total = make_kpi("TOTAL BILL", "#cbd5e1", "#0f172a")
+        c3, self.cust_kpi_paid = make_kpi("RECEIVED SO FAR", "#bbf7d0", "#16a34a")
+        c4, self.cust_kpi_balance = make_kpi("BALANCE DUE", "#fde68a", "#d97706")
+
+        kpi_strip.addWidget(c1)
+        kpi_strip.addWidget(c2)
+        kpi_strip.addWidget(c3)
+        kpi_strip.addWidget(c4)
+        layout.addLayout(kpi_strip)
+
+        # Invoice Collection Ledger History Table
+        ledger_title = QLabel("Payment & Settlement Ledger History")
+        ledger_title.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #334155; margin-top: 4px;")
+        layout.addWidget(ledger_title)
+
+        self.cust_bill_ledger_table = QTableWidget()
+        self.cust_bill_ledger_table.setColumnCount(5)
+        self.cust_bill_ledger_table.setHorizontalHeaderLabels([
+            "Date", "Payment Ref / Type", "Mode", "Amount (₹)", "Remarks"
+        ])
+        b_header = self.cust_bill_ledger_table.horizontalHeader()
+        b_header.setSectionResizeMode(QHeaderView.Interactive)
+        b_header.setSectionResizeMode(0, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(1, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(2, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(3, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(4, QHeaderView.Stretch)
+        self.cust_bill_ledger_table.setColumnWidth(0, 120) # Date
+        self.cust_bill_ledger_table.setColumnWidth(1, 240) # Payment Ref / Type
+        self.cust_bill_ledger_table.setColumnWidth(2, 110) # Mode
+        self.cust_bill_ledger_table.setColumnWidth(3, 140) # Amount (₹)
+        self.cust_bill_ledger_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.cust_bill_ledger_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.cust_bill_ledger_table.verticalHeader().setVisible(False)
+        self.cust_bill_ledger_table.verticalHeader().setDefaultSectionSize(38)
+        layout.addWidget(self.cust_bill_ledger_table)
+
+        # Live Real-time Settlement Calculator Card
+        self.cust_calc_card = QFrame()
+        self.cust_calc_card.setStyleSheet("""
+            QFrame {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 10px 14px;
+            }
+        """)
+        calc_layout = QHBoxLayout(self.cust_calc_card)
+        calc_layout.setContentsMargins(0, 0, 0, 0)
+        calc_layout.setSpacing(10)
+
+        calc_icon = QLabel("⚡")
+        calc_icon.setStyleSheet("font-size: 16px;")
+        calc_layout.addWidget(calc_icon)
+
+        self.cust_live_calc_lbl = QLabel("Enter amount above to preview settlement.")
+        self.cust_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
+        calc_layout.addWidget(self.cust_live_calc_lbl, 1)
+
+        layout.addWidget(self.cust_calc_card)
+        self.cust_helper_stack.addWidget(page)
 
     def setup_supp_tab(self):
-        layout = QHBoxLayout(self.supp_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(20)
+        # Vertical stacked layout: Top = Pay Supplier Outstanding, Bottom = Pending Bills & Ledger Helper
+        layout = QVBoxLayout(self.supp_tab)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # Form Card
+        # Top Block: Pay Supplier Outstanding Card
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setFixedWidth(380)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setContentsMargins(15, 15, 15, 15)
-        form_layout.setSpacing(12)
+        form_layout = QVBoxLayout(form_frame)
+        form_layout.setContentsMargins(16, 12, 16, 14)
+        form_layout.setSpacing(10)
 
+        # Header Row: Title on Left, Outstanding Balance Badge on Right
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel("Pay Supplier Outstanding")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
-        form_layout.addRow(lbl)
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
+        header_row.addWidget(lbl)
+        header_row.addStretch()
 
+        self.s_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
+        self.s_outstanding_lbl.setStyleSheet("""
+            font-size: 13px;
+            font-weight: bold;
+            color: #dc2626;
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 4px 12px;
+        """)
+        header_row.addWidget(self.s_outstanding_lbl)
+        form_layout.addLayout(header_row)
+
+        # Supplier selector & Add button
         self.s_supplier_combo = AutoClearSearchableComboBox()
         self.s_supplier_combo.currentTextChanged.connect(self.check_s_supplier_match)
         if self.s_supplier_combo.lineEdit():
@@ -176,23 +561,14 @@ class PaymentsView(QWidget):
             self.s_supplier_combo.lineEdit().textChanged.connect(self.check_s_supplier_match)
         self.s_supplier_combo.currentIndexChanged.connect(self.update_supp_outstanding_lbl)
 
-        s_supp_layout = QHBoxLayout()
-        s_supp_layout.setContentsMargins(0, 0, 0, 0)
-        s_supp_layout.setSpacing(6)
-        s_supp_layout.addWidget(self.s_supplier_combo, 1)
-
         self.add_s_supp_btn = QPushButton("+")
         self.add_s_supp_btn.setToolTip("Add new supplier")
         self.add_s_supp_btn.setProperty("class", "btn-quick-add")
-        self.add_s_supp_btn.setFixedWidth(40)
+        self.add_s_supp_btn.setFixedWidth(36)
         self.add_s_supp_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
         self.add_s_supp_btn.setCursor(Qt.PointingHandCursor)
         self.add_s_supp_btn.clicked.connect(self.handle_add_s_supplier_click)
         self.add_s_supp_btn.hide()
-        s_supp_layout.addWidget(self.add_s_supp_btn)
-
-        self.s_outstanding_lbl = QLabel("Current Outstanding: ₹0.00")
-        self.s_outstanding_lbl.setStyleSheet("font-weight: bold; color: #ef4444;")
 
         self.s_purchase_combo = QComboBox()
         self.s_purchase_combo.currentIndexChanged.connect(self.handle_supp_purchase_selection)
@@ -217,27 +593,74 @@ class PaymentsView(QWidget):
         self.s_remarks = QLineEdit()
         self.s_remarks.setPlaceholderText("Remarks (optional)")
 
-        form_layout.addRow("Select Supplier *:", s_supp_layout)
-        form_layout.addRow("", self.s_outstanding_lbl)
-        form_layout.addRow("Pay Against Bill:", self.s_purchase_combo)
-        form_layout.addRow("Payment Date:", self.s_date)
-        form_layout.addRow("Amount Paid (₹) *:", self.s_amount)
-        form_layout.addRow("Payment Mode:", self.s_mode)
-        form_layout.addRow("Select Bank Account:", self.s_bank)
-        form_layout.addRow("Remarks:", self.s_remarks)
-
         self.s_save_btn = QPushButton("Save Payment")
         self.s_save_btn.setProperty("class", "btn-danger")
+        self.s_save_btn.setFixedHeight(34)
+        self.s_save_btn.setCursor(Qt.PointingHandCursor)
         self.s_save_btn.clicked.connect(self.save_supplier_payment)
-        form_layout.addRow("", self.s_save_btn)
 
+        # 4 Columns x 2 Rows Grid for Compact Top Block
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+
+        def make_field(label_text, widget):
+            w = QWidget()
+            vl = QVBoxLayout(w)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(4)
+            lbl_f = QLabel(label_text)
+            lbl_f.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+            vl.addWidget(lbl_f)
+            vl.addWidget(widget)
+            return w
+
+        # Supplier field layout
+        supp_w = QWidget()
+        supp_w_l = QHBoxLayout(supp_w)
+        supp_w_l.setContentsMargins(0, 0, 0, 0)
+        supp_w_l.setSpacing(6)
+        supp_w_l.addWidget(self.s_supplier_combo, 1)
+        supp_w_l.addWidget(self.add_s_supp_btn)
+
+        f_supp = make_field("Select Supplier *", supp_w)
+        f_bill = make_field("Pay Against Bill", self.s_purchase_combo)
+        f_date = make_field("Payment Date", self.s_date)
+        f_amt = make_field("Amount Paid (₹) *", self.s_amount)
+
+        f_mode = make_field("Payment Mode", self.s_mode)
+        f_bank = make_field("Select Bank Account", self.s_bank)
+        f_rem = make_field("Remarks", self.s_remarks)
+
+        # Save button in Row 1, Col 3
+        btn_w = QWidget()
+        btn_w_l = QVBoxLayout(btn_w)
+        btn_w_l.setContentsMargins(0, 0, 0, 0)
+        btn_w_l.setSpacing(4)
+        lbl_spacer = QLabel(" ")
+        lbl_spacer.setStyleSheet("font-size: 11.5px;")
+        btn_w_l.addWidget(lbl_spacer)
+        btn_w_l.addWidget(self.s_save_btn)
+
+        grid.addWidget(f_supp, 0, 0)
+        grid.addWidget(f_bill, 0, 1)
+        grid.addWidget(f_date, 0, 2)
+        grid.addWidget(f_amt, 0, 3)
+
+        grid.addWidget(f_mode, 1, 0)
+        grid.addWidget(f_bank, 1, 1)
+        grid.addWidget(f_rem, 1, 2)
+        grid.addWidget(btn_w, 1, 3)
+
+        form_layout.addLayout(grid)
         layout.addWidget(form_frame)
 
-        # Right Side Helper Frame (Dynamic Supplier Ledger & Bill History Helper)
+        # Bottom Block: Helper Frame (Dynamic Supplier Ledger & Bill History Helper)
         self.supp_helper_frame = QFrame()
         self.supp_helper_frame.setProperty("class", "CardFrame")
         helper_layout = QVBoxLayout(self.supp_helper_frame)
-        helper_layout.setContentsMargins(15, 15, 15, 15)
+        helper_layout.setContentsMargins(12, 12, 12, 12)
         helper_layout.setSpacing(10)
 
         self.supp_helper_stack = QStackedWidget()
@@ -275,7 +698,7 @@ class PaymentsView(QWidget):
         ib_layout.addWidget(guide_header)
 
         guide_txt = QLabel(
-            "1. Select a Supplier from the dropdown on the left to immediately inspect all their open bills, invoice dates, and pending balances.\n\n"
+            "1. Select a Supplier from the dropdown above to immediately inspect all their open bills, invoice dates, and pending balances.\n\n"
             "2. Select a Bill in 'Pay Against Bill' to drill down into that bill's complete payment ledger (initial down-payment, installment history, and live remaining balance).\n\n"
             "3. Logging a payment automatically reduces the supplier's outstanding balance and accurately records an entry in the Cash Drawer or Bank Book."
         )
@@ -289,7 +712,7 @@ class PaymentsView(QWidget):
         pc_layout = QVBoxLayout(prompt_card)
         pc_layout.setAlignment(Qt.AlignCenter)
         
-        prompt_lbl = QLabel("👈 Select a supplier on the left to view pending bills and ledger history.")
+        prompt_lbl = QLabel("☝️ Select a supplier above to view pending bills and ledger history.")
         prompt_lbl.setAlignment(Qt.AlignCenter)
         prompt_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #166534;")
         pc_layout.addWidget(prompt_lbl)
@@ -353,8 +776,19 @@ class PaymentsView(QWidget):
         self.supp_pending_table.setHorizontalHeaderLabels([
             "Bill #", "Date", "Total (₹)", "Paid (₹)", "Bal Due (₹)", "Action"
         ])
-        self.supp_pending_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.supp_pending_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        header = self.supp_pending_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.setSectionResizeMode(3, QHeaderView.Fixed)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.supp_pending_table.setColumnWidth(1, 120) # Date
+        self.supp_pending_table.setColumnWidth(2, 140) # Total (₹)
+        self.supp_pending_table.setColumnWidth(3, 130) # Paid (₹)
+        self.supp_pending_table.setColumnWidth(4, 140) # Bal Due (₹)
+        self.supp_pending_table.setColumnWidth(5, 110) # Action
         self.supp_pending_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.supp_pending_table.setSelectionMode(QTableWidget.SingleSelection)
         self.supp_pending_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -389,15 +823,21 @@ class PaymentsView(QWidget):
         self.supp_vouchers_table = QTableWidget()
         self.supp_vouchers_table.setColumnCount(6)
         self.supp_vouchers_table.setHorizontalHeaderLabels([
-            "Voucher #", "Date", "Mode", "Amount Paid (₹)", "Bill Reference", "Remarks"
+            "Voucher #", "Date", "Mode", "Amount (₹)", "Bill Reference", "Remarks"
         ])
-        self.supp_vouchers_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.supp_vouchers_table.setColumnWidth(0, 80)
-        self.supp_vouchers_table.setColumnWidth(1, 80)
-        self.supp_vouchers_table.setColumnWidth(2, 85)
-        self.supp_vouchers_table.setColumnWidth(3, 90)
-        self.supp_vouchers_table.setColumnWidth(4, 110)
-        self.supp_vouchers_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        v_header = self.supp_vouchers_table.horizontalHeader()
+        v_header.setSectionResizeMode(QHeaderView.Interactive)
+        v_header.setSectionResizeMode(0, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(1, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(2, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(3, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(4, QHeaderView.Fixed)
+        v_header.setSectionResizeMode(5, QHeaderView.Stretch)
+        self.supp_vouchers_table.setColumnWidth(0, 110) # Voucher #
+        self.supp_vouchers_table.setColumnWidth(1, 120) # Date
+        self.supp_vouchers_table.setColumnWidth(2, 100) # Mode
+        self.supp_vouchers_table.setColumnWidth(3, 140) # Amount (₹)
+        self.supp_vouchers_table.setColumnWidth(4, 160) # Bill Reference
         self.supp_vouchers_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.supp_vouchers_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.supp_vouchers_table.verticalHeader().setVisible(False)
@@ -504,8 +944,17 @@ class PaymentsView(QWidget):
         self.supp_bill_ledger_table.setHorizontalHeaderLabels([
             "Date", "Payment Ref / Type", "Mode", "Amount (₹)", "Remarks"
         ])
-        self.supp_bill_ledger_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.supp_bill_ledger_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        b_header = self.supp_bill_ledger_table.horizontalHeader()
+        b_header.setSectionResizeMode(QHeaderView.Interactive)
+        b_header.setSectionResizeMode(0, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(1, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(2, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(3, QHeaderView.Fixed)
+        b_header.setSectionResizeMode(4, QHeaderView.Stretch)
+        self.supp_bill_ledger_table.setColumnWidth(0, 120) # Date
+        self.supp_bill_ledger_table.setColumnWidth(1, 240) # Payment Ref / Type
+        self.supp_bill_ledger_table.setColumnWidth(2, 110) # Mode
+        self.supp_bill_ledger_table.setColumnWidth(3, 140) # Amount (₹)
         self.supp_bill_ledger_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.supp_bill_ledger_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.supp_bill_ledger_table.verticalHeader().setVisible(False)
@@ -530,7 +979,7 @@ class PaymentsView(QWidget):
         calc_icon.setStyleSheet("font-size: 16px;")
         calc_layout.addWidget(calc_icon)
 
-        self.bill_live_calc_lbl = QLabel("Enter amount on the left to preview settlement.")
+        self.bill_live_calc_lbl = QLabel("Enter amount above to preview settlement.")
         self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
         calc_layout.addWidget(self.bill_live_calc_lbl, 1)
 
@@ -1074,6 +1523,7 @@ class PaymentsView(QWidget):
         session = Session()
         try:
             # 1. Load Customers
+            curr_cust_id = self.c_customer_combo.currentData()
             self.c_customer_combo.blockSignals(True)
             self.c_customer_combo.clear()
             self.c_customer_combo.addItem("-- Select Customer --", None)
@@ -1083,6 +1533,11 @@ class PaymentsView(QWidget):
                 self.customers_cache[c.id] = c
                 self.c_customer_combo.addItem(c.name, c.id)
             self.c_customer_combo.update_completer()
+            if curr_cust_id:
+                for idx in range(self.c_customer_combo.count()):
+                    if self.c_customer_combo.itemData(idx) == curr_cust_id:
+                        self.c_customer_combo.setCurrentIndex(idx)
+                        break
             self.c_customer_combo.blockSignals(False)
             self.update_cust_outstanding_lbl()
             self.check_c_customer_match()
@@ -1424,16 +1879,24 @@ class PaymentsView(QWidget):
     def update_cust_outstanding_lbl(self):
         cust_id = self.c_customer_combo.currentData()
         if cust_id and hasattr(self, 'customers_cache') and cust_id in self.customers_cache:
-            cust = self.customers_cache[cust_id]
-            # Since the cache is local from loading, query to get latest
             session = Session()
-            latest_cust = session.query(Customer).get(cust_id)
-            if latest_cust:
-                self.c_outstanding_lbl.setText(f"Current Outstanding: ₹{latest_cust.outstanding_balance:,.2f}")
-            session.close()
+            try:
+                latest_cust = session.query(Customer).get(cust_id)
+                if latest_cust:
+                    self.c_outstanding_lbl.setText(f"Current Outstanding: ₹{latest_cust.outstanding_balance:,.2f}")
+            finally:
+                session.close()
+            self.populate_cust_sales()
+            selection = self.c_sales_combo.currentData()
+            if selection:
+                self.load_customer_bill_page(selection)
+            else:
+                self.load_customer_ledger_page(cust_id)
         else:
             self.c_outstanding_lbl.setText("Current Outstanding: ₹0.00")
-        self.populate_cust_sales()
+            self.populate_cust_sales()
+            if hasattr(self, 'cust_helper_stack'):
+                self.cust_helper_stack.setCurrentIndex(0)
 
     def populate_cust_sales(self):
         cust_id = self.c_customer_combo.currentData()
@@ -1484,6 +1947,7 @@ class PaymentsView(QWidget):
                 print(f"Error reading bill details: {e}")
             finally:
                 session.close()
+            self.load_customer_bill_page(selection)
         elif selection:
             session = Session()
             try:
@@ -1495,8 +1959,438 @@ class PaymentsView(QWidget):
                 print(f"Error reading sales invoice details: {e}")
             finally:
                 session.close()
+            self.load_customer_bill_page({"type": "sale", "id": selection})
         else:
             self.c_amount.setValue(0.0)
+            cust_id = self.c_customer_combo.currentData()
+            if cust_id:
+                self.load_customer_ledger_page(cust_id)
+            elif hasattr(self, 'cust_helper_stack'):
+                self.cust_helper_stack.setCurrentIndex(0)
+
+    def handle_cust_pending_table_double_click(self, row, col):
+        item = self.cust_pending_table.item(row, 0)
+        if item:
+            data = item.data(Qt.UserRole)
+            if isinstance(data, dict):
+                self.select_cust_sale_or_job(data.get("type"), data.get("id"))
+
+    def select_cust_sale_or_job(self, ref_type, ref_id):
+        for idx in range(self.c_sales_combo.count()):
+            data = self.c_sales_combo.itemData(idx)
+            if isinstance(data, dict) and data.get("type") == ref_type and data.get("id") == ref_id:
+                self.c_sales_combo.setCurrentIndex(idx)
+                break
+
+    def update_cust_live_calc(self):
+        selection = self.c_sales_combo.currentData()
+        if not selection or not isinstance(selection, dict):
+            if hasattr(self, 'cust_live_calc_lbl'):
+                self.cust_live_calc_lbl.setText("Enter amount above to preview settlement.")
+            return
+
+        session = Session()
+        try:
+            from models import SalesMaster, ServiceJob
+            bal = 0.0
+            if selection.get("type") == "sale":
+                s = session.query(SalesMaster).get(selection["id"])
+                if s:
+                    bal = s.balance_receivable
+            elif selection.get("type") == "job":
+                j = session.query(ServiceJob).get(selection["id"])
+                if j:
+                    bal = j.balance
+
+            amt = self.c_amount.value()
+            if hasattr(self, 'cust_live_calc_lbl'):
+                if amt <= 0:
+                    self.cust_live_calc_lbl.setText(f"Outstanding on this bill: ₹{bal:,.2f}. Enter amount above to preview settlement.")
+                elif amt >= bal - 0.001:
+                    self.cust_live_calc_lbl.setText(f"🎉 Collecting ₹{amt:,.2f} will FULLY SETTLE this invoice/job! Remaining Balance: ₹0.00")
+                else:
+                    rem = bal - amt
+                    self.cust_live_calc_lbl.setText(f"⚡ Collecting ₹{amt:,.2f} will reduce balance from ₹{bal:,.2f} to ₹{rem:,.2f}.")
+        except Exception as e:
+            print(f"Error updating customer live preview: {e}")
+        finally:
+            session.close()
+
+    def load_customer_ledger_page(self, cust_id):
+        session = Session()
+        try:
+            from models import SalesMaster, ServiceJob
+            cust = session.query(Customer).get(cust_id)
+            if not cust:
+                return
+
+            self.cust_pending_title.setText(f"Pending Receivables — {cust.name}")
+
+            # 1. Fetch pending sales
+            sales = session.query(SalesMaster).filter(
+                SalesMaster.customer_id == cust_id,
+                SalesMaster.balance_receivable > 0
+            ).order_by(SalesMaster.date.desc(), SalesMaster.id.desc()).all()
+
+            # 2. Fetch pending repair jobs
+            jobs = []
+            if cust.mobile:
+                jobs = session.query(ServiceJob).filter(
+                    ServiceJob.mobile == cust.mobile,
+                    ServiceJob.balance > 0
+                ).order_by(ServiceJob.created_at.desc(), ServiceJob.id.desc()).all()
+
+            total_items = len(sales) + len(jobs)
+            total_due = sum(s.balance_receivable for s in sales) + sum(j.balance for j in jobs)
+
+            self.cust_pending_count_chip.setText(f"{total_items} Open Receivables")
+            self.cust_pending_total_chip.setText(f"Total Due: ₹{total_due:,.2f}")
+
+            # Populate pending table
+            self.cust_pending_table.setRowCount(total_items)
+            if total_items == 0:
+                self.cust_pending_table.hide()
+                self.cust_no_pending_box.show()
+            else:
+                self.cust_pending_table.show()
+                self.cust_no_pending_box.hide()
+                row = 0
+                # First sales
+                for s in sales:
+                    item_no = QTableWidgetItem(str(s.invoice_number))
+                    item_no.setData(Qt.UserRole, {"type": "sale", "id": s.id})
+                    item_no.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    font_no = item_no.font()
+                    font_no.setBold(True)
+                    item_no.setFont(font_no)
+                    self.cust_pending_table.setItem(row, 0, item_no)
+
+                    d_str = s.date.strftime("%d-%m-%Y") if s.date else "-"
+                    item_date = QTableWidgetItem(d_str)
+                    item_date.setTextAlignment(Qt.AlignCenter)
+                    self.cust_pending_table.setItem(row, 1, item_date)
+
+                    item_type = QTableWidgetItem("Sales Invoice")
+                    item_type.setTextAlignment(Qt.AlignCenter)
+                    item_type.setForeground(Qt.darkBlue)
+                    self.cust_pending_table.setItem(row, 2, item_type)
+
+                    item_tot = QTableWidgetItem(f"₹{s.total_amount:,.2f}")
+                    item_tot.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.cust_pending_table.setItem(row, 3, item_tot)
+
+                    item_paid = QTableWidgetItem(f"₹{s.paid_amount:,.2f}")
+                    item_paid.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.cust_pending_table.setItem(row, 4, item_paid)
+
+                    item_bal = QTableWidgetItem(f"₹{s.balance_receivable:,.2f}")
+                    item_bal.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_bal.setForeground(Qt.red)
+                    font_bal = item_bal.font()
+                    font_bal.setBold(True)
+                    item_bal.setFont(font_bal)
+                    self.cust_pending_table.setItem(row, 5, item_bal)
+
+                    # Action Button: Collect
+                    action_btn = QPushButton("Collect")
+                    action_btn.setCursor(Qt.PointingHandCursor)
+                    action_btn.setFixedHeight(28)
+                    action_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #22c55e;
+                            color: #ffffff;
+                            border: none;
+                            border-radius: 6px;
+                            padding: 3px 14px;
+                            font-size: 11.5px;
+                            font-weight: bold;
+                        }
+                        QPushButton:hover {
+                            background-color: #16a34a;
+                            color: #ffffff;
+                        }
+                    """)
+                    action_btn.clicked.connect(lambda ch, sid=s.id: self.select_cust_sale_or_job("sale", sid))
+
+                    btn_widget = QWidget()
+                    btn_widget.setStyleSheet("background: transparent;")
+                    btn_layout = QHBoxLayout(btn_widget)
+                    btn_layout.setContentsMargins(6, 2, 6, 2)
+                    btn_layout.setAlignment(Qt.AlignCenter)
+                    btn_layout.addWidget(action_btn)
+                    self.cust_pending_table.setCellWidget(row, 6, btn_widget)
+                    row += 1
+
+                # Then repair jobs
+                for j in jobs:
+                    item_no = QTableWidgetItem(str(j.job_number))
+                    item_no.setData(Qt.UserRole, {"type": "job", "id": j.id})
+                    item_no.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    font_no = item_no.font()
+                    font_no.setBold(True)
+                    item_no.setFont(font_no)
+                    self.cust_pending_table.setItem(row, 0, item_no)
+
+                    d_str = j.created_at.strftime("%d-%m-%Y") if j.created_at else "-"
+                    item_date = QTableWidgetItem(d_str)
+                    item_date.setTextAlignment(Qt.AlignCenter)
+                    self.cust_pending_table.setItem(row, 1, item_date)
+
+                    item_type = QTableWidgetItem("Repair Job")
+                    item_type.setTextAlignment(Qt.AlignCenter)
+                    item_type.setForeground(Qt.darkMagenta)
+                    self.cust_pending_table.setItem(row, 2, item_type)
+
+                    tot_est = (j.advance_amount or 0.0) + (j.balance or 0.0)
+                    item_tot = QTableWidgetItem(f"₹{tot_est:,.2f}")
+                    item_tot.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.cust_pending_table.setItem(row, 3, item_tot)
+
+                    item_paid = QTableWidgetItem(f"₹{(j.advance_amount or 0.0):,.2f}")
+                    item_paid.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.cust_pending_table.setItem(row, 4, item_paid)
+
+                    item_bal = QTableWidgetItem(f"₹{j.balance:,.2f}")
+                    item_bal.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_bal.setForeground(Qt.red)
+                    font_bal = item_bal.font()
+                    font_bal.setBold(True)
+                    item_bal.setFont(font_bal)
+                    self.cust_pending_table.setItem(row, 5, item_bal)
+
+                    action_btn = QPushButton("Collect")
+                    action_btn.setCursor(Qt.PointingHandCursor)
+                    action_btn.setFixedHeight(28)
+                    action_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #22c55e;
+                            color: #ffffff;
+                            border: none;
+                            border-radius: 6px;
+                            padding: 3px 14px;
+                            font-size: 11.5px;
+                            font-weight: bold;
+                        }
+                        QPushButton:hover {
+                            background-color: #16a34a;
+                            color: #ffffff;
+                        }
+                    """)
+                    action_btn.clicked.connect(lambda ch, jid=j.id: self.select_cust_sale_or_job("job", jid))
+
+                    btn_widget = QWidget()
+                    btn_widget.setStyleSheet("background: transparent;")
+                    btn_layout = QHBoxLayout(btn_widget)
+                    btn_layout.setContentsMargins(6, 2, 6, 2)
+                    btn_layout.setAlignment(Qt.AlignCenter)
+                    btn_layout.addWidget(action_btn)
+                    self.cust_pending_table.setCellWidget(row, 6, btn_widget)
+                    row += 1
+
+            # 3. Fetch Customer Payment/Collection Vouchers History
+            vouchers = session.query(Payment).filter(
+                Payment.party_type == 'customer',
+                Payment.party_id == cust_id
+            ).order_by(Payment.date.desc(), Payment.id.desc()).all()
+
+            self.cust_vouchers_table.setRowCount(len(vouchers))
+            for r, v in enumerate(vouchers):
+                item_v = QTableWidgetItem(f"REC-{v.id:04d}")
+                item_v.setTextAlignment(Qt.AlignCenter)
+                font_v = item_v.font()
+                font_v.setBold(True)
+                item_v.setFont(font_v)
+                self.cust_vouchers_table.setItem(r, 0, item_v)
+
+                v_date = v.date.strftime("%d-%m-%Y") if v.date else "-"
+                item_d = QTableWidgetItem(v_date)
+                item_d.setTextAlignment(Qt.AlignCenter)
+                self.cust_vouchers_table.setItem(r, 1, item_d)
+
+                item_m = QTableWidgetItem(v.payment_mode or "-")
+                item_m.setTextAlignment(Qt.AlignCenter)
+                self.cust_vouchers_table.setItem(r, 2, item_m)
+
+                item_a = QTableWidgetItem(f"₹{v.amount:,.2f}")
+                item_a.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                item_a.setForeground(Qt.darkGreen)
+                font_a = item_a.font()
+                font_a.setBold(True)
+                item_a.setFont(font_a)
+                self.cust_vouchers_table.setItem(r, 3, item_a)
+
+                ref_txt = "General Collection"
+                if v.sales_id:
+                    s_master = session.query(SalesMaster).get(v.sales_id)
+                    ref_txt = f"Invoice: {s_master.invoice_number}" if s_master else f"Sales #{v.sales_id}"
+                elif v.job_id:
+                    j_master = session.query(ServiceJob).get(v.job_id)
+                    ref_txt = f"Job Card: {j_master.job_number}" if j_master else f"Job #{v.job_id}"
+                item_ref = QTableWidgetItem(ref_txt)
+                item_ref.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.cust_vouchers_table.setItem(r, 4, item_ref)
+
+                item_rem = QTableWidgetItem(v.remarks or "-")
+                item_rem.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.cust_vouchers_table.setItem(r, 5, item_rem)
+
+            self.cust_helper_stack.setCurrentIndex(1)
+        except Exception as e:
+            print(f"Error loading customer ledger page: {e}")
+        finally:
+            session.close()
+
+    def load_customer_bill_page(self, selection):
+        if not selection or not isinstance(selection, dict):
+            return
+        item_type = selection.get("type")
+        item_id = selection.get("id")
+
+        session = Session()
+        try:
+            from models import SalesMaster, ServiceJob
+            if item_type == "sale":
+                s = session.query(SalesMaster).get(item_id)
+                if not s:
+                    return
+
+                self.cust_bill_title.setText(f"Sales Invoice #{s.invoice_number}")
+
+                # Status Badge
+                if s.balance_receivable <= 0:
+                    self.cust_bill_status_badge.setText("FULL PAID")
+                    self.cust_bill_status_badge.setStyleSheet("background-color: #dcfce7; color: #166534; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: 1px solid #86efac;")
+                elif s.paid_amount > 0:
+                    self.cust_bill_status_badge.setText("PARTIALLY PAID")
+                    self.cust_bill_status_badge.setStyleSheet("background-color: #fef9c3; color: #854d0e; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: 1px solid #fde047;")
+                else:
+                    self.cust_bill_status_badge.setText("UNPAID")
+                    self.cust_bill_status_badge.setStyleSheet("background-color: #fef2f2; color: #dc2626; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: 1px solid #fecaca;")
+
+                # KPI Cards
+                self.cust_kpi_date.setText(s.date.strftime("%d-%m-%Y") if s.date else "-")
+                self.cust_kpi_total.setText(f"₹{s.total_amount:,.2f}")
+                self.cust_kpi_paid.setText(f"₹{s.paid_amount:,.2f}")
+                self.cust_kpi_balance.setText(f"₹{s.balance_receivable:,.2f}")
+
+                payments = session.query(Payment).filter(
+                    Payment.party_type == 'customer',
+                    Payment.sales_id == s.id
+                ).order_by(Payment.date.asc(), Payment.id.asc()).all()
+
+                has_initial = s.paid_amount > 0 and len(payments) == 0
+                total_rows = len(payments) + (1 if has_initial else 0)
+                self.cust_bill_ledger_table.setRowCount(max(1, total_rows))
+
+                row = 0
+                if has_initial:
+                    d_str = s.date.strftime("%d-%m-%Y") if s.date else "-"
+                    self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
+                    self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem("Invoice Down-Payment"))
+                    self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem("Down-Payment"))
+                    item_amt = QTableWidgetItem(f"₹{s.paid_amount:,.2f}")
+                    item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_amt.setForeground(Qt.darkGreen)
+                    self.cust_bill_ledger_table.setItem(row, 3, item_amt)
+                    self.cust_bill_ledger_table.setItem(row, 4, QTableWidgetItem("Initial payment recorded at sales checkout"))
+                    row += 1
+
+                for p in payments:
+                    d_str = p.date.strftime("%d-%m-%Y") if p.date else "-"
+                    self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
+                    self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem(f"Receipt REC-{p.id:04d}"))
+                    self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem(p.payment_mode or "-"))
+                    item_amt = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                    item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_amt.setForeground(Qt.darkGreen)
+                    self.cust_bill_ledger_table.setItem(row, 3, item_amt)
+                    self.cust_bill_ledger_table.setItem(row, 4, QTableWidgetItem(p.remarks or "Collection receipt"))
+                    row += 1
+
+                if total_rows == 0:
+                    d_str = s.date.strftime("%d-%m-%Y") if s.date else "-"
+                    self.cust_bill_ledger_table.setItem(0, 0, QTableWidgetItem(d_str))
+                    self.cust_bill_ledger_table.setItem(0, 1, QTableWidgetItem("Sales Invoice Created"))
+                    self.cust_bill_ledger_table.setItem(0, 2, QTableWidgetItem("Credit"))
+                    item_amt = QTableWidgetItem("₹0.00")
+                    item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.cust_bill_ledger_table.setItem(0, 3, item_amt)
+                    self.cust_bill_ledger_table.setItem(0, 4, QTableWidgetItem("Pending collection (no payments recorded yet)"))
+
+            elif item_type == "job":
+                j = session.query(ServiceJob).get(item_id)
+                if not j:
+                    return
+
+                self.cust_bill_title.setText(f"Repair Job Card #{j.job_number} ({j.device_model})")
+
+                # Status Badge
+                if j.balance <= 0:
+                    self.cust_bill_status_badge.setText("FULL PAID")
+                    self.cust_bill_status_badge.setStyleSheet("background-color: #dcfce7; color: #166534; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: 1px solid #86efac;")
+                elif (j.advance_amount or 0.0) > 0:
+                    self.cust_bill_status_badge.setText("PARTIALLY PAID")
+                    self.cust_bill_status_badge.setStyleSheet("background-color: #fef9c3; color: #854d0e; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: 1px solid #fde047;")
+                else:
+                    self.cust_bill_status_badge.setText("UNPAID")
+                    self.cust_bill_status_badge.setStyleSheet("background-color: #fef2f2; color: #dc2626; font-size: 11.5px; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: 1px solid #fecaca;")
+
+                tot_cost = (j.advance_amount or 0.0) + (j.balance or 0.0)
+                self.cust_kpi_date.setText(j.created_at.strftime("%d-%m-%Y") if j.created_at else "-")
+                self.cust_kpi_total.setText(f"₹{tot_cost:,.2f}")
+                self.cust_kpi_paid.setText(f"₹{(j.advance_amount or 0.0):,.2f}")
+                self.cust_kpi_balance.setText(f"₹{j.balance:,.2f}")
+
+                payments = session.query(Payment).filter(
+                    Payment.party_type == 'customer',
+                    Payment.job_id == j.id
+                ).order_by(Payment.date.asc(), Payment.id.asc()).all()
+
+                has_initial = (j.advance_amount or 0.0) > 0
+                total_rows = len(payments) + (1 if has_initial else 0)
+                self.cust_bill_ledger_table.setRowCount(max(1, total_rows))
+
+                row = 0
+                if has_initial:
+                    d_str = j.created_at.strftime("%d-%m-%Y") if j.created_at else "-"
+                    self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
+                    self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem("Initial Advance Deposit"))
+                    self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem("Advance"))
+                    item_amt = QTableWidgetItem(f"₹{j.advance_amount:,.2f}")
+                    item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_amt.setForeground(Qt.darkGreen)
+                    self.cust_bill_ledger_table.setItem(row, 3, item_amt)
+                    self.cust_bill_ledger_table.setItem(row, 4, QTableWidgetItem(f"Device booking advance for {j.device_model}"))
+                    row += 1
+
+                for p in payments:
+                    d_str = p.date.strftime("%d-%m-%Y") if p.date else "-"
+                    self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
+                    self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem(f"Receipt REC-{p.id:04d}"))
+                    self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem(p.payment_mode or "-"))
+                    item_amt = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                    item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_amt.setForeground(Qt.darkGreen)
+                    self.cust_bill_ledger_table.setItem(row, 3, item_amt)
+                    self.cust_bill_ledger_table.setItem(row, 4, QTableWidgetItem(p.remarks or "Job collection payment"))
+                    row += 1
+
+                if total_rows == 0:
+                    d_str = j.created_at.strftime("%d-%m-%Y") if j.created_at else "-"
+                    self.cust_bill_ledger_table.setItem(0, 0, QTableWidgetItem(d_str))
+                    self.cust_bill_ledger_table.setItem(0, 1, QTableWidgetItem("Service Job Created"))
+                    self.cust_bill_ledger_table.setItem(0, 2, QTableWidgetItem("Unpaid"))
+                    item_amt = QTableWidgetItem("₹0.00")
+                    item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.cust_bill_ledger_table.setItem(0, 3, item_amt)
+                    self.cust_bill_ledger_table.setItem(0, 4, QTableWidgetItem("Pending completion / customer collection"))
+
+            self.update_cust_live_calc()
+            self.cust_helper_stack.setCurrentIndex(2)
+        except Exception as e:
+            print(f"Error loading customer bill page: {e}")
+        finally:
+            session.close()
 
     def check_s_supplier_match(self):
         text = self.s_supplier_combo.currentText().strip()
@@ -1681,26 +2575,34 @@ class PaymentsView(QWidget):
                     item_bal.setFont(font_bal)
                     self.supp_pending_table.setItem(row, 4, item_bal)
 
-                    # Action Button: Pay Bill
+                    # Action Button: Pay Bill (generously sized and centered)
                     action_btn = QPushButton("Pay Bill")
                     action_btn.setCursor(Qt.PointingHandCursor)
+                    action_btn.setFixedHeight(28)
                     action_btn.setStyleSheet("""
                         QPushButton {
-                            background-color: #f0fdf4;
-                            color: #166534;
-                            border: 1px solid #86efac;
-                            border-radius: 5px;
-                            padding: 3px 8px;
+                            background-color: #22c55e;
+                            color: #ffffff;
+                            border: none;
+                            border-radius: 6px;
+                            padding: 3px 14px;
                             font-size: 11.5px;
                             font-weight: bold;
                         }
                         QPushButton:hover {
-                            background-color: #22c55e;
+                            background-color: #16a34a;
                             color: #ffffff;
                         }
                     """)
                     action_btn.clicked.connect(lambda ch, pid=p.id: self.select_purchase_by_id(pid))
-                    self.supp_pending_table.setCellWidget(row, 5, action_btn)
+
+                    btn_widget = QWidget()
+                    btn_widget.setStyleSheet("background: transparent;")
+                    btn_layout = QHBoxLayout(btn_widget)
+                    btn_layout.setContentsMargins(6, 2, 6, 2)
+                    btn_layout.setAlignment(Qt.AlignCenter)
+                    btn_layout.addWidget(action_btn)
+                    self.supp_pending_table.setCellWidget(row, 5, btn_widget)
 
             # 2. Fetch Supplier Payment Vouchers History
             vouchers = session.query(Payment).filter(
