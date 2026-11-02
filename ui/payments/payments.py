@@ -2,7 +2,8 @@ import datetime
 import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QDateEdit, QDoubleSpinBox, QPushButton, QTableWidget, QTableWidgetItem, 
-                             QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, QDialogButtonBox)
+                             QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, QDialogButtonBox,
+                             QStackedWidget)
 from PySide6.QtCore import Qt, QDate
 from database import Session, Setting
 from sqlalchemy import func
@@ -58,7 +59,7 @@ class PaymentsView(QWidget):
         # Form Card
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setFixedWidth(380)
+        form_frame.setFixedWidth(320)
         form_layout = QFormLayout(form_frame)
         form_layout.setContentsMargins(15, 15, 15, 15)
         form_layout.setSpacing(12)
@@ -204,6 +205,7 @@ class PaymentsView(QWidget):
         self.s_amount.setRange(0.0, 9999999.0)
         self.s_amount.setValue(0.0)
         self.s_amount.setDecimals(2)
+        self.s_amount.valueChanged.connect(self.update_bill_live_calc)
 
         self.s_mode = QComboBox()
         self.s_mode.addItems(["Cash", "Bank"])
@@ -231,26 +233,309 @@ class PaymentsView(QWidget):
 
         layout.addWidget(form_frame)
 
-        # Info Frame
-        info_frame = QFrame()
-        info_frame.setProperty("class", "CardFrame")
-        info_layout = QVBoxLayout(info_frame)
-        info_lbl = QLabel("Supplier Ledger Helper")
-        info_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
-        info_layout.addWidget(info_lbl)
-        
-        info_txt = QLabel(
-            "Use this form when you clear your payable accounts with suppliers.\n\n"
-            "Logging a transaction here will:\n"
-            "  1. Reduce the Supplier Outstanding balance immediately.\n"
-            "  2. Add a negative transaction (-) in the Cash Book or Bank ledger.\n"
-            "  3. Keep the cash-in-hand and bank balances accurately synchronized."
+        # Right Side Helper Frame (Dynamic Supplier Ledger & Bill History Helper)
+        self.supp_helper_frame = QFrame()
+        self.supp_helper_frame.setProperty("class", "CardFrame")
+        helper_layout = QVBoxLayout(self.supp_helper_frame)
+        helper_layout.setContentsMargins(15, 15, 15, 15)
+        helper_layout.setSpacing(10)
+
+        self.supp_helper_stack = QStackedWidget()
+        helper_layout.addWidget(self.supp_helper_stack)
+
+        # Page 0: Welcome / Default Guidance Page
+        self.setup_supp_welcome_page()
+
+        # Page 1: Supplier Pending Bills Page
+        self.setup_supp_pending_page()
+
+        # Page 2: Single Bill Payment Ledger Page
+        self.setup_supp_bill_page()
+
+        layout.addWidget(self.supp_helper_frame, 1)
+
+
+    def setup_supp_welcome_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(16)
+
+        title = QLabel("Supplier Ledger Helper")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
+        layout.addWidget(title)
+
+        info_box = QFrame()
+        info_box.setStyleSheet("background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;")
+        ib_layout = QVBoxLayout(info_box)
+        ib_layout.setSpacing(10)
+
+        guide_header = QLabel("📌 How to use this ledger helper:")
+        guide_header.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #334155;")
+        ib_layout.addWidget(guide_header)
+
+        guide_txt = QLabel(
+            "1. Select a Supplier from the dropdown on the left to immediately inspect all their open bills, invoice dates, and pending balances.\n\n"
+            "2. Select a Bill in 'Pay Against Bill' to drill down into that bill's complete payment ledger (initial down-payment, installment history, and live remaining balance).\n\n"
+            "3. Logging a payment automatically reduces the supplier's outstanding balance and accurately records an entry in the Cash Drawer or Bank Book."
         )
-        info_txt.setWordWrap(True)
-        info_txt.setStyleSheet("color: #94a3b8; line-height: 20px;")
-        info_layout.addWidget(info_txt)
-        info_layout.addStretch()
-        layout.addWidget(info_frame)
+        guide_txt.setWordWrap(True)
+        guide_txt.setStyleSheet("color: #64748b; font-size: 13px; line-height: 22px;")
+        ib_layout.addWidget(guide_txt)
+        layout.addWidget(info_box)
+
+        prompt_card = QFrame()
+        prompt_card.setStyleSheet("background-color: #f0fdf4; border: 1px dashed #86efac; border-radius: 10px; padding: 20px;")
+        pc_layout = QVBoxLayout(prompt_card)
+        pc_layout.setAlignment(Qt.AlignCenter)
+        
+        prompt_lbl = QLabel("👈 Select a supplier on the left to view pending bills and ledger history.")
+        prompt_lbl.setAlignment(Qt.AlignCenter)
+        prompt_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #166534;")
+        pc_layout.addWidget(prompt_lbl)
+
+        layout.addWidget(prompt_card)
+        layout.addStretch()
+        self.supp_helper_stack.addWidget(page)
+
+    def setup_supp_pending_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # Header with Supplier Title & KPI Chips
+        header_bar = QHBoxLayout()
+        header_bar.setContentsMargins(0, 0, 0, 0)
+        header_bar.setSpacing(10)
+
+        self.supp_pending_title = QLabel("Pending Bills")
+        self.supp_pending_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
+        header_bar.addWidget(self.supp_pending_title)
+        header_bar.addStretch()
+
+        self.supp_pending_count_chip = QLabel("0 Bills")
+        self.supp_pending_count_chip.setStyleSheet("""
+            background-color: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+        """)
+        header_bar.addWidget(self.supp_pending_count_chip)
+
+        self.supp_pending_total_chip = QLabel("Total Due: ₹0.00")
+        self.supp_pending_total_chip.setStyleSheet("""
+            background-color: #fef2f2;
+            color: #dc2626;
+            font-size: 12.5px;
+            font-weight: bold;
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: 1px solid #fecaca;
+        """)
+        header_bar.addWidget(self.supp_pending_total_chip)
+        layout.addLayout(header_bar)
+
+        # Tab Widget: Pending Invoices / Past Payment Vouchers
+        self.supp_pending_tab_widget = QTabWidget()
+        
+        # Tab 1: Pending Invoices
+        pending_tab = QWidget()
+        pt_layout = QVBoxLayout(pending_tab)
+        pt_layout.setContentsMargins(4, 8, 4, 4)
+        pt_layout.setSpacing(6)
+
+        self.supp_pending_table = QTableWidget()
+        self.supp_pending_table.setColumnCount(6)
+        self.supp_pending_table.setHorizontalHeaderLabels([
+            "Bill #", "Date", "Total (₹)", "Paid (₹)", "Bal Due (₹)", "Action"
+        ])
+        self.supp_pending_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.supp_pending_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.supp_pending_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.supp_pending_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.supp_pending_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.supp_pending_table.verticalHeader().setVisible(False)
+        self.supp_pending_table.verticalHeader().setDefaultSectionSize(40)
+        self.supp_pending_table.cellDoubleClicked.connect(self.handle_pending_row_double_clicked)
+        pt_layout.addWidget(self.supp_pending_table)
+
+        self.supp_no_pending_box = QFrame()
+        self.supp_no_pending_box.setStyleSheet("background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px;")
+        snp_layout = QVBoxLayout(self.supp_no_pending_box)
+        snp_layout.setAlignment(Qt.AlignCenter)
+        snp_msg = QLabel("🎉 All bills settled! This supplier has no pending invoices.")
+        snp_msg.setAlignment(Qt.AlignCenter)
+        snp_msg.setStyleSheet("font-size: 14px; font-weight: bold; color: #166534;")
+        snp_layout.addWidget(snp_msg)
+        pt_layout.addWidget(self.supp_no_pending_box)
+        self.supp_no_pending_box.hide()
+
+        tip_lbl = QLabel("💡 Double-click any row or click 'Pay This Bill' to select and drill into that bill's payment history ledger.")
+        tip_lbl.setStyleSheet("color: #64748b; font-size: 11.5px; font-style: italic;")
+        pt_layout.addWidget(tip_lbl)
+
+        self.supp_pending_tab_widget.addTab(pending_tab, "Pending Invoices")
+
+        # Tab 2: Supplier Payment History Vouchers
+        history_tab = QWidget()
+        ht_layout = QVBoxLayout(history_tab)
+        ht_layout.setContentsMargins(4, 8, 4, 4)
+        ht_layout.setSpacing(6)
+
+        self.supp_vouchers_table = QTableWidget()
+        self.supp_vouchers_table.setColumnCount(6)
+        self.supp_vouchers_table.setHorizontalHeaderLabels([
+            "Voucher #", "Date", "Mode", "Amount Paid (₹)", "Bill Reference", "Remarks"
+        ])
+        self.supp_vouchers_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.supp_vouchers_table.setColumnWidth(0, 80)
+        self.supp_vouchers_table.setColumnWidth(1, 80)
+        self.supp_vouchers_table.setColumnWidth(2, 85)
+        self.supp_vouchers_table.setColumnWidth(3, 90)
+        self.supp_vouchers_table.setColumnWidth(4, 110)
+        self.supp_vouchers_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.supp_vouchers_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.supp_vouchers_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.supp_vouchers_table.verticalHeader().setVisible(False)
+        self.supp_vouchers_table.verticalHeader().setDefaultSectionSize(38)
+        ht_layout.addWidget(self.supp_vouchers_table)
+
+        self.supp_pending_tab_widget.addTab(history_tab, "Payment Vouchers History")
+
+        layout.addWidget(self.supp_pending_tab_widget)
+        self.supp_helper_stack.addWidget(page)
+
+    def setup_supp_bill_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # Header with Back button and Bill Title
+        header_bar = QHBoxLayout()
+        header_bar.setContentsMargins(0, 0, 0, 0)
+        header_bar.setSpacing(10)
+
+        self.back_to_bills_btn = QPushButton("← View All Pending Bills")
+        self.back_to_bills_btn.setCursor(Qt.PointingHandCursor)
+        self.back_to_bills_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #334155;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 6px 14px;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+                color: #0f172a;
+            }
+        """)
+        self.back_to_bills_btn.clicked.connect(lambda: self.s_purchase_combo.setCurrentIndex(0))
+        header_bar.addWidget(self.back_to_bills_btn)
+
+        self.supp_bill_title = QLabel("Bill Payment Ledger")
+        self.supp_bill_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
+        header_bar.addWidget(self.supp_bill_title)
+        header_bar.addStretch()
+
+        self.bill_status_badge = QLabel("UNPAID")
+        self.bill_status_badge.setStyleSheet("""
+            background-color: #fef2f2;
+            color: #dc2626;
+            font-size: 11.5px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid #fecaca;
+        """)
+        header_bar.addWidget(self.bill_status_badge)
+        layout.addLayout(header_bar)
+
+        # KPI Metric Cards Strip
+        kpi_strip = QHBoxLayout()
+        kpi_strip.setContentsMargins(0, 0, 0, 0)
+        kpi_strip.setSpacing(10)
+
+        def make_kpi(label_text, border_color="#e2e8f0", val_color="#0f172a"):
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #ffffff;
+                    border: 1px solid {border_color};
+                    border-radius: 8px;
+                }}
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(8, 6, 8, 6)
+            c_layout.setSpacing(2)
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px;")
+            val = QLabel("-")
+            val.setStyleSheet(f"font-size: 13px; font-weight: 800; color: {val_color};")
+            c_layout.addWidget(lbl)
+            c_layout.addWidget(val)
+            return card, val
+
+        c1, self.bill_kpi_date = make_kpi("INVOICE DATE", "#cbd5e1", "#334155")
+        c2, self.bill_kpi_total = make_kpi("TOTAL BILL", "#cbd5e1", "#0f172a")
+        c3, self.bill_kpi_paid = make_kpi("PAID SO FAR", "#bbf7d0", "#16a34a")
+        c4, self.bill_kpi_balance = make_kpi("BALANCE DUE", "#fecaca", "#dc2626")
+
+        kpi_strip.addWidget(c1)
+        kpi_strip.addWidget(c2)
+        kpi_strip.addWidget(c3)
+        kpi_strip.addWidget(c4)
+        layout.addLayout(kpi_strip)
+
+        # Bill Payment Ledger History Table
+        ledger_title = QLabel("Payment & Settlement Ledger History")
+        ledger_title.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #334155; margin-top: 4px;")
+        layout.addWidget(ledger_title)
+
+        self.supp_bill_ledger_table = QTableWidget()
+        self.supp_bill_ledger_table.setColumnCount(5)
+        self.supp_bill_ledger_table.setHorizontalHeaderLabels([
+            "Date", "Payment Ref / Type", "Mode", "Amount (₹)", "Remarks"
+        ])
+        self.supp_bill_ledger_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.supp_bill_ledger_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.supp_bill_ledger_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.supp_bill_ledger_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.supp_bill_ledger_table.verticalHeader().setVisible(False)
+        self.supp_bill_ledger_table.verticalHeader().setDefaultSectionSize(38)
+        layout.addWidget(self.supp_bill_ledger_table)
+
+        # Live Real-time Settlement Calculator Card
+        self.bill_calc_card = QFrame()
+        self.bill_calc_card.setStyleSheet("""
+            QFrame {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 10px 14px;
+            }
+        """)
+        calc_layout = QHBoxLayout(self.bill_calc_card)
+        calc_layout.setContentsMargins(0, 0, 0, 0)
+        calc_layout.setSpacing(10)
+
+        calc_icon = QLabel("⚡")
+        calc_icon.setStyleSheet("font-size: 16px;")
+        calc_layout.addWidget(calc_icon)
+
+        self.bill_live_calc_lbl = QLabel("Enter amount on the left to preview settlement.")
+        self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
+        calc_layout.addWidget(self.bill_live_calc_lbl, 1)
+
+        layout.addWidget(self.bill_calc_card)
+        self.supp_helper_stack.addWidget(page)
 
     def setup_history_tab(self):
         layout = QVBoxLayout(self.history_tab)
@@ -803,6 +1088,7 @@ class PaymentsView(QWidget):
             self.check_c_customer_match()
 
             # 2. Load Suppliers
+            curr_supp_id = self.s_supplier_combo.currentData()
             self.s_supplier_combo.blockSignals(True)
             self.s_supplier_combo.clear()
             self.s_supplier_combo.addItem("-- Select Supplier --", None)
@@ -812,6 +1098,11 @@ class PaymentsView(QWidget):
                 self.suppliers_cache[s.id] = s
                 self.s_supplier_combo.addItem(s.name, s.id)
             self.s_supplier_combo.update_completer()
+            if curr_supp_id:
+                for idx in range(self.s_supplier_combo.count()):
+                    if self.s_supplier_combo.itemData(idx) == curr_supp_id:
+                        self.s_supplier_combo.setCurrentIndex(idx)
+                        break
             self.s_supplier_combo.blockSignals(False)
             self.update_supp_outstanding_lbl()
             self.check_s_supplier_match()
@@ -1247,13 +1538,23 @@ class PaymentsView(QWidget):
         supp_id = self.s_supplier_combo.currentData()
         if supp_id and hasattr(self, 'suppliers_cache') and supp_id in self.suppliers_cache:
             session = Session()
-            latest_supp = session.query(Supplier).get(supp_id)
-            if latest_supp:
-                self.s_outstanding_lbl.setText(f"Current Outstanding: ₹{latest_supp.outstanding_balance:,.2f}")
-            session.close()
+            try:
+                latest_supp = session.query(Supplier).get(supp_id)
+                if latest_supp:
+                    self.s_outstanding_lbl.setText(f"Current Outstanding: ₹{latest_supp.outstanding_balance:,.2f}")
+            finally:
+                session.close()
+            self.populate_supp_purchases()
+            purchase_id = self.s_purchase_combo.currentData()
+            if purchase_id:
+                self.load_bill_ledger_page(purchase_id)
+            else:
+                self.load_supplier_ledger_page(supp_id)
         else:
             self.s_outstanding_lbl.setText("Current Outstanding: ₹0.00")
-        self.populate_supp_purchases()
+            self.populate_supp_purchases()
+            if hasattr(self, 'supp_helper_stack'):
+                self.supp_helper_stack.setCurrentIndex(0)
 
     def populate_supp_purchases(self):
         supp_id = self.s_supplier_combo.currentData()
@@ -1267,7 +1568,7 @@ class PaymentsView(QWidget):
                 purchases = session.query(PurchaseMaster).filter(
                     PurchaseMaster.supplier_id == supp_id,
                     PurchaseMaster.balance_payable > 0
-                ).order_by(PurchaseMaster.date.desc()).all()
+                ).order_by(PurchaseMaster.date.desc(), PurchaseMaster.id.desc()).all()
                 for p in purchases:
                     self.s_purchase_combo.addItem(f"{p.invoice_number} (Bal: ₹{p.balance_payable:,.2f})", p.id)
             except Exception as e:
@@ -1289,8 +1590,324 @@ class PaymentsView(QWidget):
                 print(f"Error reading purchase details: {e}")
             finally:
                 session.close()
+            self.load_bill_ledger_page(purchase_id)
         else:
             self.s_amount.setValue(0.0)
+            supp_id = self.s_supplier_combo.currentData()
+            if supp_id:
+                self.load_supplier_ledger_page(supp_id)
+            else:
+                if hasattr(self, 'supp_helper_stack'):
+                    self.supp_helper_stack.setCurrentIndex(0)
+
+    def select_purchase_by_id(self, purchase_id):
+        for idx in range(self.s_purchase_combo.count()):
+            if self.s_purchase_combo.itemData(idx) == purchase_id:
+                self.s_purchase_combo.setCurrentIndex(idx)
+                break
+
+    def handle_pending_row_double_clicked(self, row, col):
+        item = self.supp_pending_table.item(row, 0)
+        if item:
+            purchase_id = item.data(Qt.UserRole)
+            if purchase_id:
+                self.select_purchase_by_id(purchase_id)
+
+    def load_supplier_ledger_page(self, supp_id):
+        if not supp_id:
+            if hasattr(self, 'supp_helper_stack'):
+                self.supp_helper_stack.setCurrentIndex(0)
+            return
+
+        session = Session()
+        try:
+            from models import PurchaseMaster, Supplier, Payment, BankAccount
+            supp = session.query(Supplier).get(supp_id)
+            if not supp:
+                if hasattr(self, 'supp_helper_stack'):
+                    self.supp_helper_stack.setCurrentIndex(0)
+                return
+
+            self.supp_pending_title.setText(f"📋 Pending Bills — {supp.name}")
+            self.supp_pending_total_chip.setText(f"Total Due: ₹{supp.outstanding_balance:,.2f}")
+
+            # 1. Fetch pending purchases
+            purchases = session.query(PurchaseMaster).filter(
+                PurchaseMaster.supplier_id == supp_id,
+                PurchaseMaster.balance_payable > 0
+            ).order_by(PurchaseMaster.date.desc(), PurchaseMaster.id.desc()).all()
+
+            self.supp_pending_count_chip.setText(f"{len(purchases)} Open Bills")
+
+            self.supp_pending_table.setRowCount(len(purchases))
+            if len(purchases) == 0:
+                self.supp_pending_table.hide()
+                self.supp_no_pending_box.show()
+            else:
+                self.supp_pending_table.show()
+                self.supp_no_pending_box.hide()
+                for row, p in enumerate(purchases):
+                    # Bill #
+                    item_no = QTableWidgetItem(str(p.invoice_number))
+                    item_no.setData(Qt.UserRole, p.id)
+                    item_no.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    font_no = item_no.font()
+                    font_no.setBold(True)
+                    item_no.setFont(font_no)
+                    self.supp_pending_table.setItem(row, 0, item_no)
+
+                    # Date
+                    d_str = p.date.strftime("%d-%m-%Y") if p.date else "-"
+                    item_date = QTableWidgetItem(d_str)
+                    item_date.setTextAlignment(Qt.AlignCenter)
+                    self.supp_pending_table.setItem(row, 1, item_date)
+
+                    # Total Bill
+                    item_tot = QTableWidgetItem(f"₹{p.total_amount:,.2f}")
+                    item_tot.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.supp_pending_table.setItem(row, 2, item_tot)
+
+                    # Paid
+                    item_paid = QTableWidgetItem(f"₹{p.paid_amount:,.2f}")
+                    item_paid.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    self.supp_pending_table.setItem(row, 3, item_paid)
+
+                    # Balance
+                    item_bal = QTableWidgetItem(f"₹{p.balance_payable:,.2f}")
+                    item_bal.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item_bal.setForeground(Qt.red)
+                    font_bal = item_bal.font()
+                    font_bal.setBold(True)
+                    item_bal.setFont(font_bal)
+                    self.supp_pending_table.setItem(row, 4, item_bal)
+
+                    # Action Button: Pay Bill
+                    action_btn = QPushButton("Pay Bill")
+                    action_btn.setCursor(Qt.PointingHandCursor)
+                    action_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #f0fdf4;
+                            color: #166534;
+                            border: 1px solid #86efac;
+                            border-radius: 5px;
+                            padding: 3px 8px;
+                            font-size: 11.5px;
+                            font-weight: bold;
+                        }
+                        QPushButton:hover {
+                            background-color: #22c55e;
+                            color: #ffffff;
+                        }
+                    """)
+                    action_btn.clicked.connect(lambda ch, pid=p.id: self.select_purchase_by_id(pid))
+                    self.supp_pending_table.setCellWidget(row, 5, action_btn)
+
+            # 2. Fetch Supplier Payment Vouchers History
+            vouchers = session.query(Payment).filter(
+                Payment.party_type == 'supplier',
+                Payment.party_id == supp_id
+            ).order_by(Payment.date.desc(), Payment.id.desc()).all()
+
+            self.supp_vouchers_table.setRowCount(len(vouchers))
+            for row, v in enumerate(vouchers):
+                # Voucher #
+                v_item = QTableWidgetItem(f"PAY-{v.id:04d}")
+                v_item.setTextAlignment(Qt.AlignCenter)
+                self.supp_vouchers_table.setItem(row, 0, v_item)
+                # Date
+                v_date = v.date.strftime("%d-%m-%Y") if v.date else "-"
+                d_item = QTableWidgetItem(v_date)
+                d_item.setTextAlignment(Qt.AlignCenter)
+                self.supp_vouchers_table.setItem(row, 1, d_item)
+                # Mode
+                mode_str = v.payment_mode
+                if v.payment_mode == 'Bank' and v.bank_account:
+                    mode_str += f" ({v.bank_account.bank_name})"
+                self.supp_vouchers_table.setItem(row, 2, QTableWidgetItem(mode_str))
+                # Amount
+                item_v_amt = QTableWidgetItem(f"₹{v.amount:,.2f}")
+                item_v_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                item_v_amt.setForeground(Qt.darkGreen)
+                font_v = item_v_amt.font()
+                font_v.setBold(True)
+                item_v_amt.setFont(font_v)
+                self.supp_vouchers_table.setItem(row, 3, item_v_amt)
+                # Bill Reference
+                bill_ref = v.purchase.invoice_number if v.purchase else "General On-Account"
+                self.supp_vouchers_table.setItem(row, 4, QTableWidgetItem(bill_ref))
+                # Remarks
+                self.supp_vouchers_table.setItem(row, 5, QTableWidgetItem(v.remarks or "-"))
+
+            self.supp_helper_stack.setCurrentIndex(1)
+        except Exception as e:
+            print(f"Error loading supplier ledger page: {e}")
+        finally:
+            session.close()
+
+    def load_bill_ledger_page(self, purchase_id):
+        if not purchase_id:
+            supp_id = self.s_supplier_combo.currentData()
+            self.load_supplier_ledger_page(supp_id)
+            return
+
+        session = Session()
+        try:
+            from models import PurchaseMaster, Payment, BankAccount
+            p = session.query(PurchaseMaster).get(purchase_id)
+            if not p:
+                supp_id = self.s_supplier_combo.currentData()
+                self.load_supplier_ledger_page(supp_id)
+                return
+
+            # Update Header & KPI cards
+            self.supp_bill_title.setText(f"📖 Bill Payment Ledger: {p.invoice_number}")
+            self.bill_kpi_date.setText(p.date.strftime("%d-%m-%Y") if p.date else "-")
+            self.bill_kpi_total.setText(f"₹{p.total_amount:,.2f}")
+            self.bill_kpi_paid.setText(f"₹{p.paid_amount:,.2f}")
+            self.bill_kpi_balance.setText(f"₹{p.balance_payable:,.2f}")
+
+            # Status Badge
+            if p.balance_payable <= 0.001:
+                self.bill_status_badge.setText("PAID IN FULL ✓")
+                self.bill_status_badge.setStyleSheet("""
+                    background-color: #f0fdf4; color: #16a34a; font-size: 11.5px; font-weight: 800;
+                    padding: 4px 10px; border-radius: 6px; border: 1px solid #bbf7d0;
+                """)
+            elif p.paid_amount > 0:
+                self.bill_status_badge.setText("PARTIALLY PAID")
+                self.bill_status_badge.setStyleSheet("""
+                    background-color: #fefce8; color: #ca8a04; font-size: 11.5px; font-weight: 800;
+                    padding: 4px 10px; border-radius: 6px; border: 1px solid #fef08a;
+                """)
+            else:
+                self.bill_status_badge.setText("UNPAID")
+                self.bill_status_badge.setStyleSheet("""
+                    background-color: #fef2f2; color: #dc2626; font-size: 11.5px; font-weight: 800;
+                    padding: 4px 10px; border-radius: 6px; border: 1px solid #fecaca;
+                """)
+
+            # Fetch payment records specifically for this purchase
+            vouchers = session.query(Payment).filter(
+                Payment.purchase_id == purchase_id
+            ).order_by(Payment.date.asc(), Payment.id.asc()).all()
+
+            # Check if there was an initial downpayment when the invoice was recorded
+            voucher_sum = sum(v.amount for v in vouchers)
+            initial_down_payment = max(0.0, p.paid_amount - voucher_sum)
+
+            entries = []
+            if initial_down_payment > 0.001:
+                entries.append({
+                    "date": p.date.strftime("%d-%m-%Y") if p.date else "-",
+                    "ref": "Initial Payment (Purchase Entry)",
+                    "mode": "Cash / Bank (Bill Recording)",
+                    "amount": initial_down_payment,
+                    "remarks": "Paid at the time of purchase invoice creation"
+                })
+
+            for v in vouchers:
+                mode_str = v.payment_mode
+                if v.payment_mode == 'Bank' and v.bank_account:
+                    mode_str += f" ({v.bank_account.bank_name})"
+                entries.append({
+                    "date": v.date.strftime("%d-%m-%Y") if v.date else "-",
+                    "ref": f"Voucher #PAY-{v.id:04d}",
+                    "mode": mode_str,
+                    "amount": v.amount,
+                    "remarks": v.remarks or "-"
+                })
+
+            if len(entries) == 0:
+                self.supp_bill_ledger_table.setRowCount(1)
+                item_empty = QTableWidgetItem("No payments recorded yet for this bill. Full balance is outstanding.")
+                item_empty.setTextAlignment(Qt.AlignCenter)
+                self.supp_bill_ledger_table.setItem(0, 0, item_empty)
+                self.supp_bill_ledger_table.setSpan(0, 0, 1, 5)
+            else:
+                self.supp_bill_ledger_table.clearSpans()
+                self.supp_bill_ledger_table.setRowCount(len(entries))
+                for row, entry in enumerate(entries):
+                    # Date
+                    d_item = QTableWidgetItem(entry["date"])
+                    d_item.setTextAlignment(Qt.AlignCenter)
+                    self.supp_bill_ledger_table.setItem(row, 0, d_item)
+
+                    # Ref / Type
+                    r_item = QTableWidgetItem(entry["ref"])
+                    r_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    font_r = r_item.font()
+                    font_r.setBold(True)
+                    r_item.setFont(font_r)
+                    self.supp_bill_ledger_table.setItem(row, 1, r_item)
+
+                    # Mode
+                    m_item = QTableWidgetItem(entry["mode"])
+                    m_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    self.supp_bill_ledger_table.setItem(row, 2, m_item)
+
+                    # Amount
+                    a_item = QTableWidgetItem(f"₹{entry['amount']:,.2f}")
+                    a_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    a_item.setForeground(Qt.darkGreen)
+                    font_a = a_item.font()
+                    font_a.setBold(True)
+                    a_item.setFont(font_a)
+                    self.supp_bill_ledger_table.setItem(row, 3, a_item)
+
+                    # Remarks
+                    rem_item = QTableWidgetItem(entry["remarks"])
+                    rem_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    self.supp_bill_ledger_table.setItem(row, 4, rem_item)
+
+            self.update_bill_live_calc()
+            self.supp_helper_stack.setCurrentIndex(2)
+        except Exception as e:
+            print(f"Error loading bill ledger page: {e}")
+        finally:
+            session.close()
+
+    def update_bill_live_calc(self):
+        if not hasattr(self, 'supp_helper_stack') or self.supp_helper_stack.currentIndex() != 2:
+            return
+        purchase_id = self.s_purchase_combo.currentData()
+        if not purchase_id:
+            return
+
+        session = Session()
+        try:
+            from models import PurchaseMaster
+            p = session.query(PurchaseMaster).get(purchase_id)
+            if not p:
+                return
+
+            pay_now = self.s_amount.value()
+            bal = p.balance_payable
+            rem = bal - pay_now
+
+            if pay_now <= 0.001:
+                self.bill_live_calc_lbl.setText(
+                    f"Bill Balance: <b>₹{bal:,.2f}</b> | Enter payment amount on the left to preview settlement."
+                )
+                self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
+            elif rem < -0.01:
+                self.bill_live_calc_lbl.setText(
+                    f"⚠️ <b>Warning:</b> Paying <b>₹{pay_now:,.2f}</b> exceeds bill balance (₹{bal:,.2f}) by <b>₹{abs(rem):,.2f}</b>!"
+                )
+                self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #dc2626; font-weight: 500;")
+            elif abs(rem) <= 0.01:
+                self.bill_live_calc_lbl.setText(
+                    f"🎉 <b>Full Settlement!</b> Paying <b>₹{pay_now:,.2f}</b> will clear this bill completely (Remaining: <b>₹0.00</b>)."
+                )
+                self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #166534; font-weight: 500;")
+            else:
+                self.bill_live_calc_lbl.setText(
+                    f"Paying <b>₹{pay_now:,.2f}</b> now → Remaining Balance will be <b style='color: #ef4444;'>₹{rem:,.2f}</b>."
+                )
+                self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
+        except Exception as e:
+            print(f"Error in live calc: {e}")
+        finally:
+            session.close()
 
     def save_customer_collection(self):
         cust_id = self.c_customer_combo.currentData()
