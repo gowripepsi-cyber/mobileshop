@@ -18,31 +18,81 @@ class SalesReturnEntryWidget(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(20)
+        # Vertical stacked layout: Top = Block 1 (Sales Return Parameters), Bottom = Block 2 (Items Entry & Table)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(10)
 
-        # Left Column: Return Parameters
-        left_panel = QFrame()
-        left_panel.setProperty("class", "CardFrame")
-        left_panel.setFixedWidth(360)
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(15, 15, 15, 15)
-        left_layout.setSpacing(15)
+        def make_field(label_text, widget, width=None, stretch=0):
+            w = QWidget()
+            vl = QVBoxLayout(w)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(3)
+            lbl_f = QLabel(label_text)
+            lbl_f.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+            vl.addWidget(lbl_f)
+            vl.addWidget(widget)
+            if width:
+                w.setFixedWidth(width)
+            return w
 
+        input_style = "min-height: 28px; max-height: 28px; padding: 2px 8px;"
+
+        # =========================================================================
+        # BLOCK 1 (Top Block): Sales Return Details Card
+        # =========================================================================
+        top_panel = QFrame()
+        top_panel.setProperty("class", "CardFrame")
+        top_layout = QVBoxLayout(top_panel)
+        top_layout.setContentsMargins(16, 12, 16, 12)
+        top_layout.setSpacing(10)
+
+        # Header Row: Title & Outstanding Adj Badge
+        top_title_row = QHBoxLayout()
+        top_title_row.setContentsMargins(0, 0, 0, 0)
         title_lbl = QLabel("Sales Return Details")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
-        left_layout.addWidget(title_lbl)
+        title_lbl.setStyleSheet("font-size: 14.5px; font-weight: bold; color: #0f172a;")
+        top_title_row.addWidget(title_lbl)
+        top_title_row.addStretch()
 
-        form_layout = QFormLayout()
-        
+        self.adj_badge = QLabel("Outstanding Adj: ₹0.00")
+        self.adj_badge.setStyleSheet("""
+            font-size: 12.5px;
+            font-weight: bold;
+            color: #ef4444;
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 4px 12px;
+        """)
+        top_title_row.addWidget(self.adj_badge)
+        top_layout.addLayout(top_title_row)
+
+        # Grid for Block 1 (4 Columns x 2 Rows)
+        top_grid = QGridLayout()
+        top_grid.setContentsMargins(0, 0, 0, 0)
+        top_grid.setHorizontalSpacing(14)
+        top_grid.setVerticalSpacing(8)
+
+        top_grid.setColumnStretch(0, 1)
+        top_grid.setColumnStretch(1, 1)
+        top_grid.setColumnStretch(2, 2)
+        top_grid.setColumnStretch(3, 1)
+
+        # 1. Return Number
         self.return_no_input = QLineEdit()
         self.return_no_input.setPlaceholderText("e.g. SR-1001")
-        
+        self.return_no_input.setStyleSheet(input_style)
+        f_ret_no = make_field("Return Number *", self.return_no_input)
+
+        # 2. Return Date
         self.date_input = QDateEdit()
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
-        
+        self.date_input.setStyleSheet(input_style)
+        f_date = make_field("Return Date", self.date_input)
+
+        # 3. Customer (combo + add button)
         self.customer_combo = AutoClearSearchableComboBox()
         self.customer_combo.currentTextChanged.connect(self.check_customer_match)
         if self.customer_combo.lineEdit():
@@ -50,132 +100,183 @@ class SalesReturnEntryWidget(QWidget):
             self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)
         self.customer_combo.currentIndexChanged.connect(self.load_customer_invoices)
 
-        cust_layout = QHBoxLayout()
-        cust_layout.setContentsMargins(0, 0, 0, 0)
-        cust_layout.setSpacing(6)
-        cust_layout.addWidget(self.customer_combo, 1)
-
         self.add_customer_btn = QPushButton("+")
         self.add_customer_btn.setToolTip("Add new customer")
         self.add_customer_btn.setProperty("class", "btn-quick-add")
-        self.add_customer_btn.setFixedWidth(40)
-        self.add_customer_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_customer_btn.setStyleSheet("min-height: 36px; max-height: 36px; margin: 0px; padding: 0px; font-size: 18px; font-weight: bold; border-radius: 6px;")
+        self.add_customer_btn.setFixedWidth(34)
         self.add_customer_btn.setCursor(Qt.PointingHandCursor)
         self.add_customer_btn.clicked.connect(self.handle_add_customer_click)
         self.add_customer_btn.hide()
+
+        cust_widget = QWidget()
+        cust_layout = QHBoxLayout(cust_widget)
+        cust_layout.setContentsMargins(0, 0, 0, 0)
+        cust_layout.setSpacing(4)
+        cust_layout.addWidget(self.customer_combo, 1)
         cust_layout.addWidget(self.add_customer_btn)
-        
+        f_cust = make_field("Customer *", cust_widget)
+
+        # 4. Ref Sales Invoice
         self.invoice_combo = QComboBox()
-        
+        self.invoice_combo.setStyleSheet(input_style)
+        f_inv = make_field("Ref Sales Invoice", self.invoice_combo)
+
+        # 5. Refund Mode
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
+        self.pay_mode_combo.setStyleSheet(input_style)
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
         self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
-        
+        f_mode = make_field("Refund Mode", self.pay_mode_combo)
+
+        # 6. Select Bank A/c
         self.bank_combo = QComboBox()
+        self.bank_combo.setStyleSheet(input_style)
         self.bank_combo.setEnabled(False)
-        
+        f_bank = make_field("Select Bank A/c", self.bank_combo)
+
+        # 7. Refund Paid (₹)
         self.refund_input = QDoubleSpinBox()
         self.refund_input.setRange(0, 9999999)
         self.refund_input.setValue(0.0)
         self.refund_input.setDecimals(2)
+        self.refund_input.setStyleSheet(input_style)
         self.refund_input.valueChanged.connect(self.update_summary)
+        f_refund = make_field("Refund Paid (₹)", self.refund_input)
 
+        # Auto-calculated outstanding adjustment spinbox (hidden from form, displayed in badge & summary bar)
         self.bal_deducted_input = QDoubleSpinBox()
         self.bal_deducted_input.setRange(0, 9999999)
         self.bal_deducted_input.setValue(0.0)
         self.bal_deducted_input.setDecimals(2)
-        self.bal_deducted_input.setEnabled(False) # Read-only, auto-calculated
+        self.bal_deducted_input.setEnabled(False)
+        self.bal_deducted_input.hide()
 
-        form_layout.addRow("Return Number *:", self.return_no_input)
-        form_layout.addRow("Return Date:", self.date_input)
-        form_layout.addRow("Customer *:", cust_layout)
-        form_layout.addRow("Ref Sales Invoice:", self.invoice_combo)
-        form_layout.addRow("Refund Mode:", self.pay_mode_combo)
-        form_layout.addRow("Select Bank A/c:", self.bank_combo)
-        form_layout.addRow("Refund Paid (₹):", self.refund_input)
-        form_layout.addRow("Outstanding Adj (₹):", self.bal_deducted_input)
-
-        left_layout.addLayout(form_layout)
-        left_layout.addStretch()
-
-        self.save_btn = QPushButton("Save & Print Return Note")
+        # 8. Save Button in Top Block
+        self.save_btn = QPushButton("Save && Print Return Note")
         self.save_btn.setProperty("class", "btn-success")
-        self.save_btn.setFixedHeight(40)
+        self.save_btn.setStyleSheet("min-height: 36px; max-height: 36px; padding: 0px 14px; font-weight: bold; border-radius: 6px;")
+        self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.clicked.connect(self.save_sales_return)
-        left_layout.addWidget(self.save_btn)
 
-        main_layout.addWidget(left_panel)
+        top_btn_container = QWidget()
+        top_btn_vl = QVBoxLayout(top_btn_container)
+        top_btn_vl.setContentsMargins(0, 0, 0, 0)
+        top_btn_vl.setSpacing(3)
+        top_btn_spacer = QLabel(" ")
+        top_btn_spacer.setStyleSheet("font-size: 11.5px;")
+        top_btn_vl.addWidget(top_btn_spacer)
+        top_btn_vl.addWidget(self.save_btn)
 
-        # Right Column: Product Line Items & Table
-        right_panel = QFrame()
-        right_panel.setProperty("class", "CardFrame")
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(15, 15, 15, 15)
-        right_layout.setSpacing(15)
+        # Row 0: Return Number, Return Date, Customer, Ref Sales Invoice
+        top_grid.addWidget(f_ret_no, 0, 0)
+        top_grid.addWidget(f_date, 0, 1)
+        top_grid.addWidget(f_cust, 0, 2)
+        top_grid.addWidget(f_inv, 0, 3)
+
+        # Row 1: Refund Mode, Select Bank, Refund Paid, Save Button
+        top_grid.addWidget(f_mode, 1, 0)
+        top_grid.addWidget(f_bank, 1, 1)
+        top_grid.addWidget(f_refund, 1, 2)
+        top_grid.addWidget(top_btn_container, 1, 3)
+
+        top_layout.addLayout(top_grid)
+        main_layout.addWidget(top_panel)
+
+        # =========================================================================
+        # BLOCK 2 (Bottom Block): Product Line Items & Table Card
+        # =========================================================================
+        bottom_panel = QFrame()
+        bottom_panel.setProperty("class", "CardFrame")
+        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout.setContentsMargins(16, 12, 16, 14)
+        bottom_layout.setSpacing(10)
 
         entry_title = QLabel("Add Returned Products")
-        entry_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
-        right_layout.addWidget(entry_title)
+        entry_title.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #0f172a;")
+        bottom_layout.addWidget(entry_title)
 
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setHorizontalSpacing(15)
-        grid_layout.setVerticalSpacing(10)
-        
-        # Column Stretches:
-        # Col 0, 2, 4 are labels -> stretch 0
-        # Col 1 is Code & Qty -> stretch 0 (width limited by product_code_input fixed width)
-        # Col 3 is Category & Rate -> stretch 2
-        # Col 5 is Product & Button -> stretch 4
-        grid_layout.setColumnStretch(0, 0)
-        grid_layout.setColumnStretch(1, 0)
-        grid_layout.setColumnStretch(2, 0)
-        grid_layout.setColumnStretch(3, 2)
-        grid_layout.setColumnStretch(4, 0)
-        grid_layout.setColumnStretch(5, 4)
-        
+        # Item Entry Row (Clean single horizontal row)
+        item_row = QHBoxLayout()
+        item_row.setContentsMargins(0, 0, 0, 0)
+        item_row.setSpacing(8)
+
+        # 1. Product Code
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
-        self.product_code_input.setFixedWidth(120)
+        self.product_code_input.setStyleSheet(input_style)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
         self.product_code_input._skip_enter_nav = True
-        grid_layout.addWidget(QLabel("Code:"), 0, 0)
-        grid_layout.addWidget(self.product_code_input, 0, 1)
-        
+        f_pcode = make_field("Product Code", self.product_code_input, width=90)
+        item_row.addWidget(f_pcode)
+
+        # 2. Category Filter (160px width)
         self.category_combo = QComboBox()
+        self.category_combo.setStyleSheet(input_style)
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
-        self.category_combo.hide()
-        
+        f_pcat = make_field("Category", self.category_combo, width=160)
+        item_row.addWidget(f_pcat)
+
+        # 3. Product Combo
         self.product_combo = QComboBox()
         self.product_combo.setPlaceholderText("Select Product")
+        self.product_combo.setStyleSheet(input_style)
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        grid_layout.addWidget(QLabel("Product:"), 0, 2)
-        grid_layout.addWidget(self.product_combo, 0, 3, 1, 3)
+        f_pprod = make_field("Product Name *", self.product_combo)
+        item_row.addWidget(f_pprod, 1)
 
+        # 4. Quantity
         self.qty_input = QSpinBox()
-        self.qty_input.setRange(1, 1000)
+        self.qty_input.setRange(1, 100000)
         self.qty_input.setValue(1)
-        grid_layout.addWidget(QLabel("Qty:"), 1, 0)
-        grid_layout.addWidget(self.qty_input, 1, 1)
+        self.qty_input.setStyleSheet(input_style)
+        f_pqty = make_field("Quantity", self.qty_input, width=70)
+        item_row.addWidget(f_pqty)
 
+        # 5. Rate (₹)
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        grid_layout.addWidget(QLabel("Rate (₹):"), 1, 2)
-        grid_layout.addWidget(self.rate_input, 1, 3)
+        self.rate_input.setStyleSheet(input_style)
+        f_prate = make_field("Rate (₹)", self.rate_input, width=90)
+        item_row.addWidget(f_prate)
 
-        btn_layout = QHBoxLayout()
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.addStretch()
+        # 6. Add Item Button
         self.add_item_btn = QPushButton("Add Item")
+        self.add_item_btn.setProperty("class", "btn-warning")
+        self.add_item_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: bold;
+                border: none;
+                border-radius: 6px;
+                min-height: 36px;
+                max-height: 36px;
+                padding: 0px 14px;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+            }
+        """)
+        self.add_item_btn.setCursor(Qt.PointingHandCursor)
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        btn_layout.addWidget(self.add_item_btn)
 
-        grid_layout.addLayout(btn_layout, 1, 5)
+        add_btn_w = QWidget()
+        add_btn_w.setFixedWidth(85)
+        add_btn_vl = QVBoxLayout(add_btn_w)
+        add_btn_vl.setContentsMargins(0, 0, 0, 0)
+        add_btn_vl.setSpacing(3)
+        add_btn_spacer = QLabel(" ")
+        add_btn_spacer.setStyleSheet("font-size: 11.5px;")
+        add_btn_vl.addWidget(add_btn_spacer)
+        add_btn_vl.addWidget(self.add_item_btn)
+        item_row.addWidget(add_btn_w)
 
-        right_layout.addLayout(grid_layout)
+        bottom_layout.addLayout(item_row)
 
         # Table
         self.table = QTableWidget()
@@ -184,28 +285,42 @@ class SalesReturnEntryWidget(QWidget):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setColumnWidth(0, 65)   # Code
-        self.table.setColumnWidth(2, 50)   # Qty
-        self.table.setColumnWidth(3, 80)   # Rate (₹)
-        self.table.setColumnWidth(4, 85)   # Total (₹)
+        self.table.setColumnWidth(0, 85)   # Code
+        self.table.setColumnWidth(2, 65)   # Qty
+        self.table.setColumnWidth(3, 90)   # Rate (₹)
+        self.table.setColumnWidth(4, 95)   # Total (₹)
         header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 68)   # Action
+        self.table.setColumnWidth(5, 75)   # Action
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(54)
-        right_layout.addWidget(self.table)
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        bottom_layout.addWidget(self.table, 1)
 
         # Totals Summary Bar
         summary_bar = QHBoxLayout()
+        summary_bar.setContentsMargins(4, 4, 4, 4)
+        summary_bar.setSpacing(16)
+
         self.total_lbl = QLabel("Total Return Value: ₹0.00")
-        self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #dc2626;")
+        self.total_lbl.setStyleSheet("font-size: 14.5px; font-weight: bold; color: #4338ca;")
+
         self.adj_lbl = QLabel("Outstanding Adj: ₹0.00")
-        self.adj_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
-        
+        self.adj_lbl.setStyleSheet("font-size: 14.5px; font-weight: bold; color: #dc2626;")
+
         summary_bar.addWidget(self.total_lbl)
         summary_bar.addWidget(self.adj_lbl)
-        right_layout.addLayout(summary_bar)
+        summary_bar.addStretch()
 
-        main_layout.addWidget(right_panel, 2)
+        self.save_bottom_btn = QPushButton("Save && Print Return Note")
+        self.save_bottom_btn.setProperty("class", "btn-success")
+        self.save_bottom_btn.setStyleSheet("min-height: 34px; padding: 0px 16px; font-weight: bold; border-radius: 6px;")
+        self.save_bottom_btn.setCursor(Qt.PointingHandCursor)
+        self.save_bottom_btn.clicked.connect(self.save_sales_return)
+        summary_bar.addWidget(self.save_bottom_btn)
+
+        bottom_layout.addLayout(summary_bar)
+
+        # Add Block 2 with vertical stretch 1
+        main_layout.addWidget(bottom_panel, 1)
 
     def toggle_bank_account(self, mode=None):
         if mode is None:
@@ -486,6 +601,8 @@ class SalesReturnEntryWidget(QWidget):
 
         self.total_lbl.setText(f"Total Return Value: ₹{total:,.2f}")
         self.adj_lbl.setText(f"Outstanding Adj: ₹{adj:,.2f}")
+        if hasattr(self, 'adj_badge'):
+            self.adj_badge.setText(f"Outstanding Adj: ₹{adj:,.2f}")
 
     def save_sales_return(self):
         return_no = self.return_no_input.text().strip()

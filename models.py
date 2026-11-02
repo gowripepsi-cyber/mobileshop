@@ -491,3 +491,32 @@ class StaffSalaryPayment(Base):
 
     staff = relationship("Staff", back_populates="salary_payments")
     bank_account = relationship("BankAccount")
+
+class ExistingStockMaster(Base):
+    __tablename__ = 'existing_stock_master'
+    id = Column(Integer, primary_key=True)
+    entry_number = Column(String, unique=True, nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    notes = Column(Text, nullable=True)
+    total_items = Column(Integer, default=0)
+    total_qty = Column(Integer, default=0)
+    total_value = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    items = relationship("ExistingStockItem", back_populates="master", cascade="all, delete-orphan")
+
+
+class ExistingStockItem(Base):
+    __tablename__ = 'existing_stock_items'
+    id = Column(Integer, primary_key=True)
+    master_id = Column(Integer, ForeignKey('existing_stock_master.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    qty = Column(Integer, default=1)
+    rate = Column(Float, default=0.0)
+    selling_price = Column(Float, default=0.0)
+    unit = Column(String, nullable=True, default='Pcs')
+    total_amount = Column(Float, default=0.0)
+
+    master = relationship("ExistingStockMaster", back_populates="items")
+    product = relationship("Product")
+

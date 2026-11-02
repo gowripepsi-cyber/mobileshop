@@ -47,144 +47,230 @@ class PurchaseView(QWidget):
         layout.addWidget(self.tabs)
 
     def setup_entry_tab(self):
-        main_layout = QHBoxLayout(self.entry_tab)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(20)
+        # Vertical stacked layout: Top = Block 1 (Purchase Invoice Parameters), Bottom = Block 2 (Items Entry & Table)
+        main_layout = QVBoxLayout(self.entry_tab)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(10)
 
-        # Left Column: Invoice Parameters
-        left_panel = QFrame()
-        left_panel.setProperty("class", "CardFrame")
-        left_panel.setFixedWidth(350)
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(15, 15, 15, 15)
-        left_layout.setSpacing(15)
+        def make_field(label_text, widget, width=None, stretch=0):
+            w = QWidget()
+            vl = QVBoxLayout(w)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(3)
+            lbl_f = QLabel(label_text)
+            lbl_f.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+            vl.addWidget(lbl_f)
+            vl.addWidget(widget)
+            if width:
+                w.setFixedWidth(width)
+            return w
 
+        input_style = "min-height: 28px; max-height: 28px; padding: 2px 8px;"
+
+        # =========================================================================
+        # BLOCK 1 (Top Block): Purchase Invoice Parameters Card
+        # =========================================================================
+        top_panel = QFrame()
+        top_panel.setProperty("class", "CardFrame")
+        top_layout = QVBoxLayout(top_panel)
+        top_layout.setContentsMargins(16, 12, 16, 12)
+        top_layout.setSpacing(10)
+
+        # Header Row: Title & Upload Existing Stock shortcut button
+        top_title_row = QHBoxLayout()
+        top_title_row.setContentsMargins(0, 0, 0, 0)
         title_lbl = QLabel("Purchase Invoice Details")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #ffffff;")
-        left_layout.addWidget(title_lbl)
+        title_lbl.setStyleSheet("font-size: 14.5px; font-weight: bold; color: #0f172a;")
+        top_title_row.addWidget(title_lbl)
+        top_title_row.addStretch()
 
-        form_layout = QFormLayout()
-        
+        self.goto_stock_btn = QPushButton("📦 Upload Existing Stock")
+        self.goto_stock_btn.setToolTip("Switch to Upload Existing Stock / Opening Inventory")
+        self.goto_stock_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: #ffffff;
+                font-size: 11.5px;
+                font-weight: 600;
+                border: none;
+                border-radius: 6px;
+                padding: 5px 12px;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        self.goto_stock_btn.setCursor(Qt.PointingHandCursor)
+        self.goto_stock_btn.clicked.connect(self.switch_to_existing_stock)
+        top_title_row.addWidget(self.goto_stock_btn)
+        top_layout.addLayout(top_title_row)
+
+        # Grid for Block 1 (4 Columns x 2 Rows)
+        top_grid = QGridLayout()
+        top_grid.setContentsMargins(0, 0, 0, 0)
+        top_grid.setHorizontalSpacing(14)
+        top_grid.setVerticalSpacing(8)
+
+        top_grid.setColumnStretch(0, 1)
+        top_grid.setColumnStretch(1, 1)
+        top_grid.setColumnStretch(2, 2)
+        top_grid.setColumnStretch(3, 1)
+
+        # 1. Invoice Number
         self.invoice_input = QLineEdit()
         self.invoice_input.setPlaceholderText("e.g. PUR-1004")
-        
+        self.invoice_input.setStyleSheet(input_style)
+        f_invoice = make_field("Invoice Number *", self.invoice_input)
+
+        # 2. Invoice Date
         self.date_input = QDateEdit()
         self.date_input.setCalendarPopup(True)
         self.date_input.setDate(QDate.currentDate())
-        
+        self.date_input.setStyleSheet(input_style)
+        f_date = make_field("Invoice Date", self.date_input)
+
+        # 3. Supplier (combo + add button)
         self.supplier_combo = AutoClearSearchableComboBox()
         self.supplier_combo.currentTextChanged.connect(self.check_supplier_match)
         if self.supplier_combo.lineEdit():
             self.supplier_combo.lineEdit().textChanged.connect(self.check_supplier_match)
 
-        supp_layout = QHBoxLayout()
-        supp_layout.setContentsMargins(0, 0, 0, 0)
-        supp_layout.setSpacing(6)
-        supp_layout.addWidget(self.supplier_combo, 1)
-
         self.add_supplier_btn = QPushButton("+")
         self.add_supplier_btn.setToolTip("Add new supplier")
         self.add_supplier_btn.setProperty("class", "btn-quick-add")
-        self.add_supplier_btn.setFixedWidth(40)
-        self.add_supplier_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_supplier_btn.setStyleSheet("min-height: 36px; max-height: 36px; margin: 0px; padding: 0px; font-size: 18px; font-weight: bold; border-radius: 6px;")
+        self.add_supplier_btn.setFixedWidth(34)
         self.add_supplier_btn.setCursor(Qt.PointingHandCursor)
         self.add_supplier_btn.clicked.connect(self.handle_add_supplier_click)
         self.add_supplier_btn.hide()
+
+        supp_widget = QWidget()
+        supp_layout = QHBoxLayout(supp_widget)
+        supp_layout.setContentsMargins(0, 0, 0, 0)
+        supp_layout.setSpacing(4)
+        supp_layout.addWidget(self.supplier_combo, 1)
         supp_layout.addWidget(self.add_supplier_btn)
-        
+        f_supp = make_field("Supplier *", supp_widget)
+
+        # 4. Tax Invoice (GST)
+        self.gst_enabled_checkbox = QCheckBox("Tax Invoice (GST)")
+        self.gst_enabled_checkbox.setStyleSheet("font-size: 12px; font-weight: 500;")
+        self.gst_enabled_checkbox.stateChanged.connect(self.on_gst_checkbox_changed)
+        self.gst_enabled_label = QLabel("Tax Invoicing")
+        self.gst_enabled_label.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+
+        self.gst_top_container = QWidget()
+        gst_top_vl = QVBoxLayout(self.gst_top_container)
+        gst_top_vl.setContentsMargins(0, 0, 0, 0)
+        gst_top_vl.setSpacing(3)
+        gst_top_vl.addWidget(self.gst_enabled_label)
+        gst_cb_wrap = QWidget()
+        gst_cb_wrap_l = QHBoxLayout(gst_cb_wrap)
+        gst_cb_wrap_l.setContentsMargins(0, 0, 0, 0)
+        gst_cb_wrap_l.addWidget(self.gst_enabled_checkbox)
+        gst_top_vl.addWidget(gst_cb_wrap)
+
+        # 5. Payment Mode
         self.pay_mode_combo = QComboBox()
         self.pay_mode_combo.addItems(["Cash", "Bank"])
+        self.pay_mode_combo.setStyleSheet(input_style)
         self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
         self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
-        
+        f_mode = make_field("Payment Mode", self.pay_mode_combo)
+
+        # 6. Select Bank A/c
         self.bank_combo = QComboBox()
+        self.bank_combo.setStyleSheet(input_style)
         self.bank_combo.setEnabled(False)
-        
+        f_bank = make_field("Select Bank A/c", self.bank_combo)
+
+        # 7. Paid Amount (₹)
         self.paid_input = QDoubleSpinBox()
         self.paid_input.setRange(0, 9999999)
         self.paid_input.setValue(0.0)
         self.paid_input.setDecimals(2)
+        self.paid_input.setStyleSheet(input_style)
         self.paid_input.valueChanged.connect(self.update_summary)
+        f_paid = make_field("Paid Amount (₹)", self.paid_input)
 
-        # GST widgets
-        self.gst_enabled_checkbox = QCheckBox("Tax Invoice (GST)")
-        self.gst_enabled_checkbox.stateChanged.connect(self.on_gst_checkbox_changed)
-        
-        self.gst_enabled_label = QLabel("Tax Invoice:")
-
-        form_layout.addRow("Invoice Number *:", self.invoice_input)
-        form_layout.addRow("Invoice Date:", self.date_input)
-        form_layout.addRow("Supplier:", supp_layout)
-        form_layout.addRow(self.gst_enabled_label, self.gst_enabled_checkbox)
-        form_layout.addRow("Payment Mode:", self.pay_mode_combo)
-        form_layout.addRow("Select Bank A/c:", self.bank_combo)
-        form_layout.addRow("Paid Amount (₹):", self.paid_input)
-
-        left_layout.addLayout(form_layout)
-        left_layout.addStretch()
-
-        # Action Buttons Layout (Save/Update and Cancel Edit)
-        btn_layout = QHBoxLayout()
-
+        # 8. Save / Cancel Buttons in Top Block
         self.save_btn = QPushButton("Save Purchase Bill")
         self.save_btn.setProperty("class", "btn-success")
-        self.save_btn.setFixedHeight(40)
+        self.save_btn.setStyleSheet("min-height: 36px; max-height: 36px; padding: 0px 14px; font-weight: bold; border-radius: 6px;")
+        self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.clicked.connect(self.save_purchase)
-        btn_layout.addWidget(self.save_btn)
 
         self.cancel_edit_btn = QPushButton("Cancel Edit")
         self.cancel_edit_btn.setProperty("class", "btn-secondary")
-        self.cancel_edit_btn.setFixedHeight(40)
+        self.cancel_edit_btn.setStyleSheet("min-height: 36px; max-height: 36px; padding: 0px 12px; font-weight: bold; border-radius: 6px;")
+        self.cancel_edit_btn.setCursor(Qt.PointingHandCursor)
         self.cancel_edit_btn.setVisible(False)
         self.cancel_edit_btn.clicked.connect(self.cancel_edit_mode)
-        btn_layout.addWidget(self.cancel_edit_btn)
 
-        left_layout.addLayout(btn_layout)
+        top_btn_container = QWidget()
+        top_btn_vl = QVBoxLayout(top_btn_container)
+        top_btn_vl.setContentsMargins(0, 0, 0, 0)
+        top_btn_vl.setSpacing(3)
+        top_btn_spacer = QLabel(" ")
+        top_btn_spacer.setStyleSheet("font-size: 11.5px;")
+        top_btn_vl.addWidget(top_btn_spacer)
+        top_btn_hl = QHBoxLayout()
+        top_btn_hl.setContentsMargins(0, 0, 0, 0)
+        top_btn_hl.setSpacing(6)
+        top_btn_hl.addWidget(self.save_btn, 1)
+        top_btn_hl.addWidget(self.cancel_edit_btn, 1)
+        top_btn_vl.addLayout(top_btn_hl)
 
-        main_layout.addWidget(left_panel)
+        # Row 0: Invoice Number, Date, Supplier, Tax Invoice
+        top_grid.addWidget(f_invoice, 0, 0)
+        top_grid.addWidget(f_date, 0, 1)
+        top_grid.addWidget(f_supp, 0, 2)
+        top_grid.addWidget(self.gst_top_container, 0, 3)
 
-        # Right Column: Product Line Items & Table
-        right_panel = QFrame()
-        right_panel.setProperty("class", "CardFrame")
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(15, 15, 15, 15)
-        right_layout.setSpacing(15)
+        # Row 1: Payment Mode, Bank A/c, Paid Amount, Save Button
+        top_grid.addWidget(f_mode, 1, 0)
+        top_grid.addWidget(f_bank, 1, 1)
+        top_grid.addWidget(f_paid, 1, 2)
+        top_grid.addWidget(top_btn_container, 1, 3)
 
-        # Product Entry Section
+        top_layout.addLayout(top_grid)
+        main_layout.addWidget(top_panel)
+
+        # =========================================================================
+        # BLOCK 2 (Bottom Block): Items Entry & Table Card
+        # =========================================================================
+        bottom_panel = QFrame()
+        bottom_panel.setProperty("class", "CardFrame")
+        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout.setContentsMargins(16, 12, 16, 14)
+        bottom_layout.setSpacing(10)
+
+        # Section Header
         entry_title = QLabel("Add Items to Bill")
-        entry_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
-        right_layout.addWidget(entry_title)
+        entry_title.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #0f172a;")
+        bottom_layout.addWidget(entry_title)
 
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setHorizontalSpacing(15)
-        grid_layout.setVerticalSpacing(10)
-        
-        # Column Stretches:
-        # Col 0, 2, 4 are labels -> stretch 0
-        # Col 1 is Code & Purchase Price -> stretch 0 (width limited by product_code_input fixed width)
-        # Col 3 is Category & Selling Price -> stretch 2
-        # Col 5 is Product, Model & Qty/Button -> stretch 4
-        grid_layout.setColumnStretch(0, 0)
-        grid_layout.setColumnStretch(1, 0)
-        grid_layout.setColumnStretch(2, 0)
-        grid_layout.setColumnStretch(3, 2)
-        grid_layout.setColumnStretch(4, 0)
-        grid_layout.setColumnStretch(5, 4)
-        
+        # Hidden brand/model inputs
         self.brand_input = QLineEdit()
         self.brand_input.hide()
         self.model_input = QLineEdit()
         self.model_input.hide()
 
+        # Item Entry Row (Clean single horizontal row matching Existing Stock design)
+        item_row = QHBoxLayout()
+        item_row.setContentsMargins(0, 0, 0, 0)
+        item_row.setSpacing(8)
+
+        # 1. Product Code
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
-        self.product_code_input.setFixedWidth(120)
+        self.product_code_input.setStyleSheet(input_style)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
         self.product_code_input._skip_enter_nav = True
-        grid_layout.addWidget(QLabel("Product Code:"), 0, 0)
-        grid_layout.addWidget(self.product_code_input, 0, 1)
-        
+        f_pcode = make_field("Product Code", self.product_code_input, width=90)
+        item_row.addWidget(f_pcode)
+
+        # 2. Category Filter (160px width)
         self.category_combo = AutoClearSearchableComboBox()
         self.category_combo.setPlaceholderText("Select Category")
         self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
@@ -192,98 +278,157 @@ class PurchaseView(QWidget):
         self.category_combo.activated.connect(self.filter_products_by_category)
         if self.category_combo.lineEdit():
             self.category_combo.lineEdit().textChanged.connect(self.filter_products_by_category)
-        grid_layout.addWidget(QLabel("Category:"), 0, 2)
-        grid_layout.addWidget(self.category_combo, 0, 3)
-        
+        f_pcat = make_field("Category", self.category_combo, width=160)
+        item_row.addWidget(f_pcat)
+
+        # 3. Item Name + Quick Add Button
         self.product_combo = SearchableProductComboBox()
-        self.product_combo.setPlaceholderText("Select Product")
+        self.product_combo.setPlaceholderText("Select / Search Product")
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
-        
-        # Connect text changes to check product match for quick add
         self.product_combo.currentTextChanged.connect(self.check_product_match)
         if self.product_combo.lineEdit():
             self.product_combo.lineEdit().textChanged.connect(self.check_product_match)
 
         self.add_product_btn = QPushButton("+")
-        self.add_product_btn.setToolTip("Add new product")
+        self.add_product_btn.setToolTip("Add new product to master records")
         self.add_product_btn.setProperty("class", "btn-quick-add")
-        self.add_product_btn.setFixedWidth(40)
-        self.add_product_btn.setStyleSheet("padding: 0px; font-size: 18px; font-weight: bold; text-align: center;")
+        self.add_product_btn.setStyleSheet("min-height: 36px; max-height: 36px; margin: 0px; padding: 0px; font-size: 18px; font-weight: bold; border-radius: 6px;")
+        self.add_product_btn.setFixedWidth(32)
         self.add_product_btn.setCursor(Qt.PointingHandCursor)
         self.add_product_btn.clicked.connect(self.handle_add_product_click)
         self.add_product_btn.hide()
 
-        prod_layout = QHBoxLayout()
-        prod_layout.setContentsMargins(0, 0, 0, 0)
-        prod_layout.setSpacing(6)
-        prod_layout.addWidget(self.product_combo, 1)
-        prod_layout.addWidget(self.add_product_btn)
+        prod_item_widget = QWidget()
+        prod_item_layout = QHBoxLayout(prod_item_widget)
+        prod_item_layout.setContentsMargins(0, 0, 0, 0)
+        prod_item_layout.setSpacing(4)
+        prod_item_layout.addWidget(self.product_combo, 1)
+        prod_item_layout.addWidget(self.add_product_btn)
 
-        grid_layout.addWidget(QLabel("Item Name:"), 0, 4)
-        grid_layout.addLayout(prod_layout, 0, 5)
+        f_pname = make_field("Item Name *", prod_item_widget)
+        item_row.addWidget(f_pname, 1)
 
+        # 4. Quantity
         self.qty_input = QSpinBox()
         self.qty_input.setRange(1, 100000)
         self.qty_input.setValue(1)
-        grid_layout.addWidget(QLabel("Quantity:"), 1, 0)
-        grid_layout.addWidget(self.qty_input, 1, 1)
+        self.qty_input.setStyleSheet(input_style)
+        f_pqty = make_field("Quantity", self.qty_input, width=70)
+        item_row.addWidget(f_pqty)
 
+        # 5. Unit
         self.unit_combo = QComboBox()
+        self.unit_combo.setStyleSheet(input_style)
         self.load_units()
-        grid_layout.addWidget(QLabel("Unit:"), 1, 2)
-        grid_layout.addWidget(self.unit_combo, 1, 3)
+        f_punit = make_field("Unit", self.unit_combo, width=75)
+        item_row.addWidget(f_punit)
 
-        self.gst_rate_label = QLabel("GST %:")
-        self.gst_rate_combo = QComboBox()
-        self.gst_rate_combo.addItems(["0%", "5%", "12%", "18%", "28%"])
-        self.gst_rate_combo.setCurrentText("18%")
-        grid_layout.addWidget(self.gst_rate_label, 1, 4)
-        grid_layout.addWidget(self.gst_rate_combo, 1, 5)
-
+        # 6. Rate (per unit)
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
         self.rate_input.setDecimals(2)
-        
+        self.rate_input.setStyleSheet(input_style)
         self.rate_label = QLabel("Rate (per unit):")
-        grid_layout.addWidget(self.rate_label, 2, 0)
-        grid_layout.addWidget(self.rate_input, 2, 1)
+        f_prate = make_field("Rate (₹)", self.rate_input, width=85)
+        item_row.addWidget(f_prate)
 
-        self.selling_price_label = QLabel("Selling Price:")
+        # 7. Selling Price
         self.selling_price_input = QDoubleSpinBox()
         self.selling_price_input.setRange(0.0, 9999999.0)
         self.selling_price_input.setValue(0.0)
         self.selling_price_input.setDecimals(2)
-        grid_layout.addWidget(self.selling_price_label, 2, 2)
-        grid_layout.addWidget(self.selling_price_input, 2, 3)
+        self.selling_price_input.setStyleSheet(input_style)
+        self.selling_price_label = QLabel("Selling Price:")
+        f_psell = make_field("Selling Price (₹)", self.selling_price_input, width=90)
+        item_row.addWidget(f_psell)
 
+        # 8. GST % (Container)
+        self.gst_rate_label = QLabel("GST %:")
+        self.gst_rate_combo = QComboBox()
+        self.gst_rate_combo.addItems(["0%", "5%", "12%", "18%", "28%"])
+        self.gst_rate_combo.setCurrentText("18%")
+        self.gst_rate_combo.setStyleSheet(input_style)
+
+        self.gst_item_container = make_field("GST %", self.gst_rate_combo, width=75)
+        item_row.addWidget(self.gst_item_container)
+
+        # 9. Add Item Button
         self.add_item_btn = QPushButton("Add Item")
+        self.add_item_btn.setProperty("class", "btn-warning")
+        self.add_item_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: bold;
+                border: none;
+                border-radius: 6px;
+                min-height: 36px;
+                max-height: 36px;
+                padding: 0px 14px;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+            }
+        """)
+        self.add_item_btn.setCursor(Qt.PointingHandCursor)
         self.add_item_btn.clicked.connect(self.add_item_to_list)
-        grid_layout.addWidget(self.add_item_btn, 2, 5)
 
-        right_layout.addLayout(grid_layout)
+        add_btn_w = QWidget()
+        add_btn_w.setFixedWidth(85)
+        add_btn_vl = QVBoxLayout(add_btn_w)
+        add_btn_vl.setContentsMargins(0, 0, 0, 0)
+        add_btn_vl.setSpacing(3)
+        add_btn_spacer = QLabel(" ")
+        add_btn_spacer.setStyleSheet("font-size: 11.5px;")
+        add_btn_vl.addWidget(add_btn_spacer)
+        add_btn_vl.addWidget(self.add_item_btn)
+        item_row.addWidget(add_btn_w)
+
+        bottom_layout.addLayout(item_row)
 
         # Items Table
         self.table = QTableWidget()
         self.setup_table_columns(False)
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(54)
-        right_layout.addWidget(self.table)
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        bottom_layout.addWidget(self.table, 1)
 
-        # Summary Bar (Totals, Paid, Balance)
+        # Summary Bar (Totals, Paid, Balance, and Bottom Save Button)
         summary_bar = QHBoxLayout()
-        
+        summary_bar.setContentsMargins(4, 4, 4, 4)
+        summary_bar.setSpacing(16)
+
         self.total_lbl = QLabel("Total Amount: ₹0.00")
-        self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #6366f1;")
-        
+        self.total_lbl.setStyleSheet("font-size: 14.5px; font-weight: bold; color: #4338ca;")
+
         self.balance_lbl = QLabel("Balance Payable: ₹0.00")
-        self.balance_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
-        
+        self.balance_lbl.setStyleSheet("font-size: 14.5px; font-weight: bold; color: #dc2626;")
+
         summary_bar.addWidget(self.total_lbl)
         summary_bar.addWidget(self.balance_lbl)
-        right_layout.addLayout(summary_bar)
+        summary_bar.addStretch()
 
-        main_layout.addWidget(right_panel, 2)
+        self.save_bottom_btn = QPushButton("Save Purchase Bill")
+        self.save_bottom_btn.setProperty("class", "btn-success")
+        self.save_bottom_btn.setStyleSheet("min-height: 34px; padding: 0px 16px; font-weight: bold; border-radius: 6px;")
+        self.save_bottom_btn.setCursor(Qt.PointingHandCursor)
+        self.save_bottom_btn.clicked.connect(self.save_purchase)
+        summary_bar.addWidget(self.save_bottom_btn)
+
+        self.cancel_bottom_btn = QPushButton("Cancel Edit")
+        self.cancel_bottom_btn.setProperty("class", "btn-secondary")
+        self.cancel_bottom_btn.setStyleSheet("min-height: 34px; padding: 0px 14px; font-weight: bold; border-radius: 6px;")
+        self.cancel_bottom_btn.setCursor(Qt.PointingHandCursor)
+        self.cancel_bottom_btn.setVisible(False)
+        self.cancel_bottom_btn.clicked.connect(self.cancel_edit_mode)
+        summary_bar.addWidget(self.cancel_bottom_btn)
+
+        bottom_layout.addLayout(summary_bar)
+
+        # Add Block 2 with vertical stretch 1 so it fills the rest of the tab
+        main_layout.addWidget(bottom_panel, 1)
 
     def setup_history_tab(self):
         layout = QVBoxLayout(self.history_tab)
@@ -726,6 +871,11 @@ class PurchaseView(QWidget):
             self.product_code_input.clear()
             self.unit_combo.setCurrentIndex(0)
 
+    def switch_to_existing_stock(self):
+        parent_win = self.window()
+        if hasattr(parent_win, 'switch_view'):
+            parent_win.switch_view(12)
+
     def handle_product_code_entry(self):
         text = self.product_code_input.text().strip()
         if not text:
@@ -773,11 +923,15 @@ class PurchaseView(QWidget):
         
         self.gst_enabled_label.setVisible(globally_enabled)
         self.gst_enabled_checkbox.setVisible(globally_enabled)
+        if hasattr(self, 'gst_top_container'):
+            self.gst_top_container.setVisible(globally_enabled)
         
         gst_active = globally_enabled and self.gst_enabled_checkbox.isChecked()
         
         self.gst_rate_label.setVisible(gst_active)
         self.gst_rate_combo.setVisible(gst_active)
+        if hasattr(self, 'gst_item_container'):
+            self.gst_item_container.setVisible(gst_active)
         
         self.setup_table_columns(gst_active)
 
@@ -1212,6 +1366,13 @@ class PurchaseView(QWidget):
             self.save_btn.style().unpolish(self.save_btn)
             self.save_btn.style().polish(self.save_btn)
             self.cancel_edit_btn.setVisible(False)
+            if hasattr(self, 'save_bottom_btn'):
+                self.save_bottom_btn.setText("Save Purchase Bill")
+                self.save_bottom_btn.setProperty("class", "btn-success")
+                self.save_bottom_btn.style().unpolish(self.save_bottom_btn)
+                self.save_bottom_btn.style().polish(self.save_bottom_btn)
+            if hasattr(self, 'cancel_bottom_btn'):
+                self.cancel_bottom_btn.setVisible(False)
             self.invoice_input.setEnabled(True)
 
             self.bill_items.clear()
@@ -1419,8 +1580,14 @@ class PurchaseView(QWidget):
             self.save_btn.setProperty("class", "btn-warning")
             self.save_btn.style().unpolish(self.save_btn)
             self.save_btn.style().polish(self.save_btn)
-            
             self.cancel_edit_btn.setVisible(True)
+            if hasattr(self, 'save_bottom_btn'):
+                self.save_bottom_btn.setText("Update Purchase Bill")
+                self.save_bottom_btn.setProperty("class", "btn-warning")
+                self.save_bottom_btn.style().unpolish(self.save_bottom_btn)
+                self.save_bottom_btn.style().polish(self.save_bottom_btn)
+            if hasattr(self, 'cancel_bottom_btn'):
+                self.cancel_bottom_btn.setVisible(True)
             
             # Load purchase parameters
             self.invoice_input.setText(purchase.invoice_number)
@@ -1555,8 +1722,14 @@ class PurchaseView(QWidget):
         self.save_btn.setProperty("class", "btn-success")
         self.save_btn.style().unpolish(self.save_btn)
         self.save_btn.style().polish(self.save_btn)
-        
         self.cancel_edit_btn.setVisible(False)
+        if hasattr(self, 'save_bottom_btn'):
+            self.save_bottom_btn.setText("Save Purchase Bill")
+            self.save_bottom_btn.setProperty("class", "btn-success")
+            self.save_bottom_btn.style().unpolish(self.save_bottom_btn)
+            self.save_bottom_btn.style().polish(self.save_bottom_btn)
+        if hasattr(self, 'cancel_bottom_btn'):
+            self.cancel_bottom_btn.setVisible(False)
         self.invoice_input.setEnabled(True)
         
         # Clear fields

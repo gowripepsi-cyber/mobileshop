@@ -93,7 +93,8 @@ def enforce_ui_permissions(main_window):
         8: [("bank_accounts", "view"), ("payments", "view")],
         9: [("bank_accounts", "view"), ("payments", "view")],
         10: [("expenses", "view")],
-        11: [("staff", "view")]
+        11: [("staff", "view")],
+        12: [("purchase", "view")]
     }
 
     if hasattr(main_window, 'nav_buttons'):

@@ -7,6 +7,7 @@ from functools import partial
 from ui.dashboard import DashboardView
 from ui.masters.masters_view import MastersView
 from ui.inventory.purchase import PurchaseView
+from ui.inventory.existing_stock import ExistingStockView
 from ui.sales.sales import SalesView
 from ui.services.jobs import ServicesView
 from ui.payments.payments import PaymentsView
@@ -75,6 +76,7 @@ class MainWindow(QMainWindow):
             ("OPERATIONS & BILLING", [
                 ("Sales Invoice", 3, "Ctrl+4"),
                 ("Purchase Entry", 2, "Ctrl+3"),
+                ("Upload Existing Stock", 12, "Ctrl+Shift+E"),
                 ("Service Cards", 4, "Ctrl+5"),
             ]),
             ("FINANCE & HR", [
@@ -276,6 +278,7 @@ class MainWindow(QMainWindow):
         self.bank_accounts_view = self.bank_cash_view.bank_accounts_view
         self.expenses_view = ExpensesView(self)
         self.staff_view = StaffView(self)
+        self.existing_stock_view = ExistingStockView(self)
 
         # Add Views to Stacked Widget in order
         self.stacked_widget.addWidget(self.dashboard_view)       # 0
@@ -290,6 +293,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.bank_cash_view)        # 9
         self.stacked_widget.addWidget(self.expenses_view)         # 10
         self.stacked_widget.addWidget(self.staff_view)            # 11
+        self.stacked_widget.addWidget(self.existing_stock_view)   # 12
 
         content_wrapper_layout.addWidget(self.stacked_widget)
         main_layout.addWidget(content_wrapper)
@@ -437,7 +441,8 @@ class MainWindow(QMainWindow):
             8: "UPI / Money Transfer",
             9: "Bank Accounts & Cash Drawer Management",
             10: "Daily Expenses & Cost Management",
-            11: "Staff & Payroll Management"
+            11: "Staff & Payroll Management",
+            12: "Upload Existing Stock / Opening Inventory"
         }
         raw_title = title_map.get(index, "Inventory & Accounting")
         self.header_title.setText(tr(raw_title))

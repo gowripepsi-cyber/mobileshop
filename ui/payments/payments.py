@@ -1025,21 +1025,26 @@ class PaymentsView(QWidget):
         self.s_bank.setEnabled(mode == "Bank")
 
     def setup_transfer_tab(self):
-        layout = QHBoxLayout(self.transfer_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(20)
+        # Vertical stacked layout: Top = New Fund Transfer, Bottom = Transfer Log
+        layout = QVBoxLayout(self.transfer_tab)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # Form Card
+        # Top Block: Form Card
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setFixedWidth(380)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setContentsMargins(15, 15, 15, 15)
-        form_layout.setSpacing(12)
+        form_layout = QVBoxLayout(form_frame)
+        form_layout.setContentsMargins(16, 12, 16, 14)
+        form_layout.setSpacing(10)
 
+        # Header Row
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
         lbl = QLabel("New Fund Transfer")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
-        form_layout.addRow(lbl)
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
+        header_row.addWidget(lbl)
+        header_row.addStretch()
+        form_layout.addLayout(header_row)
 
         self.t_date = QDateEdit()
         self.t_date.setCalendarPopup(True)
@@ -1047,7 +1052,6 @@ class PaymentsView(QWidget):
 
         self.t_from = QComboBox()
         self.t_to = QComboBox()
-        
         self.t_from.currentIndexChanged.connect(self.handle_transfer_source_change)
 
         self.t_amount = QDoubleSpinBox()
@@ -1058,27 +1062,64 @@ class PaymentsView(QWidget):
         self.t_remarks = QLineEdit()
         self.t_remarks.setPlaceholderText("Transfer remarks (optional)")
 
-        form_layout.addRow("Transfer Date:", self.t_date)
-        form_layout.addRow("Transfer From *:", self.t_from)
-        form_layout.addRow("Transfer To *:", self.t_to)
-        form_layout.addRow("Amount (₹) *:", self.t_amount)
-        form_layout.addRow("Remarks:", self.t_remarks)
-
         self.t_save_btn = QPushButton("Execute Transfer")
         self.t_save_btn.setProperty("class", "btn-success")
+        self.t_save_btn.setFixedHeight(34)
+        self.t_save_btn.setCursor(Qt.PointingHandCursor)
         self.t_save_btn.clicked.connect(self.save_fund_transfer)
-        form_layout.addRow("", self.t_save_btn)
 
+        # Grid layout for inputs (4 Columns x 2 Rows)
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+
+        def make_field(label_text, widget):
+            w = QWidget()
+            vl = QVBoxLayout(w)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(4)
+            lbl_f = QLabel(label_text)
+            lbl_f.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+            vl.addWidget(lbl_f)
+            vl.addWidget(widget)
+            return w
+
+        f_date = make_field("Transfer Date", self.t_date)
+        f_from = make_field("Transfer From *", self.t_from)
+        f_to = make_field("Transfer To *", self.t_to)
+        f_amt = make_field("Amount (₹) *", self.t_amount)
+        f_rem = make_field("Remarks", self.t_remarks)
+
+        btn_w = QWidget()
+        btn_w_l = QVBoxLayout(btn_w)
+        btn_w_l.setContentsMargins(0, 0, 0, 0)
+        btn_w_l.setSpacing(4)
+        lbl_spacer = QLabel(" ")
+        lbl_spacer.setStyleSheet("font-size: 11.5px;")
+        btn_w_l.addWidget(lbl_spacer)
+        btn_w_l.addWidget(self.t_save_btn)
+
+        grid.addWidget(f_date, 0, 0)
+        grid.addWidget(f_from, 0, 1)
+        grid.addWidget(f_to, 0, 2)
+        grid.addWidget(f_amt, 0, 3)
+
+        grid.addWidget(f_rem, 1, 0, 1, 3)
+        grid.addWidget(btn_w, 1, 3)
+
+        form_layout.addLayout(grid)
         layout.addWidget(form_frame)
 
-        # Right Card: Transfer History Table
+        # Bottom Card: Transfer History Table
         history_frame = QFrame()
         history_frame.setProperty("class", "CardFrame")
         history_layout = QVBoxLayout(history_frame)
-        history_layout.setContentsMargins(15, 15, 15, 15)
+        history_layout.setContentsMargins(16, 12, 16, 14)
+        history_layout.setSpacing(10)
         
         history_title = QLabel("Transfer Log")
-        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
+        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
         history_layout.addWidget(history_title)
 
         self.transfer_table = QTableWidget()
@@ -1099,7 +1140,7 @@ class PaymentsView(QWidget):
         self.has_more_transfers = True
         self.transfer_table.verticalScrollBar().valueChanged.connect(self.handle_transfer_scroll)
 
-        layout.addWidget(history_frame)
+        layout.addWidget(history_frame, 1)
 
     def handle_transfer_source_change(self):
         self.populate_transfer_destinations()
@@ -1277,21 +1318,26 @@ class PaymentsView(QWidget):
             session.close()
 
     def setup_direct_tab(self):
-        layout = QHBoxLayout(self.direct_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(20)
+        # Vertical stacked layout: Top = New Direct Inflow / Outflow, Bottom = Direct Transactions Log
+        layout = QVBoxLayout(self.direct_tab)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # Form Card
+        # Top Block: Form Card
         form_frame = QFrame()
         form_frame.setProperty("class", "CardFrame")
-        form_frame.setFixedWidth(380)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setContentsMargins(15, 15, 15, 15)
-        form_layout.setSpacing(12)
+        form_layout = QVBoxLayout(form_frame)
+        form_layout.setContentsMargins(16, 12, 16, 14)
+        form_layout.setSpacing(10)
 
-        lbl = QLabel("New Direct Inflow/Outflow")
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
-        form_layout.addRow(lbl)
+        # Header Row
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        lbl = QLabel("New Direct Inflow / Outflow")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
+        header_row.addWidget(lbl)
+        header_row.addStretch()
+        form_layout.addLayout(header_row)
 
         self.d_date = QDateEdit()
         self.d_date.setCalendarPopup(True)
@@ -1315,28 +1361,67 @@ class PaymentsView(QWidget):
         self.d_desc = QLineEdit()
         self.d_desc.setPlaceholderText("Description (e.g. Capital, rent, interest)")
 
-        form_layout.addRow("Transaction Date:", self.d_date)
-        form_layout.addRow("Transaction Type *:", self.d_type)
-        form_layout.addRow("Account Type *:", self.d_account_type)
-        form_layout.addRow("Select Bank:", self.d_bank)
-        form_layout.addRow("Amount (₹) *:", self.d_amount)
-        form_layout.addRow("Description *:", self.d_desc)
-
         self.d_save_btn = QPushButton("Save Transaction")
         self.d_save_btn.setProperty("class", "btn-success")
+        self.d_save_btn.setFixedHeight(34)
+        self.d_save_btn.setCursor(Qt.PointingHandCursor)
         self.d_save_btn.clicked.connect(self.save_direct_transaction)
-        form_layout.addRow("", self.d_save_btn)
 
+        # Grid layout for inputs (4 Columns x 2 Rows)
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+
+        def make_field(label_text, widget):
+            w = QWidget()
+            vl = QVBoxLayout(w)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(4)
+            lbl_f = QLabel(label_text)
+            lbl_f.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #475569;")
+            vl.addWidget(lbl_f)
+            vl.addWidget(widget)
+            return w
+
+        f_date = make_field("Transaction Date", self.d_date)
+        f_type = make_field("Transaction Type *", self.d_type)
+        f_acc = make_field("Account Type *", self.d_account_type)
+        f_bank = make_field("Select Bank", self.d_bank)
+
+        f_amt = make_field("Amount (₹) *", self.d_amount)
+        f_desc = make_field("Description *", self.d_desc)
+
+        btn_w = QWidget()
+        btn_w_l = QVBoxLayout(btn_w)
+        btn_w_l.setContentsMargins(0, 0, 0, 0)
+        btn_w_l.setSpacing(4)
+        lbl_spacer = QLabel(" ")
+        lbl_spacer.setStyleSheet("font-size: 11.5px;")
+        btn_w_l.addWidget(lbl_spacer)
+        btn_w_l.addWidget(self.d_save_btn)
+
+        grid.addWidget(f_date, 0, 0)
+        grid.addWidget(f_type, 0, 1)
+        grid.addWidget(f_acc, 0, 2)
+        grid.addWidget(f_bank, 0, 3)
+
+        grid.addWidget(f_amt, 1, 0)
+        grid.addWidget(f_desc, 1, 1, 1, 2)
+        grid.addWidget(btn_w, 1, 3)
+
+        form_layout.addLayout(grid)
         layout.addWidget(form_frame)
 
-        # Right Card: Direct Transactions History Table
+        # Bottom Card: Direct Transactions History Table
         history_frame = QFrame()
         history_frame.setProperty("class", "CardFrame")
         history_layout = QVBoxLayout(history_frame)
-        history_layout.setContentsMargins(15, 15, 15, 15)
+        history_layout.setContentsMargins(16, 12, 16, 14)
+        history_layout.setSpacing(10)
         
         history_title = QLabel("Direct Transactions Log")
-        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
+        history_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a;")
         history_layout.addWidget(history_title)
 
         self.direct_table = QTableWidget()
@@ -1357,7 +1442,7 @@ class PaymentsView(QWidget):
         self.has_more_direct = True
         self.direct_table.verticalScrollBar().valueChanged.connect(self.handle_direct_scroll)
 
-        layout.addWidget(history_frame)
+        layout.addWidget(history_frame, 1)
 
     def handle_direct_account_type_change(self, index):
         self.d_bank.setEnabled(index == 1)
