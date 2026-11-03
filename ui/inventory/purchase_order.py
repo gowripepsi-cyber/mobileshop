@@ -133,25 +133,20 @@ class PurchaseOrderDialog(QDialog):
         row1.addWidget(f_notes, 1)
         order_layout.addLayout(row1)
 
-        # Row 2: Select Supplier Combo, Supplier Name, Mobile, Address, GSTIN, Clear Button
+        # Row 2: Supplier Combo, Mobile, Address, GSTIN, Clear Button
         row2 = QHBoxLayout()
         row2.setContentsMargins(0, 0, 0, 0)
         row2.setSpacing(10)
 
-        self.supplier_combo = QComboBox()
+        self.supplier_combo = AutoClearSearchableComboBox()
         self.supplier_combo.setStyleSheet(common_input_style)
         self.supplier_combo.currentIndexChanged.connect(self.on_supplier_selected)
-        f_s_combo = make_field("Select Supplier", self.supplier_combo, width=200)
-
-        self.supp_name_edit = QLineEdit()
-        self.supp_name_edit.setPlaceholderText("Enter or edit supplier name")
-        self.supp_name_edit.setStyleSheet(common_input_style)
-        f_s_name = make_field("Supplier Name *", self.supp_name_edit, width=200)
+        f_s_combo = make_field("Supplier *", self.supplier_combo, width=280)
 
         self.supp_mobile_edit = QLineEdit()
         self.supp_mobile_edit.setPlaceholderText("Phone / Mobile")
         self.supp_mobile_edit.setStyleSheet(common_input_style)
-        f_s_mob = make_field("Contact / Mobile", self.supp_mobile_edit, width=130)
+        f_s_mob = make_field("Contact / Mobile", self.supp_mobile_edit, width=140)
 
         self.supp_address_edit = QLineEdit()
         self.supp_address_edit.setPlaceholderText("Supplier Address")
@@ -161,7 +156,7 @@ class PurchaseOrderDialog(QDialog):
         self.supp_gst_edit = QLineEdit()
         self.supp_gst_edit.setPlaceholderText("GSTIN")
         self.supp_gst_edit.setStyleSheet(common_input_style)
-        f_s_gst = make_field("GSTIN", self.supp_gst_edit, width=130)
+        f_s_gst = make_field("GSTIN", self.supp_gst_edit, width=140)
 
         # Clear Supplier Button (Exact same height and baseline alignment as textboxes!)
         clear_box = QWidget()
@@ -180,7 +175,6 @@ class PurchaseOrderDialog(QDialog):
         clear_box_l.addWidget(self.clear_supp_btn)
 
         row2.addWidget(f_s_combo)
-        row2.addWidget(f_s_name)
         row2.addWidget(f_s_mob)
         row2.addWidget(f_s_addr, 1)
         row2.addWidget(f_s_gst)
@@ -342,14 +336,14 @@ class PurchaseOrderDialog(QDialog):
         self.items_table.setColumnWidth(3, 125)  # Brand / Model
         self.items_table.setColumnWidth(4, 65)   # Stock
         self.items_table.setColumnWidth(5, 65)   # Limit
-        self.items_table.setColumnWidth(6, 100)  # Order Qty
-        self.items_table.setColumnWidth(7, 65)   # Unit
-        self.items_table.setColumnWidth(8, 110)  # Est. Rate (₹)
-        self.items_table.setColumnWidth(9, 110)  # Total (₹)
-        self.items_table.setColumnWidth(10, 85)  # Action
+        self.items_table.setColumnWidth(6, 115)  # Order Qty (widened to fit spinbox & header)
+        self.items_table.setColumnWidth(7, 75)   # Unit (widened for full visibility)
+        self.items_table.setColumnWidth(8, 135)  # Est. Rate (₹) (widened for complete digits & header)
+        self.items_table.setColumnWidth(9, 125)  # Total (₹) (widened for complete currency totals)
+        self.items_table.setColumnWidth(10, 100) # Action (widened for full delete button & header)
 
         self.items_table.verticalHeader().setVisible(False)
-        self.items_table.verticalHeader().setDefaultSectionSize(48)
+        self.items_table.verticalHeader().setDefaultSectionSize(58)
         self.items_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.items_table.setSelectionMode(QAbstractItemView.NoSelection)
         self.items_table.setFocusPolicy(Qt.NoFocus)
@@ -377,15 +371,15 @@ class PurchaseOrderDialog(QDialog):
 
         self.save_btn = QPushButton("💾 Save Purchase Order")
         self.save_btn.setFixedHeight(36)
-        self.save_btn.setFixedWidth(170)
+        self.save_btn.setFixedWidth(195)
         self.save_btn.setStyleSheet("font-size: 12px; font-weight: bold; background-color: #f59e0b; color: white; border-radius: 6px;")
         self.save_btn.setCursor(Qt.PointingHandCursor)
-        self.save_btn.clicked.connect(self.save_purchase_order)
+        self.save_btn.clicked.connect(lambda: self.save_purchase_order(show_msg=True))
         bottom_layout.addWidget(self.save_btn)
 
         self.print_btn = QPushButton("📄 Print Preview / PDF")
         self.print_btn.setFixedHeight(36)
-        self.print_btn.setFixedWidth(160)
+        self.print_btn.setFixedWidth(180)
         self.print_btn.setStyleSheet("font-size: 12px; font-weight: bold; background-color: #8fd53b; color: #0f172a; border-radius: 6px;")
         self.print_btn.setCursor(Qt.PointingHandCursor)
         self.print_btn.clicked.connect(self.export_and_open_pdf)
@@ -451,14 +445,15 @@ class PurchaseOrderDialog(QDialog):
         h_header.setSectionResizeMode(QHeaderView.Stretch)
         h_header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        h_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
         h_header.setSectionResizeMode(8, QHeaderView.Fixed)
-        self.history_table.setColumnWidth(8, 200)
+        self.history_table.setColumnWidth(8, 240)
 
         self.history_table.verticalHeader().setVisible(False)
-        self.history_table.verticalHeader().setDefaultSectionSize(44)
+        self.history_table.verticalHeader().setDefaultSectionSize(58)
         self.history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.history_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         hist_layout.addWidget(self.history_table, 1)
@@ -500,6 +495,18 @@ class PurchaseOrderDialog(QDialog):
             for s in suppliers:
                 self.suppliers_cache[s.id] = s
                 self.supplier_combo.addItem(f"{s.name} ({s.mobile})", s.id)
+            self.supplier_combo.update_completer()
+
+            # Dynamically calculate maximum width so popup expands fully to fit all supplier names & phones
+            fm = self.supplier_combo.fontMetrics()
+            max_w = 340
+            for i in range(self.supplier_combo.count()):
+                w = fm.horizontalAdvance(self.supplier_combo.itemText(i)) + 40
+                if w > max_w:
+                    max_w = w
+            self.supplier_combo.view().setMinimumWidth(max_w)
+            if self.supplier_combo.completer() and self.supplier_combo.completer().popup():
+                self.supplier_combo.completer().popup().setMinimumWidth(max_w)
 
             # Categories
             self.add_cat_combo.clear()
@@ -562,7 +569,7 @@ class PurchaseOrderDialog(QDialog):
     def append_item_row(self, product_id, product_code, item_name, brand_model, stock, limit, qty, unit, rate):
         row = self.items_table.rowCount()
         self.items_table.insertRow(row)
-        self.items_table.setRowHeight(row, 48)
+        self.items_table.setRowHeight(row, 58)
 
         # 0. S.No
         sn_item = QTableWidgetItem(str(row + 1))
@@ -574,16 +581,18 @@ class PurchaseOrderDialog(QDialog):
         code_item.setTextAlignment(Qt.AlignCenter)
         self.items_table.setItem(row, 1, code_item)
 
-        # 2. Item Name (Container + QLineEdit with 32px height and generous vertical room)
+        # 2. Item Name (Container + QLineEdit with clean vertical clearance)
         name_container = QWidget()
+        name_container.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
         name_layout = QHBoxLayout(name_container)
-        name_layout.setContentsMargins(4, 2, 4, 2)
+        name_layout.setContentsMargins(4, 0, 4, 0)
         name_layout.setSpacing(0)
         name_edit = QLineEdit(item_name)
-        name_edit.setFixedHeight(32)
+        name_edit.setFixedHeight(28)
         name_edit.setStyleSheet(
             "QLineEdit { background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 6px; "
-            "padding: 2px 8px; font-size: 12px; color: #0f172a; } "
+            "padding: 0px 8px !important; min-height: 28px !important; max-height: 28px !important; height: 28px !important; "
+            "font-size: 12px; color: #0f172a; margin: 0px !important; } "
             "QLineEdit:focus { border: 1.5px solid #3b82f6; background-color: #f8fafc; }"
         )
         name_edit.textChanged.connect(self.recalculate_totals)
@@ -611,20 +620,22 @@ class PurchaseOrderDialog(QDialog):
         limit_item.setTextAlignment(Qt.AlignCenter)
         self.items_table.setItem(row, 5, limit_item)
 
-        # 6. Order Qty (Container + QSpinBox with 32px height)
+        # 6. Order Qty (Container + QSpinBox with clean vertical clearance)
         qty_container = QWidget()
+        qty_container.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
         qty_layout = QHBoxLayout(qty_container)
-        qty_layout.setContentsMargins(4, 2, 4, 2)
+        qty_layout.setContentsMargins(4, 0, 4, 0)
         qty_layout.setSpacing(0)
         qty_layout.setAlignment(Qt.AlignCenter)
         qty_spin = QSpinBox()
         qty_spin.setRange(1, 99999)
         qty_spin.setValue(qty)
-        qty_spin.setFixedSize(85, 32)
+        qty_spin.setFixedSize(90, 28)
         qty_spin.setAlignment(Qt.AlignCenter)
         qty_spin.setStyleSheet(
             "QSpinBox { background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 6px; "
-            "padding: 2px 4px; font-weight: bold; font-size: 12px; color: #0f172a; } "
+            "padding: 0px 4px !important; min-height: 28px !important; max-height: 28px !important; height: 28px !important; "
+            "font-weight: bold; font-size: 12px; color: #0f172a; margin: 0px !important; } "
             "QSpinBox:focus { border: 1.5px solid #3b82f6; background-color: #f8fafc; }"
         )
         qty_spin.valueChanged.connect(self.recalculate_totals)
@@ -636,21 +647,23 @@ class PurchaseOrderDialog(QDialog):
         unit_item.setTextAlignment(Qt.AlignCenter)
         self.items_table.setItem(row, 7, unit_item)
 
-        # 8. Rate (Container + QDoubleSpinBox with 32px height)
+        # 8. Rate (Container + QDoubleSpinBox with clean vertical clearance)
         rate_container = QWidget()
+        rate_container.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
         rate_layout = QHBoxLayout(rate_container)
-        rate_layout.setContentsMargins(4, 2, 4, 2)
+        rate_layout.setContentsMargins(4, 0, 4, 0)
         rate_layout.setSpacing(0)
         rate_layout.setAlignment(Qt.AlignCenter)
         rate_spin = QDoubleSpinBox()
         rate_spin.setRange(0.0, 999999.0)
         rate_spin.setDecimals(2)
         rate_spin.setValue(rate)
-        rate_spin.setFixedSize(95, 32)
+        rate_spin.setFixedSize(110, 28)
         rate_spin.setAlignment(Qt.AlignRight)
         rate_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 6px; "
-            "padding: 2px 6px; font-weight: bold; font-size: 12px; color: #0f172a; } "
+            "padding: 0px 6px !important; min-height: 28px !important; max-height: 28px !important; height: 28px !important; "
+            "font-weight: bold; font-size: 12px; color: #0f172a; margin: 0px !important; } "
             "QDoubleSpinBox:focus { border: 1.5px solid #3b82f6; background-color: #f8fafc; }"
         )
         rate_spin.valueChanged.connect(self.recalculate_totals)
@@ -666,18 +679,20 @@ class PurchaseOrderDialog(QDialog):
 
         # 10. Action: Clean Delete Button (Consistent across all rows, no stuck hover/selection)
         del_container = QWidget()
+        del_container.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
         del_layout = QHBoxLayout(del_container)
-        del_layout.setContentsMargins(4, 2, 4, 2)
+        del_layout.setContentsMargins(4, 0, 4, 0)
         del_layout.setSpacing(0)
         del_layout.setAlignment(Qt.AlignCenter)
         del_btn = QPushButton("Delete")
         del_btn.setObjectName("po_table_del_btn")
-        del_btn.setFixedSize(70, 28)
+        del_btn.setFixedSize(72, 26)
         del_btn.setFocusPolicy(Qt.NoFocus)
         del_btn.setStyleSheet(
             "QPushButton#po_table_del_btn { "
-            "   background-color: #fee2e2; color: #dc2626; font-size: 11.5px; font-weight: bold; "
-            "   border-radius: 6px; padding: 2px 8px; border: 1.5px solid #fca5a5; "
+            "   background-color: #fee2e2; color: #dc2626; font-size: 11px; font-weight: bold; "
+            "   border-radius: 6px; padding: 0px 4px !important; border: 1.5px solid #fca5a5; "
+            "   min-height: 26px !important; max-height: 26px !important; height: 26px !important; margin: 0px !important;"
             "} "
             "QPushButton#po_table_del_btn:hover { "
             "   background-color: #ef4444; color: #ffffff; border: 1.5px solid #ef4444; "
@@ -744,7 +759,6 @@ class PurchaseOrderDialog(QDialog):
         supp_id = self.supplier_combo.currentData()
         if supp_id and supp_id in self.suppliers_cache:
             supp = self.suppliers_cache[supp_id]
-            self.supp_name_edit.setText(supp.name or "")
             self.supp_mobile_edit.setText(supp.mobile or "")
             self.supp_address_edit.setText(supp.address or "")
             self.supp_gst_edit.setText(supp.gst or "")
@@ -753,11 +767,12 @@ class PurchaseOrderDialog(QDialog):
 
     def clear_supplier_fields(self):
         self.supplier_combo.setCurrentIndex(0)
-        self.supp_name_edit.clear()
+        if self.supplier_combo.lineEdit():
+            self.supplier_combo.lineEdit().setText(self.supplier_combo.itemText(0))
         self.supp_mobile_edit.clear()
         self.supp_address_edit.clear()
         self.supp_gst_edit.clear()
-        self.supp_name_edit.setFocus()
+        self.supplier_combo.setFocus()
 
     # -------------------------------------------------------------------------
     # ADD CUSTOM / CATALOG ITEM
@@ -859,10 +874,21 @@ class PurchaseOrderDialog(QDialog):
             QMessageBox.warning(self, "PO Number Required", "Please enter a valid PO number.")
             return None
 
-        supp_name = self.supp_name_edit.text().strip()
+        supp_id = self.supplier_combo.currentData()
+        supp_text = self.supplier_combo.currentText().strip()
+        if supp_id and supp_id in self.suppliers_cache:
+            supp_name = self.suppliers_cache[supp_id].name or ""
+        elif supp_text and supp_text != "-- Select Registered Supplier / Custom --":
+            if " (" in supp_text and supp_text.endswith(")"):
+                supp_name = supp_text.rsplit(" (", 1)[0].strip()
+            else:
+                supp_name = supp_text
+        else:
+            supp_name = ""
+
         if not supp_name:
-            QMessageBox.warning(self, "Supplier Required", "Please enter or select a Supplier Name.")
-            self.supp_name_edit.setFocus()
+            QMessageBox.warning(self, "Supplier Required", "Please select or enter a Supplier.")
+            self.supplier_combo.setFocus()
             return None
 
         if self.items_table.rowCount() == 0:
@@ -918,6 +944,10 @@ class PurchaseOrderDialog(QDialog):
         }
 
     def save_purchase_order(self, show_msg=True):
+        # Ensure show_msg is True when clicked from save button
+        if self.sender() == self.save_btn:
+            show_msg = True
+
         payload = self.get_order_payload()
         if not payload:
             return None
@@ -974,12 +1004,46 @@ class PurchaseOrderDialog(QDialog):
                 )
                 session.add(po_item)
 
+            saved_po_id = po_master.id
+            saved_po_num = payload['po_number']
             session.commit()
-            if show_msg:
-                QMessageBox.information(self, "Success", f"Purchase Order '{payload['po_number']}' saved successfully!")
+            next_po_num = generate_next_po_number(session)
 
-            self.po_number_edit.setText(generate_next_po_number(session))
-            return po_master.id
+            if show_msg:
+                QMessageBox.information(self, "Success", f"Purchase Order '{saved_po_num}' saved successfully!")
+
+            # 1. Clear selected supplier data and inputs
+            self.clear_supplier_fields()
+
+            # 2. Reset dates and notes
+            self.po_date_edit.setDate(QDate.currentDate())
+            self.exp_date_edit.setDate(QDate.currentDate().addDays(3))
+            self.notes_edit.setText("Urgent order for replenishment of low stock.")
+
+            # 3. Reset additional item inputs
+            if hasattr(self, 'add_code_input'):
+                self.add_code_input.clear()
+            if hasattr(self, 'add_cat_combo'):
+                self.add_cat_combo.setCurrentIndex(0)
+            if hasattr(self, 'add_prod_combo'):
+                self.add_prod_combo.reset_items()
+            if hasattr(self, 'add_qty_spin'):
+                self.add_qty_spin.setValue(1)
+            if hasattr(self, 'add_rate_spin'):
+                self.add_rate_spin.setValue(0.0)
+            if hasattr(self, 'stock_status_lbl'):
+                self.stock_status_lbl.setText("Available: -")
+
+            # 4. Reload low stock items fresh and recalculate totals
+            self.load_low_stock_items()
+
+            # 5. Set next generated PO number
+            self.po_number_edit.setText(next_po_num)
+
+            # 6. Refresh PO history tab
+            self.load_history_data()
+
+            return saved_po_id
 
         except Exception as e:
             session.rollback()
@@ -1053,7 +1117,11 @@ class PurchaseOrderDialog(QDialog):
     def load_history_data(self):
         session = Session()
         try:
-            self.history_records = session.query(PurchaseOrderMaster).order_by(PurchaseOrderMaster.id.desc()).all()
+            records = session.query(PurchaseOrderMaster).order_by(PurchaseOrderMaster.id.desc()).all()
+            for r in records:
+                _ = (r.id, r.po_number, r.date, r.supplier_name, r.supplier_mobile, r.total_items, r.total_qty, r.total_amount, r.status)
+            session.expunge_all()
+            self.history_records = records
             self.filter_history_table()
         except Exception as e:
             print(f"Error loading PO history: {e}")
@@ -1108,25 +1176,36 @@ class PurchaseOrderDialog(QDialog):
             self.history_table.setItem(row, 7, st_item)
 
             action_widget = QWidget()
+            action_widget.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
             a_layout = QHBoxLayout(action_widget)
-            a_layout.setContentsMargins(4, 2, 4, 2)
+            a_layout.setContentsMargins(4, 0, 4, 0)
             a_layout.setSpacing(6)
+            a_layout.setAlignment(Qt.AlignCenter)
+
+            btn_base = (
+                "font-size: 11px; font-weight: bold; border-radius: 6px; "
+                "min-height: 26px !important; max-height: 26px !important; height: 26px !important; "
+                "padding: 0px 4px !important; margin: 0px !important;"
+            )
 
             view_btn = QPushButton("View")
-            view_btn.setProperty("class", "btn-secondary")
-            view_btn.setFixedHeight(24)
+            view_btn.setFixedSize(62, 26)
+            view_btn.setStyleSheet(f"QPushButton {{ {btn_base} background-color: #f1f5f9; color: #334155; border: 1.5px solid #cbd5e1; }} QPushButton:hover {{ background-color: #e2e8f0; }}")
+            view_btn.setCursor(Qt.PointingHandCursor)
             view_btn.clicked.connect(lambda checked, p_id=po.id: self.view_po_details(p_id))
             a_layout.addWidget(view_btn)
 
             pdf_btn = QPushButton("PDF")
-            pdf_btn.setProperty("class", "btn-success")
-            pdf_btn.setFixedHeight(24)
+            pdf_btn.setFixedSize(54, 26)
+            pdf_btn.setStyleSheet(f"QPushButton {{ {btn_base} background-color: #10b981; color: white; border: 1.5px solid #059669; }} QPushButton:hover {{ background-color: #059669; }}")
+            pdf_btn.setCursor(Qt.PointingHandCursor)
             pdf_btn.clicked.connect(lambda checked, p_id=po.id: self.print_po_from_history(p_id))
             a_layout.addWidget(pdf_btn)
 
             del_btn = QPushButton("Delete")
-            del_btn.setProperty("class", "btn-danger")
-            del_btn.setFixedHeight(24)
+            del_btn.setFixedSize(66, 26)
+            del_btn.setStyleSheet(f"QPushButton {{ {btn_base} background-color: #ef4444; color: white; border: 1.5px solid #dc2626; }} QPushButton:hover {{ background-color: #dc2626; }}")
+            del_btn.setCursor(Qt.PointingHandCursor)
             del_btn.clicked.connect(lambda checked, p_id=po.id: self.delete_po_from_history(p_id))
             a_layout.addWidget(del_btn)
 

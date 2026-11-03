@@ -70,21 +70,20 @@ class MainWindow(QMainWindow):
         self.nav_groups = []
 
         nav_groups_data = [
-            ("MAIN", [
-                ("Dashboard", 0, "Ctrl+1"),
-            ]),
             ("OPERATIONS & BILLING", [
                 ("Sales Invoice", 3, "Ctrl+4"),
                 ("Purchase Entry", 2, "Ctrl+3"),
                 ("Upload Existing Stock", 12, "Ctrl+Shift+E"),
                 ("Service Cards", 4, "Ctrl+5"),
             ]),
-            ("FINANCE & HR", [
+            ("FINANCE", [
                 ("Payments", 5, "Ctrl+6"),
                 ("Expenses", 10, "Ctrl+9"),
-                ("Staff Management", 11, "Ctrl+0"),
                 ("Bank & Cash", 9, "Ctrl+8"),
                 ("UPI / Money Transfer", 8, "Ctrl+Shift+M"),
+            ]),
+            ("STAFF MANAGEMENT", [
+                ("Staff Management", 11, "Ctrl+0"),
             ]),
             ("MANAGEMENT & REPORTS", [
                 ("Reports", 6, "Ctrl+7"),
@@ -130,6 +129,30 @@ class MainWindow(QMainWindow):
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(2)
+
+        # Standalone HOME Button (Dashboard)
+        self.home_btn = QPushButton()
+        self.home_btn.setCheckable(True)
+        self.home_btn.setCursor(Qt.PointingHandCursor)
+        self.home_btn.setToolTip(tr("HOME"))
+
+        home_layout = QHBoxLayout(self.home_btn)
+        home_layout.setContentsMargins(10, 0, 10, 0)
+        home_layout.setSpacing(6)
+
+        home_lbl = QLabel(tr("HOME"))
+        home_lbl.setObjectName("btn_label")
+        home_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
+        home_layout.addWidget(home_lbl)
+        self.home_btn.label = home_lbl
+        self.home_btn.orig_text = "HOME"
+
+        home_layout.addStretch()
+
+        self.home_btn.clicked.connect(lambda: self.switch_view(0))
+        scroll_layout.addWidget(self.home_btn)
+        self.nav_buttons[0] = self.home_btn
+        scroll_layout.addSpacing(2)
 
         for group_name, items in nav_groups_data:
             # Clickable Collapsible Header Button
