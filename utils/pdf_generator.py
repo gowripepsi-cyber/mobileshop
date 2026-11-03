@@ -1,5 +1,6 @@
 import os
 from reportlab.lib.pagesizes import letter
+from reportlab.platypus.flowables import HRFlowable
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -2186,3 +2187,273 @@ def generate_inventory_profit_pdf(report_data, file_path):
 
 
 
+
+
+def generate_purchase_order_pdf(po_data, file_path):
+    """
+    Generates a professional PDF Purchase Order document.
+    po_data keys:
+      - shop_name, shop_contact, shop_address, shop_gst
+      - po_number, date, expected_date, status, notes
+      - supplier_name, supplier_mobile, supplier_address, supplier_gst
+      - items: list of dicts {"s_no", "product_code", "name", "brand_model", "qty", "unit", "rate", "total"}
+      - total_items, total_qty, total_amount
+    """
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    style_shop_name = ParagraphStyle(
+        'POSHopName',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#d97706')
+    )
+    
+    style_title = ParagraphStyle(
+        'POTitle',
+        fontName='Helvetica-Bold',
+        fontSize=22,
+        leading=26,
+        textColor=colors.HexColor('#1e293b'),
+        alignment=2 # Right
+    )
+
+    style_sub = ParagraphStyle(
+        'POSubtext',
+        fontName='Helvetica',
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor('#475569')
+    )
+    
+    style_bold = ParagraphStyle(
+        'POBold',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor('#1e293b')
+    )
+
+    style_box_header = ParagraphStyle(
+        'POBoxHeader',
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor('#d97706')
+    )
+    
+    style_th = ParagraphStyle(
+        'POTh',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=11,
+        textColor=colors.white,
+        alignment=0
+    )
+    style_th_right = ParagraphStyle(
+        'POThRight',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=11,
+        textColor=colors.white,
+        alignment=2
+    )
+
+    style_td = ParagraphStyle(
+        'POTd',
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#1e293b'),
+        alignment=0
+    )
+    style_td_right = ParagraphStyle(
+        'POTdRight',
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#1e293b'),
+        alignment=2
+    )
+    style_td_bold_right = ParagraphStyle(
+        'POTdBoldRight',
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#0f172a'),
+        alignment=2
+    )
+
+    story = []
+
+    # 1. Header Grid
+    left_info = [
+        Paragraph(po_data.get('shop_name', 'I TECH MOBILES'), style_shop_name),
+        Paragraph(po_data.get('shop_address', ''), style_sub),
+        Paragraph(f"Phone: {po_data.get('shop_contact', 'N/A')}", style_sub),
+        Paragraph(f"GSTIN: {po_data.get('shop_gst', 'N/A')}", style_sub)
+    ]
+    
+    right_info = [
+        Paragraph("PURCHASE ORDER", style_title),
+        Spacer(1, 4),
+        Paragraph(f"<b>PO Number:</b> {po_data.get('po_number', '')}", style_bold),
+        Paragraph(f"<b>Order Date:</b> {po_data.get('date', '')}", style_sub),
+        Paragraph(f"<b>Status:</b> {po_data.get('status', 'Pending')}", style_sub)
+    ]
+    
+    header_table = Table([[left_info, right_info]], colWidths=[310, 230])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    story.append(header_table)
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#d97706'), spaceBefore=4, spaceAfter=12))
+
+    # 2. Supplier Info & Order Details Table
+    supp_details = [
+        Paragraph("VENDOR / SUPPLIER DETAILS", style_box_header),
+        Spacer(1, 3),
+        Paragraph(f"<b>Name:</b> {po_data.get('supplier_name', 'N/A')}", style_bold),
+        Paragraph(f"<b>Contact:</b> {po_data.get('supplier_mobile', 'N/A')}", style_sub),
+        Paragraph(f"<b>Address:</b> {po_data.get('supplier_address', 'N/A') or 'N/A'}", style_sub),
+        Paragraph(f"<b>GSTIN:</b> {po_data.get('supplier_gst', 'N/A') or 'N/A'}", style_sub)
+    ]
+
+    exp_date = po_data.get('expected_date') or 'Immediate / Earliest'
+    notes_val = po_data.get('notes') or 'Urgent order for replenishment of low stock.'
+    order_details = [
+        Paragraph("ORDER & SHIPPING DETAILS", style_box_header),
+        Spacer(1, 3),
+        Paragraph(f"<b>Expected Delivery:</b> {exp_date}", style_sub),
+        Paragraph(f"<b>Total Order Qty:</b> {po_data.get('total_qty', 0)} Units", style_sub),
+        Paragraph(f"<b>Order Category:</b> Low Stock Replenishment", style_sub),
+        Paragraph(f"<b>Notes / Remarks:</b> {notes_val}", style_sub)
+    ]
+
+    info_card_table = Table([[supp_details, order_details]], colWidths=[270, 270])
+    info_card_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BACKGROUND', (0,0), (0,0), colors.HexColor('#fefce8')),
+        ('BACKGROUND', (1,0), (1,0), colors.HexColor('#f8fafc')),
+        ('BOX', (0,0), (0,0), 1, colors.HexColor('#fde68a')),
+        ('BOX', (1,0), (1,0), 1, colors.HexColor('#e2e8f0')),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+    story.append(info_card_table)
+    story.append(Spacer(1, 14))
+
+    # 3. Items Table
+    table_data = [
+        [
+            Paragraph("S.N", style_th),
+            Paragraph("Code", style_th),
+            Paragraph("Item Description", style_th),
+            Paragraph("Brand / Model", style_th),
+            Paragraph("Qty", style_th_right),
+            Paragraph("Unit", style_th),
+            Paragraph("Est. Rate (₹)", style_th_right),
+            Paragraph("Total (₹)", style_th_right)
+        ]
+    ]
+
+    items = po_data.get('items', [])
+    for idx, it in enumerate(items, 1):
+        p_code = it.get('product_code', '-') or '-'
+        p_name = it.get('name', 'Item')
+        p_bm = it.get('brand_model', '-') or '-'
+        qty = it.get('qty', 1)
+        unit = it.get('unit', 'Pcs') or 'Pcs'
+        rate = float(it.get('rate', 0.0) or 0.0)
+        row_tot = float(it.get('total', qty * rate) or 0.0)
+
+        table_data.append([
+            Paragraph(str(idx), style_td),
+            Paragraph(p_code, style_td),
+            Paragraph(p_name, style_td),
+            Paragraph(p_bm, style_td),
+            Paragraph(str(qty), style_td_right),
+            Paragraph(unit, style_td),
+            Paragraph(f"{rate:,.2f}", style_td_right),
+            Paragraph(f"{row_tot:,.2f}", style_td_right)
+        ])
+
+    # Total Row
+    tot_amount = float(po_data.get('total_amount', 0.0) or 0.0)
+    table_data.append([
+        Paragraph("<b>Total</b>", style_td),
+        Paragraph("", style_td),
+        Paragraph(f"<b>{po_data.get('total_items', len(items))} Item(s) Ordered</b>", style_td),
+        Paragraph("", style_td),
+        Paragraph(f"<b>{po_data.get('total_qty', 0)}</b>", style_td_right),
+        Paragraph("", style_td),
+        Paragraph("<b>Estimated Total:</b>", style_td_right),
+        Paragraph(f"<b>₹{tot_amount:,.2f}</b>", style_td_bold_right)
+    ])
+
+    col_widths = [26, 50, 184, 80, 40, 36, 62, 62]
+    items_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    
+    t_style = [
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e293b')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (-1,-1), 4),
+        ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ('LINEBELOW', (0,1), (-1,-2), 0.5, colors.HexColor('#e2e8f0')),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#f1f5f9')),
+        ('LINEABOVE', (0,-1), (-1,-1), 1.2, colors.HexColor('#cbd5e1')),
+    ]
+    for r in range(1, len(items) + 1):
+        if r % 2 == 0:
+            t_style.append(('BACKGROUND', (0, r), (-1, r), colors.HexColor('#f8fafc')))
+
+    items_table.setStyle(TableStyle(t_style))
+    story.append(items_table)
+    story.append(Spacer(1, 16))
+
+    # 4. Terms and Signature Box
+    terms = [
+        Paragraph("<b>Terms & Instructions:</b>", style_bold),
+        Paragraph("1. Please supply genuine, undamaged items along with delivery challan/invoice.", style_sub),
+        Paragraph("2. In case of any price revision or unavailability, please notify us before dispatch.", style_sub),
+        Paragraph("3. Payment will be settled as per agreed supplier terms upon receiving stock.", style_sub)
+    ]
+    
+    sig = [
+        Spacer(1, 25),
+        HRFlowable(width="80%", thickness=1, color=colors.HexColor('#94a3b8'), spaceBefore=5, spaceAfter=3),
+        Paragraph("Authorized Signatory / Shop Seal", style_sub)
+    ]
+    
+    footer_table = Table([[terms, sig]], colWidths=[360, 180])
+    footer_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (1,0), (1,0), 'CENTER'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+    story.append(footer_table)
+
+    def add_page_number(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 8)
+        canvas.setFillColor(colors.HexColor('#64748b'))
+        canvas.drawRightString(576, 20, f"Page {canvas.getPageNumber()}")
+        canvas.drawString(36, 20, "Generated via Inventory & Accounting Management System")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)

@@ -70,6 +70,10 @@ class Product(Base):
     unit = Column(String, nullable=True, default='Pcs')
 
     @property
+    def cost_price(self):
+        return self.purchase_price or 0.0
+
+    @property
     def brand_model(self):
         if self.brand and self.model and self.brand != self.model:
             return f"{self.brand} {self.model}".strip()
@@ -520,3 +524,44 @@ class ExistingStockItem(Base):
     master = relationship("ExistingStockMaster", back_populates="items")
     product = relationship("Product")
 
+
+
+class PurchaseOrderMaster(Base):
+    __tablename__ = 'purchase_order_master'
+    id = Column(Integer, primary_key=True)
+    po_number = Column(String, unique=True, nullable=False, index=True)
+    date = Column(Date, default=datetime.date.today)
+    expected_date = Column(Date, nullable=True)
+    supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=True)
+    supplier_name = Column(String, nullable=True)
+    supplier_mobile = Column(String, nullable=True)
+    supplier_address = Column(Text, nullable=True)
+    supplier_gst = Column(String, nullable=True)
+    total_items = Column(Integer, default=0)
+    total_qty = Column(Integer, default=0)
+    total_amount = Column(Float, default=0.0)
+    status = Column(String, default="Pending")  # Pending, Ordered, Approved, Completed, Cancelled
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    supplier = relationship("Supplier")
+    items = relationship("PurchaseOrderItem", back_populates="purchase_order", cascade="all, delete-orphan")
+
+
+class PurchaseOrderItem(Base):
+    __tablename__ = 'purchase_order_items'
+    id = Column(Integer, primary_key=True)
+    po_id = Column(Integer, ForeignKey('purchase_order_master.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=True)
+    product_code = Column(String, nullable=True)
+    item_name = Column(String, nullable=False)
+    brand_model = Column(String, nullable=True)
+    unit = Column(String, nullable=True, default='Pcs')
+    current_stock = Column(Integer, default=0)
+    low_limit = Column(Integer, default=0)
+    qty = Column(Integer, default=1)
+    rate = Column(Float, default=0.0)
+    total_amount = Column(Float, default=0.0)
+
+    purchase_order = relationship("PurchaseOrderMaster", back_populates="items")
+    product = relationship("Product")

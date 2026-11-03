@@ -155,6 +155,14 @@ class DashboardView(QWidget):
         self.print_preview_btn.setStyleSheet("font-size: 11px; background-color: #8fd53b; color: #0f172a; font-weight: bold; border-radius: 8px; margin-bottom: 10px; padding: 0px 10px;")
         self.print_preview_btn.clicked.connect(self.show_low_stock_print_preview)
         title_btn_layout.addWidget(self.print_preview_btn)
+
+        self.purchase_order_btn = QPushButton("🛒 Purchase Order")
+        self.purchase_order_btn.setFixedWidth(135)
+        self.purchase_order_btn.setFixedHeight(44)
+        self.purchase_order_btn.setStyleSheet("font-size: 11px; background-color: #f59e0b; color: white; font-weight: bold; border-radius: 8px; margin-bottom: 10px; padding: 0px 10px;")
+        self.purchase_order_btn.setCursor(Qt.PointingHandCursor)
+        self.purchase_order_btn.clicked.connect(self.open_purchase_order_dialog)
+        title_btn_layout.addWidget(self.purchase_order_btn)
         
         low_stock_layout.addLayout(title_btn_layout)
 
@@ -473,6 +481,12 @@ class DashboardView(QWidget):
         main_win = self.window()
         if hasattr(main_win, 'check_low_stock_alert'):
             main_win.check_low_stock_alert(manual=True)
+
+    def open_purchase_order_dialog(self):
+        from ui.inventory.purchase_order import PurchaseOrderDialog
+        dlg = PurchaseOrderDialog(self)
+        dlg.exec()
+        self.refresh_data()
 
     def show_low_stock_print_preview(self):
         import os

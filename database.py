@@ -1,7 +1,7 @@
 import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit, ExpenseCategory, Expense, Staff, StaffAttendance, StaffSalaryPayment, ExistingStockMaster, ExistingStockItem
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit, ExpenseCategory, Expense, Staff, StaffAttendance, StaffSalaryPayment, ExistingStockMaster, ExistingStockItem, PurchaseOrderMaster, PurchaseOrderItem
 
 DATABASE_URL = "sqlite:///inventory.db"
 
@@ -80,6 +80,20 @@ def generate_next_salary_payment_number(session, payment_type="Salary") -> str:
             except Exception:
                 pass
     return f"{prefix}{(max_num + 1):05d}"
+
+def generate_next_po_number(session) -> str:
+    from models import PurchaseOrderMaster
+    last_po = session.query(PurchaseOrderMaster.po_number).order_by(PurchaseOrderMaster.id.desc()).first()
+    if last_po and last_po[0]:
+        try:
+            parts = last_po[0].split("-")
+            num = int(parts[-1])
+            return f"PO-{num + 1}"
+        except Exception:
+            pass
+    count = session.query(PurchaseOrderMaster).count()
+    return f"PO-{1001 + count}"
+
 
 def init_db():
     Base.metadata.create_all(engine)
