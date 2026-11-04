@@ -1,10 +1,11 @@
 import datetime
 from PySide6.QtWidgets import (QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QLineEdit, QPushButton)
+                             QTableWidget, QTableWidgetItem, QHeaderView, QFrame, QLineEdit, QPushButton,
+                             QDialog, QFormLayout, QMessageBox)
 from PySide6.QtCore import Qt
 from sqlalchemy import func
 from database import Session
-from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction, PurchaseMaster
+from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction, PurchaseMaster, Payment
 
 class ClickableCard(QFrame):
     def __init__(self, title, border_color, parent_view, parent=None):
@@ -409,6 +410,23 @@ class DashboardView(QWidget):
                     "obj_ref": j.job_number
                 })
 
+            # 6. Search Products by name, product_code, brand, or model
+            products = session.query(Product).filter(
+                (Product.name.ilike(f"%{query_text}%")) |
+                (Product.product_code.ilike(f"%{query_text}%")) |
+                (Product.brand.ilike(f"%{query_text}%")) |
+                (Product.model.ilike(f"%{query_text}%"))
+            ).limit(10).all()
+            for prod in products:
+                bm = f" ({prod.brand} {prod.model})".strip() if (prod.brand or prod.model) else ""
+                results.append({
+                    "type": "Product",
+                    "ref": f"{prod.name}{bm}",
+                    "details": f"Code: {prod.product_code} | Stock: {prod.stock_qty} {prod.unit or 'Pcs'} | Price: ₹{prod.selling_price:,.2f}",
+                    "id": prod.id,
+                    "obj_ref": prod.product_code
+                })
+
             # Populate table
             self.results_table.setRowCount(len(results))
             for i, r in enumerate(results):
@@ -452,17 +470,342 @@ class DashboardView(QWidget):
             if hasattr(main_window, 'services_view'):
                 main_window.services_view.view_job_details(res_ref)
         elif res_type == "Customer":
-            if hasattr(main_window, 'customers_view'):
-                main_window.switch_view(1)
-                if hasattr(main_window, 'masters_view'):
-                    main_window.masters_view.set_active_tab(1)
-                main_window.customers_view.search_input.setText(res_ref)
+            self.view_customer_details(res_id)
         elif res_type == "Supplier":
-            if hasattr(main_window, 'suppliers_view'):
-                main_window.switch_view(1)
-                if hasattr(main_window, 'masters_view'):
-                    main_window.masters_view.set_active_tab(2)
-                main_window.suppliers_view.search_input.setText(res_ref)
+            self.view_supplier_details(res_id)
+        elif res_type == "Product":
+            self.view_product_details(res_id)
+
+    def view_customer_details(self, customer_id):
+        session = Session()
+        try:
+            cust = session.query(Customer).get(customer_id)
+            if not cust:
+                QMessageBox.warning(self, "Error", "Customer not found.")
+                return
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Customer Details - {cust.name}")
+            dialog.setMinimumSize(700, 520)
+
+            dlg_layout = QVBoxLayout(dialog)
+            dlg_layout.setSpacing(12)
+            dlg_layout.setContentsMargins(18, 18, 18, 18)
+
+            # Customer Profile Info Frame
+            info_frame = QFrame()
+            info_frame.setProperty("class", "CardFrame")
+            info_layout = QFormLayout(info_frame)
+            info_layout.setSpacing(8)
+
+            lbl_name = QLabel(cust.name)
+            lbl_name.setStyleSheet("font-weight: bold; font-size: 14px; color: #0f172a;")
+            info_layout.addRow("Customer Name:", lbl_name)
+            info_layout.addRow("Mobile Number:", QLabel(cust.mobile or "-"))
+            info_layout.addRow("Address:", QLabel(cust.address or "-"))
+            if cust.gst:
+                info_layout.addRow("GSTIN:", QLabel(cust.gst))
+
+            lbl_bal = QLabel(f"₹{cust.outstanding_balance:,.2f}")
+            if cust.outstanding_balance > 0:
+                lbl_bal.setStyleSheet("font-weight: bold; font-size: 14px; color: #dc2626;")
+            else:
+                lbl_bal.setStyleSheet("font-weight: bold; font-size: 14px; color: #16a34a;")
+            info_layout.addRow("Outstanding Balance:", lbl_bal)
+
+            dlg_layout.addWidget(info_frame)
+
+            # Recent Invoices & Repair Jobs Table
+            history_title = QLabel("<b>Recent Invoices & Service History:</b>")
+            history_title.setStyleSheet("font-size: 13px; color: #0f172a; margin-top: 4px;")
+            dlg_layout.addWidget(history_title)
+
+            table = QTableWidget()
+            table.setColumnCount(5)
+            table.setHorizontalHeaderLabels(["Date", "Type", "Ref # / Details", "Amount (₹)", "Status / Balance"])
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+            table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+            table.setColumnWidth(0, 95)
+            table.setColumnWidth(1, 105)
+            table.setColumnWidth(3, 100)
+            table.setColumnWidth(4, 110)
+            table.verticalHeader().setVisible(False)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+
+            sales = session.query(SalesMaster).filter_by(customer_id=cust.id).order_by(SalesMaster.id.desc()).limit(10).all()
+            jobs = session.query(ServiceJob).filter_by(mobile=cust.mobile).order_by(ServiceJob.id.desc()).limit(10).all() if cust.mobile else []
+
+            rows = []
+            for s in sales:
+                dt_str = s.date.strftime("%Y-%m-%d") if s.date else "-"
+                bal_str = f"Bal: ₹{s.balance_receivable:,.2f}" if s.balance_receivable > 0 else "Paid"
+                rows.append((s.date or datetime.date.min, dt_str, "Sales Invoice", s.invoice_number, f"{s.total_amount:,.2f}", bal_str))
+            for j in jobs:
+                j_dt = j.created_at.date() if isinstance(j.created_at, datetime.datetime) else j.created_at
+                dt_str = j_dt.strftime("%Y-%m-%d") if j_dt else "-"
+                bal_str = f"Bal: ₹{j.balance:,.2f}" if j.balance > 0 else j.status
+                rows.append((j_dt or datetime.date.min, dt_str, "Repair Job", f"{j.job_number} ({j.device_model})", f"{j.total_amount:,.2f}", bal_str))
+
+            rows.sort(key=lambda r: r[0], reverse=True)
+            table.setRowCount(len(rows))
+            for i, r in enumerate(rows):
+                table.setItem(i, 0, QTableWidgetItem(r[1]))
+                table.setItem(i, 1, QTableWidgetItem(r[2]))
+                table.setItem(i, 2, QTableWidgetItem(r[3]))
+                table.setItem(i, 3, QTableWidgetItem(r[4]))
+                table.setItem(i, 4, QTableWidgetItem(r[5]))
+
+            dlg_layout.addWidget(table)
+
+            # Bottom Action Buttons
+            btn_layout = QHBoxLayout()
+
+            ledger_btn = QPushButton("📜 View Full Ledger")
+            ledger_btn.setProperty("class", "btn-warning")
+            def open_ledger():
+                from ui.masters.ledger_dialog import LedgerBreakupDialog
+                dlg_led = LedgerBreakupDialog(party_type='customer', party_id=cust.id, party_name=cust.name, parent=dialog)
+                dlg_led.exec()
+            ledger_btn.clicked.connect(open_ledger)
+            btn_layout.addWidget(ledger_btn)
+
+            edit_btn = QPushButton("✏️ Edit Customer")
+            edit_btn.setProperty("class", "btn-secondary")
+            def open_edit():
+                from ui.masters.customers import CustomerDialog
+                dlg_edit = CustomerDialog(customer=cust, parent=dialog)
+                if dlg_edit.exec() == QDialog.Accepted:
+                    dialog.accept()
+                    self.perform_global_search(self.search_input.text().strip())
+            edit_btn.clicked.connect(open_edit)
+            btn_layout.addWidget(edit_btn)
+
+            master_btn = QPushButton("📁 Go to Master Records")
+            master_btn.setProperty("class", "btn-secondary")
+            def goto_master():
+                dialog.accept()
+                main_win = self.window()
+                if hasattr(main_win, 'switch_view'):
+                    main_win.switch_view(1)
+                    if hasattr(main_win, 'masters_view'):
+                        main_win.masters_view.set_active_tab(2)
+                    if hasattr(main_win, 'customers_view'):
+                        main_win.customers_view.search_input.setText(cust.name)
+            master_btn.clicked.connect(goto_master)
+            btn_layout.addWidget(master_btn)
+
+            btn_layout.addStretch()
+
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+
+            dlg_layout.addLayout(btn_layout)
+            dialog.exec()
+
+        except Exception as e:
+            print(f"Error viewing customer details: {e}")
+        finally:
+            session.close()
+
+    def view_supplier_details(self, supplier_id):
+        session = Session()
+        try:
+            supp = session.query(Supplier).get(supplier_id)
+            if not supp:
+                QMessageBox.warning(self, "Error", "Supplier not found.")
+                return
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Supplier Details - {supp.name}")
+            dialog.setMinimumSize(700, 520)
+
+            dlg_layout = QVBoxLayout(dialog)
+            dlg_layout.setSpacing(12)
+            dlg_layout.setContentsMargins(18, 18, 18, 18)
+
+            # Supplier Profile Info Frame
+            info_frame = QFrame()
+            info_frame.setProperty("class", "CardFrame")
+            info_layout = QFormLayout(info_frame)
+            info_layout.setSpacing(8)
+
+            lbl_name = QLabel(supp.name)
+            lbl_name.setStyleSheet("font-weight: bold; font-size: 14px; color: #0f172a;")
+            info_layout.addRow("Supplier Name:", lbl_name)
+            info_layout.addRow("Mobile Number:", QLabel(supp.mobile or "-"))
+            info_layout.addRow("Address:", QLabel(supp.address or "-"))
+            if supp.gst:
+                info_layout.addRow("GSTIN:", QLabel(supp.gst))
+
+            lbl_bal = QLabel(f"₹{supp.outstanding_balance:,.2f}")
+            if supp.outstanding_balance > 0:
+                lbl_bal.setStyleSheet("font-weight: bold; font-size: 14px; color: #dc2626;")
+            else:
+                lbl_bal.setStyleSheet("font-weight: bold; font-size: 14px; color: #16a34a;")
+            info_layout.addRow("Outstanding Balance:", lbl_bal)
+
+            dlg_layout.addWidget(info_frame)
+
+            # Recent Purchase Bills Table
+            history_title = QLabel("<b>Recent Purchase History:</b>")
+            history_title.setStyleSheet("font-size: 13px; color: #0f172a; margin-top: 4px;")
+            dlg_layout.addWidget(history_title)
+
+            table = QTableWidget()
+            table.setColumnCount(4)
+            table.setHorizontalHeaderLabels(["Date", "Invoice / Bill #", "Total Amount (₹)", "Balance (₹)"])
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+            table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+            table.setColumnWidth(0, 110)
+            table.setColumnWidth(2, 130)
+            table.setColumnWidth(3, 130)
+            table.verticalHeader().setVisible(False)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+
+            purchases = session.query(PurchaseMaster).filter_by(supplier_id=supp.id).order_by(PurchaseMaster.id.desc()).limit(15).all()
+            table.setRowCount(len(purchases))
+            for i, p in enumerate(purchases):
+                dt_str = p.date.strftime("%Y-%m-%d") if p.date else "-"
+                table.setItem(i, 0, QTableWidgetItem(dt_str))
+                table.setItem(i, 1, QTableWidgetItem(p.invoice_number))
+                table.setItem(i, 2, QTableWidgetItem(f"{p.total_amount:,.2f}"))
+                bal_str = f"{p.balance_payable:,.2f}" if p.balance_payable > 0 else "Paid"
+                table.setItem(i, 3, QTableWidgetItem(bal_str))
+
+            dlg_layout.addWidget(table)
+
+            # Bottom Action Buttons
+            btn_layout = QHBoxLayout()
+
+            ledger_btn = QPushButton("📜 View Full Ledger")
+            ledger_btn.setProperty("class", "btn-warning")
+            def open_ledger():
+                from ui.masters.ledger_dialog import LedgerBreakupDialog
+                dlg_led = LedgerBreakupDialog(party_type='supplier', party_id=supp.id, party_name=supp.name, parent=dialog)
+                dlg_led.exec()
+            ledger_btn.clicked.connect(open_ledger)
+            btn_layout.addWidget(ledger_btn)
+
+            edit_btn = QPushButton("✏️ Edit Supplier")
+            edit_btn.setProperty("class", "btn-secondary")
+            def open_edit():
+                from ui.masters.suppliers import SupplierDialog
+                dlg_edit = SupplierDialog(supplier=supp, parent=dialog)
+                if dlg_edit.exec() == QDialog.Accepted:
+                    dialog.accept()
+                    self.perform_global_search(self.search_input.text().strip())
+            edit_btn.clicked.connect(open_edit)
+            btn_layout.addWidget(edit_btn)
+
+            master_btn = QPushButton("📁 Go to Master Records")
+            master_btn.setProperty("class", "btn-secondary")
+            def goto_master():
+                dialog.accept()
+                main_win = self.window()
+                if hasattr(main_win, 'switch_view'):
+                    main_win.switch_view(1)
+                    if hasattr(main_win, 'masters_view'):
+                        main_win.masters_view.set_active_tab(3)
+                    if hasattr(main_win, 'suppliers_view'):
+                        main_win.suppliers_view.search_input.setText(supp.name)
+            master_btn.clicked.connect(goto_master)
+            btn_layout.addWidget(master_btn)
+
+            btn_layout.addStretch()
+
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+
+            dlg_layout.addLayout(btn_layout)
+            dialog.exec()
+
+        except Exception as e:
+            print(f"Error viewing supplier details: {e}")
+        finally:
+            session.close()
+
+    def view_product_details(self, product_id):
+        session = Session()
+        try:
+            prod = session.query(Product).get(product_id)
+            if not prod:
+                QMessageBox.warning(self, "Error", "Product not found.")
+                return
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Product Details - {prod.name}")
+            dialog.setMinimumSize(540, 420)
+
+            dlg_layout = QVBoxLayout(dialog)
+            dlg_layout.setSpacing(12)
+            dlg_layout.setContentsMargins(18, 18, 18, 18)
+
+            info_frame = QFrame()
+            info_frame.setProperty("class", "CardFrame")
+            info_layout = QFormLayout(info_frame)
+            info_layout.setSpacing(8)
+
+            lbl_name = QLabel(prod.name)
+            lbl_name.setStyleSheet("font-weight: bold; font-size: 14px; color: #0f172a;")
+            info_layout.addRow("Product Name:", lbl_name)
+            info_layout.addRow("Product Code:", QLabel(prod.product_code or "-"))
+            info_layout.addRow("Category:", QLabel(str(prod.category) if prod.category else "-"))
+            info_layout.addRow("Brand / Model:", QLabel(f"{prod.brand or '-'} / {prod.model or '-'}"))
+            info_layout.addRow("Unit:", QLabel(prod.unit or "Pcs"))
+            info_layout.addRow("Selling Price (₹):", QLabel(f"₹{prod.selling_price:,.2f}"))
+            info_layout.addRow("Cost Price (₹):", QLabel(f"₹{prod.cost_price:,.2f}"))
+
+            stock_lbl = QLabel(f"{prod.stock_qty} {prod.unit or 'Pcs'}")
+            if prod.stock_qty <= prod.low_stock_limit:
+                stock_lbl.setStyleSheet("font-weight: bold; color: #dc2626;")
+            else:
+                stock_lbl.setStyleSheet("font-weight: bold; color: #16a34a;")
+            info_layout.addRow("Current Stock:", stock_lbl)
+            info_layout.addRow("Low Stock Limit:", QLabel(str(prod.low_stock_limit)))
+
+            dlg_layout.addWidget(info_frame)
+            dlg_layout.addStretch()
+
+            btn_layout = QHBoxLayout()
+            edit_btn = QPushButton("✏️ Edit Product")
+            edit_btn.setProperty("class", "btn-secondary")
+            def open_edit():
+                from ui.masters.products import ProductDialog
+                dlg_edit = ProductDialog(product=prod, parent=dialog)
+                if dlg_edit.exec() == QDialog.Accepted:
+                    dialog.accept()
+                    self.perform_global_search(self.search_input.text().strip())
+            edit_btn.clicked.connect(open_edit)
+            btn_layout.addWidget(edit_btn)
+
+            master_btn = QPushButton("📁 Go to Products Master")
+            master_btn.setProperty("class", "btn-secondary")
+            def goto_master():
+                dialog.accept()
+                main_win = self.window()
+                if hasattr(main_win, 'switch_view'):
+                    main_win.switch_view(1)
+                    if hasattr(main_win, 'masters_view'):
+                        main_win.masters_view.set_active_tab(0)
+                    if hasattr(main_win, 'products_view'):
+                        main_win.products_view.search_input.setText(prod.product_code or prod.name)
+            master_btn.clicked.connect(goto_master)
+            btn_layout.addWidget(master_btn)
+
+            btn_layout.addStretch()
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+
+            dlg_layout.addLayout(btn_layout)
+            dialog.exec()
+
+        except Exception as e:
+            print(f"Error viewing product details: {e}")
+        finally:
+            session.close()
 
     def handle_card_click(self, title):
         main_win = self.window()
