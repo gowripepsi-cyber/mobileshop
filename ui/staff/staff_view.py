@@ -663,15 +663,15 @@ class StaffView(QWidget):
         header = self.staff_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)  # Name stretches
-        self.staff_table.setColumnWidth(0, 85)   # Code
-        self.staff_table.setColumnWidth(2, 110)  # Desig
-        self.staff_table.setColumnWidth(3, 100)  # Mobile
-        self.staff_table.setColumnWidth(4, 85)   # Type
-        self.staff_table.setColumnWidth(5, 95)   # Salary
-        self.staff_table.setColumnWidth(6, 90)   # Join date
-        self.staff_table.setColumnWidth(7, 85)   # Status
+        self.staff_table.setColumnWidth(0, 80)   # Code
+        self.staff_table.setColumnWidth(2, 105)  # Desig
+        self.staff_table.setColumnWidth(3, 95)   # Mobile
+        self.staff_table.setColumnWidth(4, 90)   # Type
+        self.staff_table.setColumnWidth(5, 105)  # Salary
+        self.staff_table.setColumnWidth(6, 95)   # Join date
+        self.staff_table.setColumnWidth(7, 75)   # Status
         header.setSectionResizeMode(8, QHeaderView.Fixed)
-        self.staff_table.setColumnWidth(8, 170)  # Actions
+        self.staff_table.setColumnWidth(8, 225)  # Actions (Edit, Pay History, Delete)
         self.staff_table.verticalHeader().setVisible(False)
         self.staff_table.verticalHeader().setDefaultSectionSize(48)
         layout.addWidget(self.staff_table)
@@ -1014,17 +1014,17 @@ class StaffView(QWidget):
         s_hdr = self.sal_table.horizontalHeader()
         s_hdr.setSectionResizeMode(QHeaderView.Interactive)
         s_hdr.setSectionResizeMode(2, QHeaderView.Stretch)  # Staff Name stretches
-        self.sal_table.setColumnWidth(0, 90)   # Payment #
-        self.sal_table.setColumnWidth(1, 85)   # Date
-        self.sal_table.setColumnWidth(3, 80)   # Type
-        self.sal_table.setColumnWidth(4, 85)   # Month
-        self.sal_table.setColumnWidth(5, 85)   # Gross
-        self.sal_table.setColumnWidth(6, 85)   # Ded
-        self.sal_table.setColumnWidth(7, 95)   # Net
-        self.sal_table.setColumnWidth(8, 65)   # Mode
-        self.sal_table.setColumnWidth(9, 100)  # Bank
+        self.sal_table.setColumnWidth(0, 95)   # Payment #
+        self.sal_table.setColumnWidth(1, 90)   # Date
+        self.sal_table.setColumnWidth(3, 85)   # Type
+        self.sal_table.setColumnWidth(4, 90)   # Month
+        self.sal_table.setColumnWidth(5, 95)   # Gross
+        self.sal_table.setColumnWidth(6, 105)  # Ded
+        self.sal_table.setColumnWidth(7, 100)  # Net
+        self.sal_table.setColumnWidth(8, 75)   # Mode
+        self.sal_table.setColumnWidth(9, 105)  # Bank
         s_hdr.setSectionResizeMode(10, QHeaderView.Fixed)
-        self.sal_table.setColumnWidth(10, 130) # Action
+        self.sal_table.setColumnWidth(10, 155) # Action
         self.sal_table.verticalHeader().setVisible(False)
         self.sal_table.verticalHeader().setDefaultSectionSize(48)
         layout.addWidget(self.sal_table)
@@ -1127,19 +1127,24 @@ class StaffView(QWidget):
                 btn_layout = QHBoxLayout(btn_widget)
                 btn_layout.setContentsMargins(4, 2, 4, 2)
                 btn_layout.setSpacing(4)
+                btn_layout.setAlignment(Qt.AlignCenter)
 
                 btn_edit = QPushButton("Edit")
-                btn_edit.setProperty("class", "btn-action-view")
+                btn_edit.setProperty("class", "btn-action-edit")
+                btn_edit.setCursor(Qt.PointingHandCursor)
                 btn_edit.setFixedHeight(26)
                 btn_edit.clicked.connect(lambda _, sid=st.id: self.open_edit_staff_dialog(sid))
 
                 btn_ledger = QPushButton("Pay History")
-                btn_ledger.setProperty("class", "btn-secondary")
+                btn_ledger.setProperty("class", "btn-action-print")
+                btn_ledger.setCursor(Qt.PointingHandCursor)
                 btn_ledger.setFixedHeight(26)
+                btn_ledger.setStyleSheet("font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 6px;")
                 btn_ledger.clicked.connect(lambda _, sid=st.id: self.open_staff_ledger(sid))
 
                 btn_del = QPushButton("Delete")
                 btn_del.setProperty("class", "btn-action-delete")
+                btn_del.setCursor(Qt.PointingHandCursor)
                 btn_del.setFixedHeight(26)
                 btn_del.clicked.connect(lambda _, sid=st.id: self.delete_staff(sid))
 
@@ -1233,13 +1238,17 @@ class StaffView(QWidget):
                 btn_layout.setContentsMargins(4, 2, 4, 2)
                 btn_layout.setSpacing(4)
 
+                btn_layout.setAlignment(Qt.AlignCenter)
+
                 btn_slip = QPushButton("Slip")
-                btn_slip.setProperty("class", "btn-action-view")
+                btn_slip.setProperty("class", "btn-action-print")
+                btn_slip.setCursor(Qt.PointingHandCursor)
                 btn_slip.setFixedHeight(26)
                 btn_slip.clicked.connect(lambda _, pid=p.id: self.print_pay_slip(pid))
 
                 btn_del = QPushButton("Delete")
                 btn_del.setProperty("class", "btn-action-delete")
+                btn_del.setCursor(Qt.PointingHandCursor)
                 btn_del.setFixedHeight(26)
                 btn_del.clicked.connect(lambda _, pid=p.id: self.delete_salary_record(pid))
 
