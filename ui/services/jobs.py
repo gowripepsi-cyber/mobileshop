@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import QCompleter
 from sqlalchemy import case
 from database import Session, Setting
-from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product, Payment
+from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product, Payment, Staff
 from utils.pdf_generator import generate_service_pdf
 from utils.ui_helpers import enable_quick_add_auto_select
 
@@ -54,10 +54,11 @@ class JobCardDialog(QDialog):
         finally:
             session.close()
 
-        if self.show_imei:
-            self.setFixedSize(450, 540)
+        if self.job:
+            h = 560 if self.show_imei else 530
         else:
-            self.setFixedSize(450, 510)
+            h = 515 if self.show_imei else 485
+        self.setFixedSize(480, h)
             
         self.init_ui()
 
@@ -114,24 +115,23 @@ class JobCardDialog(QDialog):
         self.complaint_input = QTextEdit()
         self.complaint_input.setFixedHeight(80)
         
-        self.technician_input = QLineEdit()
-        self.technician_input.setPlaceholderText("Assigned technician (type or select from staff)...")
-        # Autocomplete from active staff
-        try:
-            from database import Staff
-            _t_sess = Session()
-            _techs = _t_sess.query(Staff.name).filter_by(status='Active').all()
-            _t_names = [t[0] for t in _techs if t[0]]
-            _t_sess.close()
-            if _t_names:
-                _comp = QCompleter(_t_names, self)
-                _comp.setCaseSensitivity(Qt.CaseInsensitive)
-                self.technician_input.setCompleter(_comp)
-        except Exception:
-            pass
+        # Mechanic / Service Attender (Optional dropdown & search from Staff table)
+        self.technician_combo = QComboBox()
+        self.technician_combo.setEditable(True)
+        self.technician_combo.setInsertPolicy(QComboBox.NoInsert)
+        if self.technician_combo.lineEdit():
+            self.technician_combo.lineEdit().setPlaceholderText("Select or type mechanic / attender (optional)")
+            self.technician_combo.lineEdit().setClearButtonEnabled(True)
+
+        # Backward compatibility alias
+        self.technician_input = self.technician_combo.lineEdit()
         
-        self.status_combo = QComboBox()
-        self.status_combo.addItems(["Received", "Under Repair", "Ready", "Delivered"])
+        # Only show Job Status dropdown when editing an existing job card (new jobs are always 'Received' by default)
+        if self.job:
+            self.status_combo = QComboBox()
+            self.status_combo.addItems(["Received", "Under Repair", "Ready", "Delivered"])
+        else:
+            self.status_combo = None
 
         form_layout.addRow("Job Number *:", self.job_num_input)
         form_layout.addRow("Customer Name *:", cust_layout)
@@ -139,8 +139,9 @@ class JobCardDialog(QDialog):
         form_layout.addRow("Device Detail *:", self.device_model_input)
         form_layout.addRow("Device ID:", self.imei_input)
         form_layout.addRow("Complaint details:", self.complaint_input)
-        form_layout.addRow("Assigned Technician:", self.technician_input)
-        form_layout.addRow("Job Status:", self.status_combo)
+        form_layout.addRow("Mechanic / Attender:", self.technician_combo)
+        if self.status_combo:
+            form_layout.addRow("Job Status:", self.status_combo)
 
         layout.addLayout(form_layout)
 
@@ -157,6 +158,7 @@ class JobCardDialog(QDialog):
         layout.addLayout(btn_layout)
 
         self.load_customers()
+        self.load_technicians(selected_tech=self.job.technician if self.job else None)
 
         if self.job:
             self.job_num_input.setText(self.job.job_number)
@@ -166,8 +168,8 @@ class JobCardDialog(QDialog):
             self.device_model_input.setText(self.job.device_model)
             self.imei_input.setText(self.job.imei)
             self.complaint_input.setPlainText(self.job.complaint or "")
-            self.technician_input.setText(self.job.technician or "")
-            self.status_combo.setCurrentText(self.job.status)
+            if self.status_combo:
+                self.status_combo.setCurrentText(self.job.status or "Received")
         else:
             # Suggest next 6-digit serial number (pure numbers, no alphabets)
             session = Session()
@@ -272,6 +274,80 @@ class JobCardDialog(QDialog):
                     self.cust_click_filter._user_typed = True
             session.close()
 
+    def load_technicians(self, selected_tech=None):
+        session = Session()
+        try:
+            self.technician_combo.blockSignals(True)
+            self.technician_combo.clear()
+            self.technician_combo.addItem("-- Select Mechanic / Service Attender (Optional) --", "")
+
+            # Prioritize Technicians, but list all Active staff alphabetically
+            active_staff = session.query(Staff).filter_by(status='Active').order_by(
+                Staff.designation.ilike('%technician%').desc(),
+                Staff.name.asc()
+            ).all()
+
+            names_for_comp = []
+            for s in active_staff:
+                label = f"{s.name} ({s.designation})" if s.designation else s.name
+                self.technician_combo.addItem(label, s.name)
+                names_for_comp.append(label)
+                if s.name not in names_for_comp:
+                    names_for_comp.append(s.name)
+
+            comp = QCompleter(names_for_comp, self.technician_combo)
+            comp.setFilterMode(Qt.MatchContains)
+            comp.setCaseSensitivity(Qt.CaseInsensitive)
+            comp.setCompletionMode(QCompleter.PopupCompletion)
+            self.technician_combo.setCompleter(comp)
+
+            if selected_tech:
+                matched = -1
+                for i in range(self.technician_combo.count()):
+                    if self.technician_combo.itemData(i) == selected_tech or self.technician_combo.itemText(i) == selected_tech:
+                        matched = i
+                        break
+                if matched >= 0:
+                    self.technician_combo.setCurrentIndex(matched)
+                else:
+                    self.technician_combo.setEditText(selected_tech)
+            else:
+                self.technician_combo.setCurrentIndex(0)
+            self.technician_combo.blockSignals(False)
+        except Exception as e:
+            print(f"Error loading staff/technicians: {e}")
+        finally:
+            session.close()
+
+    def get_selected_technician(self):
+        text = self.technician_combo.currentText().strip()
+        idx = self.technician_combo.currentIndex()
+
+        if not text or text == "-- Select Mechanic / Service Attender (Optional) --":
+            return ""
+
+        # If currentText matches the selected combo item's text, return its associated data (staff name)
+        if idx >= 0 and self.technician_combo.itemText(idx).strip() == text:
+            data = self.technician_combo.itemData(idx)
+            if data and isinstance(data, str) and data.strip():
+                return data.strip()
+            return text
+
+        # If text matches any other item in the combo, return its data
+        for i in range(self.technician_combo.count()):
+            item_txt = self.technician_combo.itemText(i).strip()
+            item_data = self.technician_combo.itemData(i)
+            if item_txt.lower() == text.lower() or (item_data and item_data.strip().lower() == text.lower()):
+                if item_data and isinstance(item_data, str) and item_data.strip():
+                    return item_data.strip()
+
+        # If user typed "Name (Role)", extract just the name
+        if "(" in text and text.endswith(")"):
+            return text.rsplit("(", 1)[0].strip()
+
+        return text
+
+
     def handle_save(self):
         job_num = self.job_num_input.text().strip()
         mobile = self.cust_mobile_input.text().strip()
@@ -281,8 +357,8 @@ class JobCardDialog(QDialog):
         model = self.device_model_input.text().strip()
         imei = self.imei_input.text().strip()
         complaint = self.complaint_input.toPlainText().strip()
-        tech = self.technician_input.text().strip()
-        status = self.status_combo.currentText()
+        tech = self.get_selected_technician()
+        status = self.status_combo.currentText() if self.status_combo else (self.job.status if self.job else "Received")
 
         is_invalid = not job_num or not mobile or not name or not model
         if is_invalid:
@@ -428,7 +504,7 @@ class BillingDialog(QDialog):
         device_info.setWordWrap(True)
         
         tech_info = QLabel(
-            f"<b>Tech:</b> {self.job.technician or '-'}<br/>"
+            f"<b>Mechanic / Attender:</b> {self.job.technician or '-'}<br/>"
             f"<b>Complaint:</b> {self.job.complaint or '-'}"
         )
         tech_info.setStyleSheet("color: #e2e8f0; font-size: 12px; line-height: 1.3;")
@@ -1665,7 +1741,7 @@ class ServicesView(QWidget):
             info_layout.addRow("Device Detail:", QLabel(job.device_model))
             info_layout.addRow("Device ID:", QLabel(job.imei or "-"))
             info_layout.addRow("Complaint details:", QLabel(job.complaint or "-"))
-            info_layout.addRow("Technician:", QLabel(job.technician or "-"))
+            info_layout.addRow("Mechanic / Attender:", QLabel(job.technician or "-"))
             info_layout.addRow("Job Status:", QLabel(job.status))
             dlg_layout.addWidget(info_frame)
             

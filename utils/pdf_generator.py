@@ -4,6 +4,44 @@ from reportlab.platypus.flowables import HRFlowable
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.pdfmetrics import registerFontFamily
+
+# Global font configuration supporting Tamil / Indic Unicode characters
+FONT_REGULAR = "Helvetica"
+FONT_BOLD = "Helvetica-Bold"
+
+def _init_pdf_fonts():
+    global FONT_REGULAR, FONT_BOLD
+    font_candidates = [
+        # Windows Indic / Tamil fonts
+        ("Nirmala", r"C:\Windows\Fonts\Nirmala.ttf", "Nirmala-Bold", r"C:\Windows\Fonts\NirmalaB.ttf"),
+        ("Latha", r"C:\Windows\Fonts\latha.ttf", "Latha-Bold", r"C:\Windows\Fonts\lathab.ttf"),
+        ("SegoeUI", r"C:\Windows\Fonts\segoeui.ttf", "SegoeUI-Bold", r"C:\Windows\Fonts\segoeuib.ttf"),
+        ("Arial", r"C:\Windows\Fonts\arial.ttf", "Arial-Bold", r"C:\Windows\Fonts\arialbd.ttf"),
+        # Linux standard fonts
+        ("NotoSansTamil", "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf", "NotoSansTamil-Bold", "/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf"),
+        ("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ]
+    for reg_name, reg_path, bold_name, bold_path in font_candidates:
+        if os.path.exists(reg_path):
+            try:
+                pdfmetrics.registerFont(TTFont(reg_name, reg_path))
+                if os.path.exists(bold_path):
+                    pdfmetrics.registerFont(TTFont(bold_name, bold_path))
+                    registerFontFamily(reg_name, normal=reg_name, bold=bold_name, italic=reg_name, boldItalic=bold_name)
+                    FONT_BOLD = bold_name
+                else:
+                    registerFontFamily(reg_name, normal=reg_name, bold=reg_name, italic=reg_name, boldItalic=reg_name)
+                    FONT_BOLD = reg_name
+                FONT_REGULAR = reg_name
+                break
+            except Exception as e:
+                print(f"Font registration notice ({reg_name}): {e}")
+
+_init_pdf_fonts()
+
 
 def generate_sales_pdf(invoice_data, file_path):
     """
@@ -30,7 +68,7 @@ def generate_sales_pdf(invoice_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopName',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -38,7 +76,7 @@ def generate_sales_pdf(invoice_data, file_path):
     
     style_header_label = ParagraphStyle(
         'HeaderLabel',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#64748b')
@@ -46,7 +84,7 @@ def generate_sales_pdf(invoice_data, file_path):
     
     style_header_val = ParagraphStyle(
         'HeaderVal',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=13,
         textColor=colors.HexColor('#1e293b')
@@ -54,7 +92,7 @@ def generate_sales_pdf(invoice_data, file_path):
 
     style_title = ParagraphStyle(
         'InvoiceTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=24,
         leading=28,
         textColor=colors.HexColor('#1e293b'),
@@ -63,7 +101,7 @@ def generate_sales_pdf(invoice_data, file_path):
 
     style_sub = ParagraphStyle(
         'Subtext',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#475569')
@@ -71,7 +109,7 @@ def generate_sales_pdf(invoice_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldText',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1e293b')
@@ -145,7 +183,7 @@ def generate_sales_pdf(invoice_data, file_path):
     # 3. Items Table
     item_header_style = ParagraphStyle(
         'ItemHeader',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         textColor=colors.white
     )
@@ -299,7 +337,7 @@ def generate_purchase_pdf(purchase_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNamePurchase',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -307,7 +345,7 @@ def generate_purchase_pdf(purchase_data, file_path):
     
     style_header_label = ParagraphStyle(
         'HeaderLabelPurchase',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#64748b')
@@ -315,7 +353,7 @@ def generate_purchase_pdf(purchase_data, file_path):
     
     style_header_val = ParagraphStyle(
         'HeaderValPurchase',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=13,
         textColor=colors.HexColor('#1e293b')
@@ -323,7 +361,7 @@ def generate_purchase_pdf(purchase_data, file_path):
 
     style_title = ParagraphStyle(
         'InvoiceTitlePurchase',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=24,
         leading=28,
         textColor=colors.HexColor('#1e293b'),
@@ -332,7 +370,7 @@ def generate_purchase_pdf(purchase_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextPurchase',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#475569')
@@ -340,7 +378,7 @@ def generate_purchase_pdf(purchase_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextPurchase',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1e293b')
@@ -406,7 +444,7 @@ def generate_purchase_pdf(purchase_data, file_path):
     # 3. Items Table
     item_header_style = ParagraphStyle(
         'ItemHeaderPurchase',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         textColor=colors.white
     )
@@ -560,7 +598,7 @@ def generate_service_pdf(service_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNameService',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -568,7 +606,7 @@ def generate_service_pdf(service_data, file_path):
     
     style_header_label = ParagraphStyle(
         'HeaderLabelService',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#64748b')
@@ -576,7 +614,7 @@ def generate_service_pdf(service_data, file_path):
     
     style_header_val = ParagraphStyle(
         'HeaderValService',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=13,
         textColor=colors.HexColor('#1e293b')
@@ -584,7 +622,7 @@ def generate_service_pdf(service_data, file_path):
 
     style_title = ParagraphStyle(
         'InvoiceTitleService',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=24,
         leading=28,
         textColor=colors.HexColor('#1e293b'),
@@ -593,7 +631,7 @@ def generate_service_pdf(service_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextService',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#475569')
@@ -601,7 +639,7 @@ def generate_service_pdf(service_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextService',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1e293b')
@@ -675,7 +713,7 @@ def generate_service_pdf(service_data, file_path):
     # 3. Items Table (Labor + Spare Parts)
     item_header_style = ParagraphStyle(
         'ItemHeaderService',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         textColor=colors.white
     )
@@ -797,7 +835,7 @@ def generate_payment_pdf(payment_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNamePayment',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -805,7 +843,7 @@ def generate_payment_pdf(payment_data, file_path):
     
     style_title = ParagraphStyle(
         'InvoiceTitlePayment',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=24,
         leading=28,
         textColor=colors.HexColor('#1e293b'),
@@ -814,7 +852,7 @@ def generate_payment_pdf(payment_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextPayment',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#475569')
@@ -822,7 +860,7 @@ def generate_payment_pdf(payment_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextPayment',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#1e293b')
@@ -940,7 +978,7 @@ def generate_ledger_pdf(ledger_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNameLedger',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -948,7 +986,7 @@ def generate_ledger_pdf(ledger_data, file_path):
     
     style_title = ParagraphStyle(
         'LedgerTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=24,
         leading=28,
         textColor=colors.HexColor('#1e293b'),
@@ -957,7 +995,7 @@ def generate_ledger_pdf(ledger_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextLedger',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#475569')
@@ -965,7 +1003,7 @@ def generate_ledger_pdf(ledger_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextLedger',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1e293b')
@@ -1044,7 +1082,7 @@ def generate_ledger_pdf(ledger_data, file_path):
     # Table Widths: Date (70), Ref / Invoice (90), Description (160), Debit (75), Credit (75), Balance (70) = 540
     item_header_style = ParagraphStyle(
         'ItemHeaderLedger',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         textColor=colors.white
     )
@@ -1147,7 +1185,7 @@ def generate_money_transfer_pdf(transfer_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNameMT',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -1155,7 +1193,7 @@ def generate_money_transfer_pdf(transfer_data, file_path):
     
     style_title = ParagraphStyle(
         'InvoiceTitleMT',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=22,
         leading=26,
         textColor=colors.HexColor('#1e293b'),
@@ -1164,7 +1202,7 @@ def generate_money_transfer_pdf(transfer_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextMT',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#475569')
@@ -1172,7 +1210,7 @@ def generate_money_transfer_pdf(transfer_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextMT',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#1e293b')
@@ -1314,7 +1352,7 @@ def generate_low_stock_pdf(report_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNameStock',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -1322,7 +1360,7 @@ def generate_low_stock_pdf(report_data, file_path):
     
     style_title = ParagraphStyle(
         'StockTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=22,
         leading=26,
         textColor=colors.HexColor('#1e293b'),
@@ -1331,7 +1369,7 @@ def generate_low_stock_pdf(report_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextStock',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#475569')
@@ -1339,7 +1377,7 @@ def generate_low_stock_pdf(report_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextStock',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#1e293b')
@@ -1444,7 +1482,7 @@ def generate_outstanding_pdf(report_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNameOutstanding',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -1455,7 +1493,7 @@ def generate_outstanding_pdf(report_data, file_path):
     
     style_title = ParagraphStyle(
         'OutstandingTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=16,
         leading=20,
         textColor=colors.HexColor(title_color),
@@ -1464,7 +1502,7 @@ def generate_outstanding_pdf(report_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextOutstanding',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#475569')
@@ -1472,7 +1510,7 @@ def generate_outstanding_pdf(report_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextOutstanding',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#1e293b')
@@ -1582,7 +1620,7 @@ def generate_sales_return_pdf(return_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNameSR',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -1590,7 +1628,7 @@ def generate_sales_return_pdf(return_data, file_path):
     
     style_title = ParagraphStyle(
         'SRTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=22,
         leading=26,
         textColor=colors.HexColor('#dc2626'),
@@ -1599,7 +1637,7 @@ def generate_sales_return_pdf(return_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextSR',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#475569')
@@ -1607,7 +1645,7 @@ def generate_sales_return_pdf(return_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextSR',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1e293b')
@@ -1678,7 +1716,7 @@ def generate_sales_return_pdf(return_data, file_path):
     # 3. Items Table
     item_header_style = ParagraphStyle(
         'ItemHeaderSR',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         textColor=colors.white
     )
@@ -1788,7 +1826,7 @@ def generate_purchase_return_pdf(return_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNamePR',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -1796,7 +1834,7 @@ def generate_purchase_return_pdf(return_data, file_path):
     
     style_title = ParagraphStyle(
         'PRTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=22,
         leading=26,
         textColor=colors.HexColor('#dc2626'),
@@ -1805,7 +1843,7 @@ def generate_purchase_return_pdf(return_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextPR',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#475569')
@@ -1813,7 +1851,7 @@ def generate_purchase_return_pdf(return_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextPR',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#1e293b')
@@ -1884,7 +1922,7 @@ def generate_purchase_return_pdf(return_data, file_path):
     # 3. Items Table
     item_header_style = ParagraphStyle(
         'ItemHeaderPR',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         textColor=colors.white
     )
@@ -1995,7 +2033,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
     style_shop_name = ParagraphStyle(
         'ShopNamePL',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#6366f1')
@@ -2003,7 +2041,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
     
     style_title = ParagraphStyle(
         'ReportTitlePL',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#1e293b'),
@@ -2012,7 +2050,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
 
     style_sub = ParagraphStyle(
         'SubtextPL',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#475569')
@@ -2020,7 +2058,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
     
     style_bold = ParagraphStyle(
         'BoldTextPL',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#1e293b')
@@ -2028,7 +2066,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
 
     style_header = ParagraphStyle(
         'HeaderStylePL',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.white
@@ -2036,7 +2074,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
 
     style_cell = ParagraphStyle(
         'CellStylePL',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=8,
         leading=11,
         textColor=colors.HexColor('#1e293b')
@@ -2044,7 +2082,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
 
     style_cell_bold = ParagraphStyle(
         'CellBoldStylePL',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=8,
         leading=11,
         textColor=colors.HexColor('#1e293b')
@@ -2173,7 +2211,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
     
     def add_page_number(canvas, doc):
         canvas.saveState()
-        canvas.setFont('Helvetica', 8)
+        canvas.setFont(FONT_REGULAR, 8)
         canvas.setFillColor(colors.HexColor('#64748b'))
         canvas.drawRightString(806, 20, f"Page {canvas.getPageNumber()}")
         canvas.drawString(36, 20, "Inventory & Accounting Management System - Confidential Report")
@@ -2213,7 +2251,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     style_shop_name = ParagraphStyle(
         'POSHopName',
         parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=20,
         leading=24,
         textColor=colors.HexColor('#d97706')
@@ -2221,7 +2259,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     
     style_title = ParagraphStyle(
         'POTitle',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=22,
         leading=26,
         textColor=colors.HexColor('#1e293b'),
@@ -2230,7 +2268,7 @@ def generate_purchase_order_pdf(po_data, file_path):
 
     style_sub = ParagraphStyle(
         'POSubtext',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=9,
         leading=13,
         textColor=colors.HexColor('#475569')
@@ -2238,7 +2276,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     
     style_bold = ParagraphStyle(
         'POBold',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=13,
         textColor=colors.HexColor('#1e293b')
@@ -2246,7 +2284,7 @@ def generate_purchase_order_pdf(po_data, file_path):
 
     style_box_header = ParagraphStyle(
         'POBoxHeader',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=10,
         leading=14,
         textColor=colors.HexColor('#d97706')
@@ -2254,7 +2292,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     
     style_th = ParagraphStyle(
         'POTh',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=11,
         textColor=colors.white,
@@ -2262,7 +2300,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     )
     style_th_right = ParagraphStyle(
         'POThRight',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=11,
         textColor=colors.white,
@@ -2271,7 +2309,7 @@ def generate_purchase_order_pdf(po_data, file_path):
 
     style_td = ParagraphStyle(
         'POTd',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=8.5,
         leading=11,
         textColor=colors.HexColor('#1e293b'),
@@ -2279,7 +2317,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     )
     style_td_right = ParagraphStyle(
         'POTdRight',
-        fontName='Helvetica',
+        fontName=FONT_REGULAR,
         fontSize=8.5,
         leading=11,
         textColor=colors.HexColor('#1e293b'),
@@ -2287,7 +2325,7 @@ def generate_purchase_order_pdf(po_data, file_path):
     )
     style_td_bold_right = ParagraphStyle(
         'POTdBoldRight',
-        fontName='Helvetica-Bold',
+        fontName=FONT_BOLD,
         fontSize=9,
         leading=12,
         textColor=colors.HexColor('#0f172a'),
@@ -2450,7 +2488,7 @@ def generate_purchase_order_pdf(po_data, file_path):
 
     def add_page_number(canvas, doc):
         canvas.saveState()
-        canvas.setFont('Helvetica', 8)
+        canvas.setFont(FONT_REGULAR, 8)
         canvas.setFillColor(colors.HexColor('#64748b'))
         canvas.drawRightString(576, 20, f"Page {canvas.getPageNumber()}")
         canvas.drawString(36, 20, "Generated via Inventory & Accounting Management System")

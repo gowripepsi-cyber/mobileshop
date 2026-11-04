@@ -1274,16 +1274,17 @@ class StaffView(QWidget):
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib import colors
+            from utils.pdf_generator import FONT_REGULAR, FONT_BOLD
 
             doc = SimpleDocTemplate(file_path, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=30, bottomMargin=30)
             elements = []
             styles = getSampleStyleSheet()
 
             # Shop Title
-            title_style = ParagraphStyle('ShopTitle', parent=styles['Heading1'], fontSize=18, leading=22, alignment=1, textColor=colors.HexColor("#0f172a"))
+            title_style = ParagraphStyle('ShopTitle', parent=styles['Heading1'], fontName=FONT_BOLD, fontSize=18, leading=22, alignment=1, textColor=colors.HexColor("#0f172a"))
             elements.append(Paragraph(shop_name, title_style))
 
-            sub_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, leading=14, alignment=1, textColor=colors.HexColor("#64748b"))
+            sub_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontName=FONT_REGULAR, fontSize=11, leading=14, alignment=1, textColor=colors.HexColor("#64748b"))
             elements.append(Paragraph(f"STAFF SALARY / PAYOUT VOUCHER", sub_style))
             elements.append(Spacer(1, 15))
 
@@ -1296,10 +1297,10 @@ class StaffView(QWidget):
             ]
             t_info = Table(info_data, colWidths=[110, 160, 100, 160])
             t_info.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTNAME', (0, 0), (-1, -1), FONT_REGULAR),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (0, -1), FONT_BOLD),
+                ('FONTNAME', (2, 0), (2, -1), FONT_BOLD),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ]))
             elements.append(t_info)
@@ -1316,12 +1317,12 @@ class StaffView(QWidget):
             t_fin.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1e293b")),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
                 ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
                 ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f1f5f9")),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (0, -1), (-1, -1), FONT_BOLD),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
                 ('TOPPADDING', (0, 0), (-1, -1), 8),
             ]))
@@ -1336,7 +1337,7 @@ class StaffView(QWidget):
             t_sig = Table(sig_data, colWidths=[265, 265])
             t_sig.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 1), (-1, 1), FONT_BOLD),
                 ('FONTSIZE', (0, 0), (-1, -1), 9),
             ]))
             elements.append(t_sig)
