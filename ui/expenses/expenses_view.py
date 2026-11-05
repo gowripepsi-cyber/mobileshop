@@ -453,11 +453,21 @@ class ExpensesView(QWidget):
 
         # Expense Log Table
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels([
+        exp_headers = [
             "Voucher #", "Date", "Category", "Paid To", "Mode",
             "Bank", "Amount (₹)", "Ref / Bill #", "Description", "Action"
-        ])
+        ]
+        self.table.setColumnCount(len(exp_headers))
+        for col, label in enumerate(exp_headers):
+            h_item = QTableWidgetItem(label)
+            if col in [0, 1, 4, 9]:
+                h_item.setTextAlignment(Qt.AlignCenter)
+            elif col == 6:
+                h_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                h_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.table.setHorizontalHeaderItem(col, h_item)
+
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setSectionResizeMode(8, QHeaderView.Stretch)  # Description stretches
@@ -470,9 +480,10 @@ class ExpensesView(QWidget):
         self.table.setColumnWidth(6, 85)   # Amount
         self.table.setColumnWidth(7, 85)   # Ref
         header.setSectionResizeMode(9, QHeaderView.Fixed)
-        self.table.setColumnWidth(9, 120)  # Action buttons
+        self.table.setColumnWidth(9, 155)  # Action buttons (fits Edit & Delete cleanly)
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(48)
+        self.table.verticalHeader().setDefaultSectionSize(44)
+        self.table.setStyleSheet("QTableWidget::item { padding: 2px 6px; }")
         layout.addWidget(self.table)
 
     def _create_kpi_card(self, title, default_val, border_color):
@@ -601,10 +612,18 @@ class ExpensesView(QWidget):
         t_layout.addWidget(t_title)
 
         self.cat_table = QTableWidget()
-        self.cat_table.setColumnCount(6)
-        self.cat_table.setHorizontalHeaderLabels([
-            "ID", "Category Name", "Description", "Expenses Count", "Total Spent (₹)", "Action"
-        ])
+        cat_headers = ["ID", "Category Name", "Description", "Expenses Count", "Total Spent (₹)", "Action"]
+        self.cat_table.setColumnCount(len(cat_headers))
+        for col, label in enumerate(cat_headers):
+            h_item = QTableWidgetItem(label)
+            if col in [0, 3, 5]:
+                h_item.setTextAlignment(Qt.AlignCenter)
+            elif col == 4:
+                h_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                h_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.cat_table.setHorizontalHeaderItem(col, h_item)
+
         c_hdr = self.cat_table.horizontalHeader()
         c_hdr.setSectionResizeMode(QHeaderView.Interactive)
         c_hdr.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -613,9 +632,10 @@ class ExpensesView(QWidget):
         self.cat_table.setColumnWidth(3, 110)
         self.cat_table.setColumnWidth(4, 110)
         c_hdr.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.cat_table.setColumnWidth(5, 120)
+        self.cat_table.setColumnWidth(5, 155)  # Action buttons (fits Edit & Delete cleanly)
         self.cat_table.verticalHeader().setVisible(False)
         self.cat_table.verticalHeader().setDefaultSectionSize(44)
+        self.cat_table.setStyleSheet("QTableWidget::item { padding: 2px 6px; }")
         t_layout.addWidget(self.cat_table)
 
         layout.addWidget(table_frame, 1)
@@ -881,18 +901,22 @@ class ExpensesView(QWidget):
 
                 # Actions
                 btn_widget = QWidget()
+                btn_widget.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
                 btn_layout = QHBoxLayout(btn_widget)
-                btn_layout.setContentsMargins(4, 2, 4, 2)
+                btn_layout.setContentsMargins(0, 0, 0, 0)
                 btn_layout.setSpacing(6)
+                btn_layout.setAlignment(Qt.AlignCenter)
 
                 btn_edit = QPushButton("Edit")
                 btn_edit.setProperty("class", "btn-action-view")
-                btn_edit.setFixedHeight(26)
+                btn_edit.setCursor(Qt.PointingHandCursor)
+                btn_edit.setFixedSize(62, 26)
                 btn_edit.clicked.connect(lambda _, eid=exp.id: self.open_edit_expense_dialog(eid))
 
                 btn_del = QPushButton("Delete")
                 btn_del.setProperty("class", "btn-action-delete")
-                btn_del.setFixedHeight(26)
+                btn_del.setCursor(Qt.PointingHandCursor)
+                btn_del.setFixedSize(68, 26)
                 btn_del.clicked.connect(lambda _, eid=exp.id: self.delete_expense(eid))
 
                 btn_layout.addWidget(btn_edit)
@@ -925,32 +949,49 @@ class ExpensesView(QWidget):
             cats = session.query(ExpenseCategory).order_by(ExpenseCategory.name).all()
             self.cat_table.setRowCount(len(cats))
             for i, c in enumerate(cats):
-                self.cat_table.setItem(i, 0, QTableWidgetItem(str(c.id)))
-                self.cat_table.setItem(i, 1, QTableWidgetItem(c.name))
-                self.cat_table.setItem(i, 2, QTableWidgetItem(c.description or "-"))
+                id_item = QTableWidgetItem(str(c.id))
+                id_item.setTextAlignment(Qt.AlignCenter)
+                self.cat_table.setItem(i, 0, id_item)
+                
+                name_item = QTableWidgetItem(c.name)
+                name_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.cat_table.setItem(i, 1, name_item)
+                
+                desc_item = QTableWidgetItem(c.description or "-")
+                desc_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.cat_table.setItem(i, 2, desc_item)
 
                 # Count & Total Spent
                 expenses = session.query(Expense).filter_by(category_id=c.id).all()
                 count = len(expenses)
                 tot_spent = sum(e.amount for e in expenses)
 
-                self.cat_table.setItem(i, 3, QTableWidgetItem(str(count)))
-                self.cat_table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(tot_spent)}"))
+                cnt_item = QTableWidgetItem(str(count))
+                cnt_item.setTextAlignment(Qt.AlignCenter)
+                self.cat_table.setItem(i, 3, cnt_item)
+                
+                tot_item = QTableWidgetItem(f"₹{format_inr(tot_spent)}")
+                tot_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.cat_table.setItem(i, 4, tot_item)
 
                 # Actions
                 btn_widget = QWidget()
+                btn_widget.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
                 btn_layout = QHBoxLayout(btn_widget)
-                btn_layout.setContentsMargins(4, 2, 4, 2)
+                btn_layout.setContentsMargins(0, 0, 0, 0)
                 btn_layout.setSpacing(6)
+                btn_layout.setAlignment(Qt.AlignCenter)
 
                 btn_edit = QPushButton("Edit")
                 btn_edit.setProperty("class", "btn-action-view")
-                btn_edit.setFixedHeight(26)
+                btn_edit.setCursor(Qt.PointingHandCursor)
+                btn_edit.setFixedSize(62, 26)
                 btn_edit.clicked.connect(lambda _, cid=c.id: self.edit_category(cid))
 
                 btn_del = QPushButton("Delete")
                 btn_del.setProperty("class", "btn-action-delete")
-                btn_del.setFixedHeight(26)
+                btn_del.setCursor(Qt.PointingHandCursor)
+                btn_del.setFixedSize(68, 26)
                 btn_del.clicked.connect(lambda _, cid=c.id: self.delete_category(cid))
 
                 btn_layout.addWidget(btn_edit)
