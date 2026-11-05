@@ -80,7 +80,6 @@ class JobCardDialog(QDialog):
         if self.cust_name_combo.lineEdit():
             self.cust_name_combo.lineEdit().setPlaceholderText("Select or type customer name")
             self.cust_name_combo.lineEdit().setClearButtonEnabled(True)
-            self.cust_name_combo.lineEdit().textChanged.connect(self.check_customer_match)
         self.cust_name_combo.currentIndexChanged.connect(self.on_customer_selected)
 
         # Install click-to-clear filter on customer name input

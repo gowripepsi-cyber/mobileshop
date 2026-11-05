@@ -99,7 +99,6 @@ class SalesReturnEntryWidget(QWidget):
         self.customer_combo.currentTextChanged.connect(self.check_customer_match)
         if self.customer_combo.lineEdit():
             self.customer_combo.lineEdit().setPlaceholderText("Select or type customer name")
-            self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)
         self.customer_combo.currentIndexChanged.connect(self.load_customer_invoices)
 
         self.add_customer_btn = QPushButton("+")
@@ -353,10 +352,7 @@ class SalesReturnEntryWidget(QWidget):
             if item_text and item_text != "-- Select Customer --" and item_text.lower() == text.lower():
                 matched = True
                 if self.customer_combo.currentIndex() != i:
-                    self.customer_combo.blockSignals(True)
                     self.customer_combo.setCurrentIndex(i)
-                    self.customer_combo.blockSignals(False)
-                    self.load_customer_invoices()
                 break
         
         if not matched:

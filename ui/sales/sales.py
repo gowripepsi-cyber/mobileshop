@@ -116,8 +116,6 @@ class SalesView(QWidget):
         # 3. Customer (combo + add button)
         self.customer_combo = AutoClearSearchableComboBox()
         self.customer_combo.currentTextChanged.connect(self.check_customer_match)
-        if self.customer_combo.lineEdit():
-            self.customer_combo.lineEdit().textChanged.connect(self.check_customer_match)
 
         self.add_customer_btn = QPushButton("+")
         self.add_customer_btn.setToolTip("Add new customer")
@@ -508,9 +506,7 @@ class SalesView(QWidget):
             if item_text and item_text != "-- Select Customer / Cash --" and item_text.lower() == text.lower():
                 matched = True
                 if self.customer_combo.currentIndex() != i:
-                    self.customer_combo.blockSignals(True)
                     self.customer_combo.setCurrentIndex(i)
-                    self.customer_combo.blockSignals(False)
                 break
         
         if not matched:

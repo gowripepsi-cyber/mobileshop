@@ -353,17 +353,26 @@ class SearchableComboBox(QComboBox):
         self.setEditable(True)
         self.setInsertPolicy(QComboBox.NoInsert)
         self._suppress_popup = False
+        self._handling_selection = False
         
         if self.lineEdit():
             self.lineEdit().installEventFilter(self)
-            self.lineEdit().textChanged.connect(self.on_text_changed)
+            self.lineEdit().textEdited.connect(self.on_text_changed)
         
     def update_completer(self):
         completer = QCompleter(self.model(), self)
         completer.setFilterMode(Qt.MatchContains)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.activated[str].connect(self._on_completer_activated)
+        if completer.popup():
+            completer.popup().clicked.connect(self._on_popup_clicked)
         self.setCompleter(completer)
+
+    def _on_popup_clicked(self, index):
+        if not index.isValid():
+            return
+        text = index.data()
+        self._on_completer_activated(text)
 
     def showPopup(self):
         completer = self.completer()
@@ -379,25 +388,30 @@ class SearchableComboBox(QComboBox):
             super().showPopup()
 
     def _on_completer_activated(self, text):
-        self._suppress_popup = True
-        le = self.lineEdit()
-        if le:
-            le._suppress_clear = True
-            le.setText(text)
-        idx = self.findText(text)
-        if idx >= 0:
-            if self.currentIndex() != idx:
-                self.setCurrentIndex(idx)
-            else:
-                self.currentIndexChanged.emit(idx)
-                self.currentTextChanged.emit(text)
-            self.activated.emit(idx)
-        if self.completer() and self.completer().popup():
-            self.completer().popup().hide()
-        if le:
-            le._suppress_clear = False
-            le._cleared_on_focus = False
-        self._suppress_popup = False
+        if getattr(self, '_handling_selection', False):
+            return
+        self._handling_selection = True
+        try:
+            self._suppress_popup = True
+            le = self.lineEdit()
+            if le:
+                le._suppress_clear = True
+                le.setText(text)
+            idx = self.findText(text)
+            if idx >= 0:
+                if self.currentIndex() != idx:
+                    self.setCurrentIndex(idx)
+                else:
+                    self.currentTextChanged.emit(text)
+                self.activated.emit(idx)
+            if self.completer() and self.completer().popup():
+                self.completer().popup().hide()
+            if le:
+                le._suppress_clear = False
+                le._cleared_on_focus = False
+            self._suppress_popup = False
+        finally:
+            self._handling_selection = False
 
     def on_text_changed(self, text):
         if getattr(self, '_suppress_popup', False):
@@ -434,8 +448,16 @@ class SearchableComboBox(QComboBox):
                     if self._handle_arrow_key(-1):
                         return True
             elif event.type() == QEvent.FocusOut:
-                if self.completer() and self.completer().popup():
-                    self.completer().popup().hide()
+                # Prevent blur from closing dropdown before item click is processed
+                if event.reason() == Qt.PopupFocusReason:
+                    return False
+                    
+                popup = self.completer().popup() if self.completer() else None
+                if popup and popup.isVisible():
+                    from PySide6.QtWidgets import QApplication
+                    if popup.underMouse() or (QApplication.activePopupWidget() == popup):
+                        return False
+                    popup.hide()
                     
                 from PySide6.QtWidgets import QApplication
                 focus_widget = QApplication.focusWidget()
@@ -500,7 +522,6 @@ class SearchableComboBox(QComboBox):
                     if self.currentIndex() != idx:
                         self.setCurrentIndex(idx)
                     else:
-                        self.currentIndexChanged.emit(idx)
                         self.currentTextChanged.emit(selected_text)
                     self.activated.emit(idx)
             popup.hide()
@@ -608,8 +629,14 @@ class AutoClearLineEdit(QLineEdit):
     def focusOutEvent(self, event):
         self._cleared_on_focus = False
         super().focusOutEvent(event)
-        if self.combo.completer() and self.combo.completer().popup():
-            self.combo.completer().popup().hide()
+        if event.reason() == Qt.PopupFocusReason:
+            return
+        completer = self.combo.completer()
+        if completer and completer.popup() and completer.popup().isVisible():
+            from PySide6.QtWidgets import QApplication
+            if completer.popup().underMouse() or (QApplication.activePopupWidget() == completer.popup()):
+                return
+            completer.popup().hide()
 
 
 class AutoClearSearchableComboBox(SearchableComboBox):
@@ -623,7 +650,7 @@ class AutoClearSearchableComboBox(SearchableComboBox):
         custom_line_edit = AutoClearLineEdit(self)
         self.setLineEdit(custom_line_edit)
         self.lineEdit().installEventFilter(self)
-        self.lineEdit().textChanged.connect(self.on_text_changed)
+        self.lineEdit().textEdited.connect(self.on_text_changed)
 
 
 class SearchableProductComboBox(AutoClearSearchableComboBox):
