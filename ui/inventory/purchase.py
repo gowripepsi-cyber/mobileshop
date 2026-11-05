@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout,
                              QTabWidget, QDialog, QDialogButtonBox, QCompleter, QCheckBox)
 from PySide6.QtCore import Qt, QDate, QTimer
+from utils.formatters import format_inr
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_purchase_pdf
@@ -803,9 +804,9 @@ class PurchaseView(QWidget):
                 self.history_table.setItem(i, 0, QTableWidgetItem(p.invoice_number))
                 self.history_table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
                 self.history_table.setItem(i, 2, QTableWidgetItem(p.supplier.name))
-                self.history_table.setItem(i, 3, QTableWidgetItem(f"₹{p.total_amount:,.2f}"))
-                self.history_table.setItem(i, 4, QTableWidgetItem(f"₹{p.paid_amount:,.2f}"))
-                self.history_table.setItem(i, 5, QTableWidgetItem(f"₹{p.balance_payable:,.2f}"))
+                self.history_table.setItem(i, 3, QTableWidgetItem(f"₹{format_inr(p.total_amount)}"))
+                self.history_table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(p.paid_amount)}"))
+                self.history_table.setItem(i, 5, QTableWidgetItem(f"₹{format_inr(p.balance_payable)}"))
                 
                 # Action Buttons
                 actions_widget = QWidget()
@@ -1122,16 +1123,16 @@ class PurchaseView(QWidget):
             tax_sum = sum(item.get("tax_amount", 0.0) for item in self.bill_items)
             total = taxable_sum + tax_sum
             
-            self.total_lbl.setText(f"Taxable: ₹{taxable_sum:,.2f} | GST: ₹{tax_sum:,.2f} | Total: ₹{total:,.2f}")
+            self.total_lbl.setText(f"Taxable: ₹{format_inr(taxable_sum)} | GST: ₹{format_inr(tax_sum)} | Total: ₹{format_inr(total)}")
         else:
             total = sum(item.get("qty", 0) * item.get("rate", 0.0) for item in self.bill_items)
-            self.total_lbl.setText(f"Total Amount: ₹{total:,.2f}")
+            self.total_lbl.setText(f"Total Amount: ₹{format_inr(total)}")
 
         paid = self.paid_input.value()
         balance = total - paid
         if balance < 0:
             balance = 0.0
-        self.balance_lbl.setText(f"Balance Payable: ₹{balance:,.2f}")
+        self.balance_lbl.setText(f"Balance Payable: ₹{format_inr(balance)}")
 
     def save_purchase(self):
         invoice_no = self.invoice_input.text().strip()
@@ -1457,9 +1458,9 @@ class PurchaseView(QWidget):
             # Totals
             totals_frame = QFrame()
             totals_layout = QFormLayout(totals_frame)
-            totals_layout.addRow("Total Amount:", QLabel(f"₹{purchase.total_amount:,.2f}"))
-            totals_layout.addRow("Paid Amount:", QLabel(f"₹{purchase.paid_amount:,.2f}"))
-            totals_layout.addRow("Balance Payable:", QLabel(f"₹{purchase.balance_payable:,.2f}"))
+            totals_layout.addRow("Total Amount:", QLabel(f"₹{format_inr(purchase.total_amount)}"))
+            totals_layout.addRow("Paid Amount:", QLabel(f"₹{format_inr(purchase.paid_amount)}"))
+            totals_layout.addRow("Balance Payable:", QLabel(f"₹{format_inr(purchase.balance_payable)}"))
             dlg_layout.addWidget(totals_frame)
             
             # Bottom Buttons (Print Invoice & Close)

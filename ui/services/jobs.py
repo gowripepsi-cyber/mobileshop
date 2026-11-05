@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QRegularExpression
 from PySide6.QtGui import QColor, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import QCompleter
 from sqlalchemy import case
+from utils.formatters import format_inr
 from database import Session, Setting
 from models import ServiceJob, ServicePart, Customer, CashTransaction, BankTransaction, BankAccount, Product, Payment, Staff
 from utils.pdf_generator import generate_service_pdf
@@ -1019,7 +1020,7 @@ class BillingDialog(QDialog):
             for i, p in enumerate(payments):
                 self.payments_table.setItem(i, 0, QTableWidgetItem(p.date.strftime("%Y-%m-%d")))
                 self.payments_table.setItem(i, 1, QTableWidgetItem(p.payment_mode))
-                amt_item = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                amt_item = QTableWidgetItem(f"₹{format_inr(p.amount)}")
                 amt_item.setForeground(Qt.darkGreen)
                 self.payments_table.setItem(i, 2, amt_item)
                 self.payments_table.setItem(i, 3, QTableWidgetItem(p.remarks or "-"))
@@ -1031,13 +1032,13 @@ class BillingDialog(QDialog):
                 self.payments_table.setRowCount(1)
                 self.payments_table.setItem(0, 0, QTableWidgetItem(getattr(self, 'job_created_date', '')))
                 self.payments_table.setItem(0, 1, QTableWidgetItem("Cash"))
-                amt_item = QTableWidgetItem(f"₹{total_paid:,.2f}")
+                amt_item = QTableWidgetItem(f"₹{format_inr(total_paid)}")
                 amt_item.setForeground(Qt.darkGreen)
                 self.payments_table.setItem(0, 2, amt_item)
                 self.payments_table.setItem(0, 3, QTableWidgetItem("Initial Payment / Advance"))
 
             self.total_paid_so_far = total_paid
-            self.already_paid_lbl.setText(f"₹{total_paid:,.2f}")
+            self.already_paid_lbl.setText(f"₹{format_inr(total_paid)}")
         except Exception as e:
             print(f"Error loading payments history: {e}")
         finally:
@@ -1053,14 +1054,14 @@ class BillingDialog(QDialog):
 
     def recalculate_totals(self):
         parts_total = sum(p["cost"] * p["qty"] for p in self.parts_list)
-        self.parts_cost_lbl.setText(f"₹{parts_total:,.2f}")
+        self.parts_cost_lbl.setText(f"₹{format_inr(parts_total)}")
 
         service_charge = self.service_charge_input.value()
         net_total = parts_total + service_charge
-        self.total_lbl.setText(f"₹{net_total:,.2f}")
+        self.total_lbl.setText(f"₹{format_inr(net_total)}")
 
         already_paid = getattr(self, 'total_paid_so_far', 0.0)
-        self.already_paid_lbl.setText(f"₹{already_paid:,.2f}")
+        self.already_paid_lbl.setText(f"₹{format_inr(already_paid)}")
 
         paying_now = self.paying_now_input.value()
         projected_paid = already_paid + paying_now
@@ -1068,7 +1069,7 @@ class BillingDialog(QDialog):
         if remaining_balance < 0:
             remaining_balance = 0.0
 
-        self.balance_lbl.setText(f"₹{remaining_balance:,.2f}")
+        self.balance_lbl.setText(f"₹{format_inr(remaining_balance)}")
 
         # Balance badge styling
         if remaining_balance == 0 and net_total > 0:
@@ -1083,10 +1084,10 @@ class BillingDialog(QDialog):
             self.balance_card.setStyleSheet("background-color: #fef2f2; border: 1.5px solid #fecaca; border-left: 5px solid #ef4444; border-radius: 10px; padding: 6px 10px;")
 
         if paying_now > 0:
-            self.projected_balance_lbl.setText(f"After paying ₹{paying_now:,.2f} now: Balance will be ₹{remaining_balance:,.2f}")
+            self.projected_balance_lbl.setText(f"After paying ₹{format_inr(paying_now)} now: Balance will be ₹{format_inr(remaining_balance)}")
             self.projected_balance_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #15803d;")
         else:
-            self.projected_balance_lbl.setText(f"No payment currently entered. Balance: ₹{remaining_balance:,.2f}")
+            self.projected_balance_lbl.setText(f"No payment currently entered. Balance: ₹{format_inr(remaining_balance)}")
             self.projected_balance_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #64748b;")
 
     def record_payment_immediate(self):
@@ -1100,7 +1101,7 @@ class BillingDialog(QDialog):
         net_total = parts_total + service_charge
         current_rem = max(0.0, net_total - self.total_paid_so_far)
         if paying_now > current_rem + 0.01:
-            QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{paying_now:,.2f}) cannot exceed pending balance (₹{current_rem:,.2f}).")
+            QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{format_inr(paying_now)}) cannot exceed pending balance (₹{format_inr(current_rem)}).")
             return
 
         pay_mode = self.pay_mode_combo.currentText()
@@ -1167,7 +1168,7 @@ class BillingDialog(QDialog):
             self.pay_remarks_input.clear()
             self.load_payments_history()
             self.recalculate_totals()
-            QMessageBox.information(self, "Success", f"Payment installment of ₹{paying_now:,.2f} recorded successfully.\nRemaining Balance: ₹{new_balance:,.2f}")
+            QMessageBox.information(self, "Success", f"Payment installment of ₹{format_inr(paying_now)} recorded successfully.\nRemaining Balance: ₹{format_inr(new_balance)}")
         except Exception as e:
             session.rollback()
             QMessageBox.critical(self, "Error", f"Failed to record payment: {e}")
@@ -1182,7 +1183,7 @@ class BillingDialog(QDialog):
         paying_now = self.paying_now_input.value()
         current_rem = max(0.0, net_total - self.total_paid_so_far)
         if paying_now > current_rem + 0.01:
-            QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{paying_now:,.2f}) cannot exceed pending balance (₹{current_rem:,.2f}).")
+            QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{format_inr(paying_now)}) cannot exceed pending balance (₹{format_inr(current_rem)}).")
             return
 
         pay_mode = self.pay_mode_combo.currentText()
@@ -1301,7 +1302,7 @@ class BillingDialog(QDialog):
 
             session.commit()
             session.close()
-            msg = f"Repair invoice details saved.\nTotal: ₹{final_total:,.2f}\nTotal Paid: ₹{final_paid:,.2f}\nBalance Remaining: ₹{final_bal:,.2f}"
+            msg = f"Repair invoice details saved.\nTotal: ₹{format_inr(final_total)}\nTotal Paid: ₹{format_inr(final_paid)}\nBalance Remaining: ₹{format_inr(final_bal)}"
             QMessageBox.information(self, "Success", msg)
             self.accept()
         except Exception as e:
@@ -1587,17 +1588,17 @@ class ServicesView(QWidget):
                 self.table.setItem(i, 6, status_item)
 
                 # Col 7: Labor
-                labor_item = QTableWidgetItem(f"₹{j.service_charge:,.2f}")
+                labor_item = QTableWidgetItem(f"₹{format_inr(j.service_charge)}")
                 labor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.table.setItem(i, 7, labor_item)
 
                 # Col 8: Total
-                tot_item = QTableWidgetItem(f"₹{j.total_amount:,.2f}")
+                tot_item = QTableWidgetItem(f"₹{format_inr(j.total_amount)}")
                 tot_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.table.setItem(i, 8, tot_item)
                 
                 # Col 9: Balance
-                bal_item = QTableWidgetItem(f"₹{j.balance:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(j.balance)}")
                 bal_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if j.balance > 0:
                     bal_item.setForeground(Qt.red)
@@ -1773,9 +1774,9 @@ class ServicesView(QWidget):
             # Totals
             totals_frame = QFrame()
             totals_layout = QFormLayout(totals_frame)
-            totals_layout.addRow("Total Amount:", QLabel(f"₹{job.total_amount:,.2f}"))
-            totals_layout.addRow("Paid Amount:", QLabel(f"₹{job.paid_amount:,.2f}"))
-            totals_layout.addRow("Balance Due:", QLabel(f"₹{job.balance:,.2f}"))
+            totals_layout.addRow("Total Amount:", QLabel(f"₹{format_inr(job.total_amount)}"))
+            totals_layout.addRow("Paid Amount:", QLabel(f"₹{format_inr(job.paid_amount)}"))
+            totals_layout.addRow("Balance Due:", QLabel(f"₹{format_inr(job.balance)}"))
             dlg_layout.addWidget(totals_frame)
 
             # Payment History Installments
@@ -1796,7 +1797,7 @@ class ServicesView(QWidget):
                 for idx, jp in enumerate(job_payments):
                     pay_table.setItem(idx, 0, QTableWidgetItem(jp.date.strftime("%Y-%m-%d")))
                     pay_table.setItem(idx, 1, QTableWidgetItem(jp.payment_mode))
-                    amt_item = QTableWidgetItem(f"₹{jp.amount:,.2f}")
+                    amt_item = QTableWidgetItem(f"₹{format_inr(jp.amount)}")
                     amt_item.setForeground(Qt.darkGreen)
                     pay_table.setItem(idx, 2, amt_item)
                     pay_table.setItem(idx, 3, QTableWidgetItem(jp.remarks or "-"))

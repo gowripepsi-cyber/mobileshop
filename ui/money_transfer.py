@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                              QHeaderView, QMessageBox, QFrame, QFormLayout, QFileDialog, QApplication,
                              QRadioButton)
 from PySide6.QtCore import Qt, QDate
+from utils.formatters import format_inr
 from database import Session, Setting
 from models import MoneyTransfer, BankAccount, CashTransaction, BankTransaction
 from utils.pdf_generator import generate_money_transfer_pdf
@@ -273,8 +274,8 @@ class MoneyTransferView(QWidget):
             completed_count = session.query(MoneyTransfer).filter_by(status='Completed').count()
             pending_count = session.query(MoneyTransfer).filter_by(status='Pending').count()
 
-            self.kpi_total_amt.val_label.setText(f"₹{total_amt:,.2f}")
-            self.kpi_total_charges.val_label.setText(f"₹{total_charges:,.2f}")
+            self.kpi_total_amt.val_label.setText(f"₹{format_inr(total_amt)}")
+            self.kpi_total_charges.val_label.setText(f"₹{format_inr(total_charges)}")
             self.kpi_completed.val_label.setText(str(completed_count))
             self.kpi_pending.val_label.setText(str(pending_count))
 
@@ -331,7 +332,7 @@ class MoneyTransferView(QWidget):
                 self.table.setItem(i, 2, QTableWidgetItem(t.customer_name))
                 self.table.setItem(i, 3, QTableWidgetItem(t.beneficiary_name))
                 self.table.setItem(i, 4, QTableWidgetItem(t.transfer_type))
-                self.table.setItem(i, 5, QTableWidgetItem(f"₹{t.amount:,.2f} (+₹{t.service_charge:,.2f})"))
+                self.table.setItem(i, 5, QTableWidgetItem(f"₹{format_inr(t.amount)} (+₹{format_inr(t.service_charge)})"))
                 
                 status_item = QTableWidgetItem(t.status)
                 if t.status == 'Completed':
@@ -421,7 +422,7 @@ class MoneyTransferView(QWidget):
                 return
             payout_target_name = f"{bank_po.bank_name} ({bank_po.account_name})"
             if bank_po.balance < amount:
-                QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in payout account {payout_target_name}.\nAvailable: ₹{bank_po.balance:,.2f}")
+                QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in payout account {payout_target_name}.\nAvailable: ₹{format_inr(bank_po.balance)}")
                 session.close()
                 return
 

@@ -2,6 +2,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
                              QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView,
                              QComboBox)
 from PySide6.QtCore import Qt
+from utils.formatters import format_inr
 from database import Session
 from models import BankAccount, BankTransaction
 
@@ -219,7 +220,7 @@ class BankAccountsView(QWidget):
                 self.table.setItem(i, 3, QTableWidgetItem(a.account_name))
                 self.table.setItem(i, 4, QTableWidgetItem(a.account_type or "Current"))
                 
-                bal_item = QTableWidgetItem(f"₹{a.balance:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(a.balance)}")
                 if a.balance < 1000.0:
                     bal_item.setForeground(Qt.red)
                 self.table.setItem(i, 5, bal_item)

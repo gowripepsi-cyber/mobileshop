@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QTableWidgetItem, QHeaderView, QMessageBox, QFrame, QFormLayout, 
                              QDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate, QTimer
+from utils.formatters import format_inr
 from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, PurchaseReturnMaster, PurchaseReturnItem
 from utils.pdf_generator import generate_purchase_return_pdf
@@ -613,10 +614,10 @@ class PurchaseReturnEntryWidget(QWidget):
         adj = total - refund
         self.bal_deducted_input.setValue(adj)
 
-        self.total_lbl.setText(f"Total Return Value: ₹{total:,.2f}")
-        self.adj_lbl.setText(f"Outstanding Adj: ₹{adj:,.2f}")
+        self.total_lbl.setText(f"Total Return Value: ₹{format_inr(total)}")
+        self.adj_lbl.setText(f"Outstanding Adj: ₹{format_inr(adj)}")
         if hasattr(self, 'adj_badge'):
-            self.adj_badge.setText(f"Outstanding Adj: ₹{adj:,.2f}")
+            self.adj_badge.setText(f"Outstanding Adj: ₹{format_inr(adj)}")
 
     def save_purchase_return(self):
         return_no = self.return_no_input.text().strip()
@@ -901,9 +902,9 @@ class PurchaseReturnHistoryWidget(QWidget):
                 self.table.setItem(i, 0, QTableWidgetItem(r.return_number))
                 self.table.setItem(i, 1, QTableWidgetItem(r.date.strftime("%Y-%m-%d")))
                 self.table.setItem(i, 2, QTableWidgetItem(r.supplier.name))
-                self.table.setItem(i, 3, QTableWidgetItem(f"₹{r.total_amount:,.2f}"))
-                self.table.setItem(i, 4, QTableWidgetItem(f"₹{r.refund_received:,.2f}"))
-                self.table.setItem(i, 5, QTableWidgetItem(f"₹{r.balance_deducted:,.2f}"))
+                self.table.setItem(i, 3, QTableWidgetItem(f"₹{format_inr(r.total_amount)}"))
+                self.table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(r.refund_received)}"))
+                self.table.setItem(i, 5, QTableWidgetItem(f"₹{format_inr(r.balance_deducted)}"))
 
                 # Action Buttons
                 actions_widget = QWidget()
@@ -986,9 +987,9 @@ class PurchaseReturnHistoryWidget(QWidget):
 
             totals_frame = QFrame()
             totals_layout = QFormLayout(totals_frame)
-            totals_layout.addRow("Total Return Amount:", QLabel(f"₹{ret.total_amount:,.2f}"))
-            totals_layout.addRow("Refund Received:", QLabel(f"₹{ret.refund_received:,.2f}"))
-            totals_layout.addRow("Outstanding Adjusted:", QLabel(f"₹{ret.balance_deducted:,.2f}"))
+            totals_layout.addRow("Total Return Amount:", QLabel(f"₹{format_inr(ret.total_amount)}"))
+            totals_layout.addRow("Refund Received:", QLabel(f"₹{format_inr(ret.refund_received)}"))
+            totals_layout.addRow("Outstanding Adjusted:", QLabel(f"₹{format_inr(ret.balance_deducted)}"))
             dlg_layout.addWidget(totals_frame)
 
             btn_box = QHBoxLayout()

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFileDialog
 )
 from PySide6.QtCore import Qt, QDate
+from utils.formatters import format_inr
 from database import Session
 from models import Product, Category, Unit, ExistingStockMaster, ExistingStockItem
 from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, AutoClearSearchableComboBox
@@ -614,9 +615,9 @@ class ExistingStockView(QWidget):
             # Unit
             self.table.setItem(row, 7, QTableWidgetItem(str(item["unit"])))
             # Rate
-            self.table.setItem(row, 8, QTableWidgetItem(f"₹{item['rate']:,.2f}"))
+            self.table.setItem(row, 8, QTableWidgetItem(f"₹{format_inr(item['rate'])}"))
             # Selling Price
-            self.table.setItem(row, 9, QTableWidgetItem(f"₹{item['selling_price']:,.2f}"))
+            self.table.setItem(row, 9, QTableWidgetItem(f"₹{format_inr(item['selling_price'])}"))
 
             # Remove button
             del_btn = QPushButton("Remove")
@@ -629,7 +630,7 @@ class ExistingStockView(QWidget):
         self.items_count_badge.setText(f"{total_items} Items Added")
         self.total_items_lbl.setText(f"Total Items: {total_items}")
         self.total_qty_lbl.setText(f"Total Added Qty: {total_qty}")
-        self.total_val_lbl.setText(f"Total Valuation: ₹{total_val:,.2f}")
+        self.total_val_lbl.setText(f"Total Valuation: ₹{format_inr(total_val)}")
 
     def remove_item(self, row):
         if 0 <= row < len(self.stock_items):
@@ -663,7 +664,7 @@ class ExistingStockView(QWidget):
             self, "Confirm Upload",
             f"Are you sure you want to upload existing stock for {total_items} item(s)?\n\n"
             f"• Total Quantity Added: {total_qty}\n"
-            f"• Total Valuation: ₹{total_val:,.2f}\n\n"
+            f"• Total Valuation: ₹{format_inr(total_val)}\n\n"
             f"This will increment each product's stock in the system.",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
         )
@@ -723,7 +724,7 @@ class ExistingStockView(QWidget):
                 f"Entry Number: {entry_no}\n"
                 f"Items Updated: {total_items}\n"
                 f"Total Units Added: {total_qty}\n"
-                f"Total Valuation: ₹{total_val:,.2f}"
+                f"Total Valuation: ₹{format_inr(total_val)}"
             )
 
             # Reset form & reload
@@ -784,7 +785,7 @@ class ExistingStockView(QWidget):
                 # Total Qty
                 self.history_table.setItem(row, 3, QTableWidgetItem(str(r.total_qty)))
                 # Total Valuation
-                self.history_table.setItem(row, 4, QTableWidgetItem(f"₹{r.total_value:,.2f}"))
+                self.history_table.setItem(row, 4, QTableWidgetItem(f"₹{format_inr(r.total_value)}"))
                 # Notes
                 self.history_table.setItem(row, 5, QTableWidgetItem(str(r.notes or "-")))
 
@@ -830,7 +831,7 @@ class ExistingStockView(QWidget):
             dlg_l.setContentsMargins(16, 16, 16, 16)
             dlg_l.setSpacing(12)
 
-            info_lbl = QLabel(f"<b>Entry:</b> {master.entry_number} &nbsp;|&nbsp; <b>Date:</b> {master.date} &nbsp;|&nbsp; <b>Total Items:</b> {master.total_items} &nbsp;|&nbsp; <b>Total Qty:</b> {master.total_qty} &nbsp;|&nbsp; <b>Valuation:</b> ₹{master.total_value:,.2f}")
+            info_lbl = QLabel(f"<b>Entry:</b> {master.entry_number} &nbsp;|&nbsp; <b>Date:</b> {master.date} &nbsp;|&nbsp; <b>Total Items:</b> {master.total_items} &nbsp;|&nbsp; <b>Total Qty:</b> {master.total_qty} &nbsp;|&nbsp; <b>Valuation:</b> ₹{format_inr(master.total_value)}")
             info_lbl.setStyleSheet("font-size: 13px; color: #0f172a;")
             dlg_l.addWidget(info_lbl)
 
@@ -850,8 +851,8 @@ class ExistingStockView(QWidget):
                 table.setItem(i, 2, QTableWidgetItem(str(p_name)))
                 table.setItem(i, 3, QTableWidgetItem(str(itm.qty)))
                 table.setItem(i, 4, QTableWidgetItem(str(itm.unit or "Pcs")))
-                table.setItem(i, 5, QTableWidgetItem(f"₹{itm.rate:,.2f}"))
-                table.setItem(i, 6, QTableWidgetItem(f"₹{itm.total_amount:,.2f}"))
+                table.setItem(i, 5, QTableWidgetItem(f"₹{format_inr(itm.rate)}"))
+                table.setItem(i, 6, QTableWidgetItem(f"₹{format_inr(itm.total_amount)}"))
 
             dlg_l.addWidget(table)
 

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor, QFont
 
+from utils.formatters import format_inr
 from database import (
     Session, Setting, BankAccount, CashTransaction, BankTransaction,
     ExpenseCategory, Expense, generate_next_expense_voucher
@@ -902,7 +903,7 @@ class ExpensesView(QWidget):
             # Today's expenses
             today_exp = session.query(Expense).filter(Expense.date == today).all()
             tot_today = sum(e.amount for e in today_exp)
-            self.card_today.lbl_val.setText(f"₹{tot_today:,.2f}")
+            self.card_today.lbl_val.setText(f"₹{format_inr(tot_today)}")
 
             # This month's expenses
             first_day = today.replace(day=1)
@@ -911,9 +912,9 @@ class ExpensesView(QWidget):
             tot_cash = sum(e.amount for e in month_exp if e.payment_mode == 'Cash')
             tot_bank = sum(e.amount for e in month_exp if e.payment_mode == 'Bank')
 
-            self.card_month.lbl_val.setText(f"₹{tot_month:,.2f}")
-            self.card_cash.lbl_val.setText(f"₹{tot_cash:,.2f}")
-            self.card_bank.lbl_val.setText(f"₹{tot_bank:,.2f}")
+            self.card_month.lbl_val.setText(f"₹{format_inr(tot_month)}")
+            self.card_cash.lbl_val.setText(f"₹{format_inr(tot_cash)}")
+            self.card_bank.lbl_val.setText(f"₹{format_inr(tot_bank)}")
 
         finally:
             session.close()
@@ -934,7 +935,7 @@ class ExpensesView(QWidget):
                 tot_spent = sum(e.amount for e in expenses)
 
                 self.cat_table.setItem(i, 3, QTableWidgetItem(str(count)))
-                self.cat_table.setItem(i, 4, QTableWidgetItem(f"₹{tot_spent:,.2f}"))
+                self.cat_table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(tot_spent)}"))
 
                 # Actions
                 btn_widget = QWidget()
@@ -978,11 +979,11 @@ class ExpensesView(QWidget):
             total_amt = sum(e.amount for e in expenses)
             total_txns = len(expenses)
 
-            self.card_an_total.lbl_val.setText(f"₹{total_amt:,.2f}")
+            self.card_an_total.lbl_val.setText(f"₹{format_inr(total_amt)}")
             self.card_an_txns.lbl_val.setText(str(total_txns))
 
             avg_daily = (total_amt / days_in_month) if days_in_month > 0 else 0.0
-            self.card_an_daily_avg.lbl_val.setText(f"₹{avg_daily:,.2f}")
+            self.card_an_daily_avg.lbl_val.setText(f"₹{format_inr(avg_daily)}")
 
             # Group by category
             cat_totals = {}
@@ -994,7 +995,7 @@ class ExpensesView(QWidget):
 
             if cat_totals:
                 top_cat = max(cat_totals, key=cat_totals.get)
-                self.card_an_top_cat.lbl_val.setText(f"{top_cat} (₹{cat_totals[top_cat]:,.0f})")
+                self.card_an_top_cat.lbl_val.setText(f"{top_cat} (₹{format_inr(cat_totals[top_cat], decimals=0)})")
             else:
                 self.card_an_top_cat.lbl_val.setText("None")
 
@@ -1004,7 +1005,7 @@ class ExpensesView(QWidget):
             for i, (c_name, c_tot) in enumerate(sorted_cats):
                 self.analytics_table.setItem(i, 0, QTableWidgetItem(c_name))
                 self.analytics_table.setItem(i, 1, QTableWidgetItem(str(cat_counts.get(c_name, 0))))
-                self.analytics_table.setItem(i, 2, QTableWidgetItem(f"₹{c_tot:,.2f}"))
+                self.analytics_table.setItem(i, 2, QTableWidgetItem(f"₹{format_inr(c_tot)}"))
                 pct = (c_tot / total_amt * 100.0) if total_amt > 0 else 0.0
                 self.analytics_table.setItem(i, 3, QTableWidgetItem(f"{pct:.1f}%"))
 
@@ -1124,7 +1125,7 @@ class ExpensesView(QWidget):
                     exp.payment_mode, amt_str, exp.reference_no or "-", exp.description or "-"
                 ])
 
-            data.append(["TOTAL", "", "", "", "", f"{total_amt:,.2f}", "", ""])
+            data.append(["TOTAL", "", "", "", "", f"{format_inr(total_amt)}", "", ""])
 
             t = Table(data, colWidths=[80, 75, 110, 110, 65, 90, 80, 150])
             t.setStyle(TableStyle([

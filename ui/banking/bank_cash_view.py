@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QDoubleValidator
 from sqlalchemy import func
 
+from utils.formatters import format_inr
 from database import Session
 from models import (
     BankAccount, BankTransaction, CashTransaction, 
@@ -197,12 +198,12 @@ class EditFundTransferDialog(QDialog):
             self.from_combo.setEnabled(False)
             self.to_combo.setEnabled(True)
             for b_id, b_name, bal in getattr(self, 'banks_cache', []):
-                self.to_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
+                self.to_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
 
         elif "Bank to Cash" in mode:
             self.from_combo.setEnabled(True)
             for b_id, b_name, bal in getattr(self, 'banks_cache', []):
-                self.from_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
+                self.from_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
             self.to_combo.addItem("Cash Drawer", ("cash", None))
             self.to_combo.setEnabled(False)
 
@@ -210,8 +211,8 @@ class EditFundTransferDialog(QDialog):
             self.from_combo.setEnabled(True)
             self.to_combo.setEnabled(True)
             for b_id, b_name, bal in getattr(self, 'banks_cache', []):
-                self.from_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
-                self.to_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
+                self.from_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
+                self.to_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
 
     def handle_save(self):
         new_amount = self.amount_input.value()
@@ -260,7 +261,7 @@ class EditFundTransferDialog(QDialog):
                 new_from_bank = session.query(BankAccount).get(from_data[1])
                 if not new_from_bank or new_from_bank.balance < new_amount:
                     avail = new_from_bank.balance if new_from_bank else 0.0
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in source bank.\nAvailable: ₹{avail:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in source bank.\nAvailable: ₹{format_inr(avail)}")
                     session.rollback()
                     return
                 from_name = f"{new_from_bank.bank_name} ({new_from_bank.account_name})"
@@ -269,7 +270,7 @@ class EditFundTransferDialog(QDialog):
                 cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
                 cash_avail = cash_in - cash_out
                 if cash_avail < new_amount:
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{cash_avail:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{format_inr(cash_avail)}")
                     session.rollback()
                     return
                 from_name = "Cash Drawer"
@@ -404,7 +405,7 @@ class EditDirectTransactionDialog(QDialog):
             banks = session.query(BankAccount).all()
             self.bank_combo.clear()
             for b in banks:
-                self.bank_combo.addItem(f"{b.bank_name} ({b.account_name}) [Bal: ₹{b.balance:,.2f}]", b.id)
+                self.bank_combo.addItem(f"{b.bank_name} ({b.account_name}) [Bal: ₹{format_inr(b.balance)}]", b.id)
 
             dt = session.query(DirectTransaction).get(self.entry_id)
             if not dt:
@@ -480,7 +481,7 @@ class EditDirectTransactionDialog(QDialog):
                     new_bank = session.query(BankAccount).get(bank_id)
                     if not new_bank or new_bank.balance < new_amount:
                         avail = new_bank.balance if new_bank else 0.0
-                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {new_bank.bank_name if new_bank else 'Bank'}.\nAvailable: ₹{avail:,.2f}")
+                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {new_bank.bank_name if new_bank else 'Bank'}.\nAvailable: ₹{format_inr(avail)}")
                         session.rollback()
                         return
                 else:
@@ -488,7 +489,7 @@ class EditDirectTransactionDialog(QDialog):
                     cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
                     cash_avail = cash_in - cash_out
                     if cash_avail < new_amount:
-                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{cash_avail:,.2f}")
+                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{format_inr(cash_avail)}")
                         session.rollback()
                         return
 
@@ -937,9 +938,9 @@ class BankCashView(QWidget):
             total_liquid = total_bank_bal + cash_bal
 
             # Update Stat Cards
-            self.dash_card_bank.value_label.setText(f"₹{total_bank_bal:,.2f}")
-            self.dash_card_cash.value_label.setText(f"₹{cash_bal:,.2f}")
-            self.dash_card_total.value_label.setText(f"₹{total_liquid:,.2f}")
+            self.dash_card_bank.value_label.setText(f"₹{format_inr(total_bank_bal)}")
+            self.dash_card_cash.value_label.setText(f"₹{format_inr(cash_bal)}")
+            self.dash_card_total.value_label.setText(f"₹{format_inr(total_liquid)}")
 
             # 3. UPI Stats and Transactions
             period = self.upi_period_combo.currentText() if hasattr(self, 'upi_period_combo') else "All Time"
@@ -976,8 +977,8 @@ class BankCashView(QWidget):
             upi_count = len(b_txs) + len(mt_txs)
             upi_amount = sum(t.amount for t in b_txs) + sum(m.amount for m in mt_txs)
 
-            self.dash_card_upi.value_label.setText(f"₹{upi_amount:,.2f}")
-            self.lbl_upi_amount_badge.setText(f"₹{upi_amount:,.2f}")
+            self.dash_card_upi.value_label.setText(f"₹{format_inr(upi_amount)}")
+            self.lbl_upi_amount_badge.setText(f"₹{format_inr(upi_amount)}")
             self.lbl_upi_count_badge.setText(f"{upi_count} {tr('Txns')}")
 
             # Populate UPI Table
@@ -994,7 +995,7 @@ class BankCashView(QWidget):
                 self.dash_upi_table.setItem(i, 0, QTableWidgetItem(dt.strftime("%Y-%m-%d") if hasattr(dt, 'strftime') else str(dt)))
                 self.dash_upi_table.setItem(i, 1, QTableWidgetItem(acc))
                 self.dash_upi_table.setItem(i, 2, QTableWidgetItem(desc))
-                item_amt = QTableWidgetItem(f"+ ₹{amt:,.2f}")
+                item_amt = QTableWidgetItem(f"+ ₹{format_inr(amt)}")
                 item_amt.setForeground(Qt.green)
                 self.dash_upi_table.setItem(i, 3, item_amt)
 
@@ -1035,12 +1036,12 @@ class BankCashView(QWidget):
                 self.dash_accounts_table.setItem(i, 1, QTableWidgetItem(acc['inst']))
                 self.dash_accounts_table.setItem(i, 2, QTableWidgetItem(acc['type']))
 
-                in_item = QTableWidgetItem(f"+ ₹{acc['today_in']:,.2f}")
+                in_item = QTableWidgetItem(f"+ ₹{format_inr(acc['today_in'])}")
                 if acc['today_in'] > 0:
                     in_item.setForeground(Qt.green)
                 self.dash_accounts_table.setItem(i, 3, in_item)
 
-                bal_item = QTableWidgetItem(f"₹{acc['balance']:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(acc['balance'])}")
                 if acc['balance'] < 1000.0:
                     bal_item.setForeground(Qt.red)
                 else:
@@ -1048,7 +1049,7 @@ class BankCashView(QWidget):
                 self.dash_accounts_table.setItem(i, 4, bal_item)
 
             self.lbl_acc_summary.setText(
-                f"💵 {tr('Cash')}: ₹{cash_bal:,.2f}  |  🏛️ {tr('Banks')}: ₹{total_bank_bal:,.2f}  |  💼 {tr('Total Funds')}: ₹{total_liquid:,.2f}"
+                f"💵 {tr('Cash')}: ₹{format_inr(cash_bal)}  |  🏛️ {tr('Banks')}: ₹{format_inr(total_bank_bal)}  |  💼 {tr('Total Funds')}: ₹{format_inr(total_liquid)}"
             )
 
         except Exception as e:
@@ -1500,7 +1501,7 @@ class BankCashView(QWidget):
             cash_out_total = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
             cash_in_hand = cash_in_total - cash_out_total
 
-            self.card_cash_in_hand.value_label.setText(f"₹{cash_in_hand:,.2f}")
+            self.card_cash_in_hand.value_label.setText(f"₹{format_inr(cash_in_hand)}")
 
             # 2. Today's In/Out
             today = datetime.date.today()
@@ -1514,8 +1515,8 @@ class BankCashView(QWidget):
                 CashTransaction.date == today
             ).scalar() or 0.0
 
-            self.card_today_in.value_label.setText(f"+ ₹{today_in:,.2f}")
-            self.card_today_out.value_label.setText(f"- ₹{today_out:,.2f}")
+            self.card_today_in.value_label.setText(f"+ ₹{format_inr(today_in)}")
+            self.card_today_out.value_label.setText(f"- ₹{format_inr(today_out)}")
 
         except Exception as e:
             print(f"Error loading cash metrics: {e}")
@@ -1556,12 +1557,12 @@ class BankCashView(QWidget):
                 self.cash_table.setItem(i, 2, QTableWidgetItem(str(tx.source_type or "").capitalize()))
 
                 if tx.transaction_type == 'in':
-                    in_item = QTableWidgetItem(f"+ ₹{tx.amount:,.2f}")
+                    in_item = QTableWidgetItem(f"+ ₹{format_inr(tx.amount)}")
                     in_item.setForeground(Qt.green)
                     out_item = QTableWidgetItem("-")
                 else:
                     in_item = QTableWidgetItem("-")
-                    out_item = QTableWidgetItem(f"- ₹{tx.amount:,.2f}")
+                    out_item = QTableWidgetItem(f"- ₹{format_inr(tx.amount)}")
                     out_item.setForeground(Qt.red)
 
                 self.cash_table.setItem(i, 3, in_item)
@@ -1581,7 +1582,7 @@ class BankCashView(QWidget):
             banks = session.query(BankAccount).all()
             total_bal = sum(b.balance for b in banks)
 
-            self.card_bank_balance.value_label.setText(f"₹{total_bal:,.2f}")
+            self.card_bank_balance.value_label.setText(f"₹{format_inr(total_bal)}")
             self.card_bank_count.value_label.setText(str(len(banks)))
 
             search_txt = self.bank_search_input.text().strip().lower() if hasattr(self, 'bank_search_input') else ""
@@ -1605,7 +1606,7 @@ class BankCashView(QWidget):
                 self.bank_acc_table.setItem(i, 3, QTableWidgetItem(a.account_name))
                 self.bank_acc_table.setItem(i, 4, QTableWidgetItem(a.account_type or "Current"))
 
-                bal_item = QTableWidgetItem(f"₹{a.balance:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(a.balance)}")
                 if a.balance < 1000.0:
                     bal_item.setForeground(Qt.red)
                 else:
@@ -1669,12 +1670,12 @@ class BankCashView(QWidget):
                 self.bank_tx_table.setItem(i, 3, QTableWidgetItem(str(tx.source_type or "").capitalize()))
 
                 if tx.transaction_type == 'deposit':
-                    dep_item = QTableWidgetItem(f"+ ₹{tx.amount:,.2f}")
+                    dep_item = QTableWidgetItem(f"+ ₹{format_inr(tx.amount)}")
                     dep_item.setForeground(Qt.green)
                     with_item = QTableWidgetItem("-")
                 else:
                     dep_item = QTableWidgetItem("-")
-                    with_item = QTableWidgetItem(f"- ₹{tx.amount:,.2f}")
+                    with_item = QTableWidgetItem(f"- ₹{format_inr(tx.amount)}")
                     with_item.setForeground(Qt.red)
 
                 self.bank_tx_table.setItem(i, 4, dep_item)
@@ -1760,12 +1761,12 @@ class BankCashView(QWidget):
             self.tr_from_combo.setEnabled(False)
             self.tr_to_combo.setEnabled(True)
             for b_id, b_name, bal in getattr(self, 'tr_banks_cache', []):
-                self.tr_to_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
+                self.tr_to_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
 
         elif "Bank to Cash" in mode:
             self.tr_from_combo.setEnabled(True)
             for b_id, b_name, bal in getattr(self, 'tr_banks_cache', []):
-                self.tr_from_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
+                self.tr_from_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
             self.tr_to_combo.addItem("Cash Drawer", ("cash", None))
             self.tr_to_combo.setEnabled(False)
 
@@ -1773,8 +1774,8 @@ class BankCashView(QWidget):
             self.tr_from_combo.setEnabled(True)
             self.tr_to_combo.setEnabled(True)
             for b_id, b_name, bal in getattr(self, 'tr_banks_cache', []):
-                self.tr_from_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
-                self.tr_to_combo.addItem(f"{b_name} [Bal: ₹{bal:,.2f}]", ("bank", b_id))
+                self.tr_from_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
+                self.tr_to_combo.addItem(f"{b_name} [Bal: ₹{format_inr(bal)}]", ("bank", b_id))
 
     def save_fund_transfer(self):
         amount = self.tr_amount.value()
@@ -1803,7 +1804,7 @@ class BankCashView(QWidget):
                 bank_from = session.query(BankAccount).get(from_data[1])
                 if not bank_from or bank_from.balance < amount:
                     available = bank_from.balance if bank_from else 0.0
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in source bank.\nAvailable: ₹{available:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in source bank.\nAvailable: ₹{format_inr(available)}")
                     return
                 from_name = f"{bank_from.bank_name} ({bank_from.account_name})"
             else:
@@ -1811,7 +1812,7 @@ class BankCashView(QWidget):
                 cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
                 cash_avail = cash_in - cash_out
                 if cash_avail < amount:
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{cash_avail:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{format_inr(cash_avail)}")
                     return
                 from_name = "Cash Drawer"
 
@@ -1865,7 +1866,7 @@ class BankCashView(QWidget):
                 session.add(tx_in)
 
             session.commit()
-            QMessageBox.information(self, "Success", f"Transfer of ₹{amount:,.2f} completed successfully.")
+            QMessageBox.information(self, "Success", f"Transfer of ₹{format_inr(amount)} completed successfully.")
             self.tr_amount.setValue(0.0)
             self.tr_remarks.clear()
             self.refresh_data()
@@ -1907,7 +1908,7 @@ class BankCashView(QWidget):
                 self.transfer_log_table.setItem(i, 2, QTableWidgetItem(from_str))
                 self.transfer_log_table.setItem(i, 3, QTableWidgetItem(to_str))
                 
-                amt_item = QTableWidgetItem(f"₹{t.amount:,.2f}")
+                amt_item = QTableWidgetItem(f"₹{format_inr(t.amount)}")
                 amt_item.setForeground(Qt.cyan)
                 self.transfer_log_table.setItem(i, 4, amt_item)
                 self.transfer_log_table.setItem(i, 5, QTableWidgetItem(t.remarks or "-"))
@@ -2043,14 +2044,14 @@ class BankCashView(QWidget):
                     bank = session.query(BankAccount).get(bank_id)
                     if not bank or bank.balance < amount:
                         avail = bank.balance if bank else 0.0
-                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {bank.bank_name if bank else 'Bank'}.\nAvailable: ₹{avail:,.2f}")
+                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {bank.bank_name if bank else 'Bank'}.\nAvailable: ₹{format_inr(avail)}")
                         return
                 else:
                     cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
                     cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
                     avail = cash_in - cash_out
                     if avail < amount:
-                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{avail:,.2f}")
+                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in drawer.\nAvailable: ₹{format_inr(avail)}")
                         return
 
             dt = DirectTransaction(
@@ -2094,7 +2095,7 @@ class BankCashView(QWidget):
                 session.add(tx)
 
             session.commit()
-            QMessageBox.information(self, "Success", f"Direct entry of ₹{amount:,.2f} recorded successfully.")
+            QMessageBox.information(self, "Success", f"Direct entry of ₹{format_inr(amount)} recorded successfully.")
             self.dir_amount.setValue(0.0)
             self.dir_desc.clear()
             self.refresh_data()
@@ -2131,7 +2132,7 @@ class BankCashView(QWidget):
                     acc_str = "Cash Drawer"
 
                 self.direct_log_table.setItem(i, 3, QTableWidgetItem(acc_str))
-                self.direct_log_table.setItem(i, 4, QTableWidgetItem(f"₹{r.amount:,.2f}"))
+                self.direct_log_table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(r.amount)}"))
                 self.direct_log_table.setItem(i, 5, QTableWidgetItem(r.description or "-"))
 
                 btn_widget = QWidget()

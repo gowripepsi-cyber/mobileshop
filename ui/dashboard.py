@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, Q
                              QDialog, QFormLayout, QMessageBox)
 from PySide6.QtCore import Qt
 from sqlalchemy import func
+from utils.formatters import format_inr
 from database import Session
 from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction, PurchaseMaster, Payment
 
@@ -253,31 +254,31 @@ class DashboardView(QWidget):
             
             # Today's Sales
             sales_today = session.query(func.sum(SalesMaster.total_amount)).filter(SalesMaster.date == today).scalar() or 0.0
-            self.cards["Today's Sales"].setText(f"₹{sales_today:,.2f}")
+            self.cards["Today's Sales"].setText(f"₹{format_inr(sales_today)}")
 
             # Today's Service Income (Total amount from repair jobs logged today)
             if enable_repair:
                 service_today = session.query(func.sum(ServiceJob.total_amount)).filter(func.date(ServiceJob.created_at) == today).scalar() or 0.0
-                self.cards["Today's Service Income"].setText(f"₹{service_today:,.2f}")
+                self.cards["Today's Service Income"].setText(f"₹{format_inr(service_today)}")
 
             # Cash in Hand calculation
             cash_in = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'in').scalar() or 0.0
             cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
             cash_in_hand = cash_in - cash_out
-            self.cards["Cash in Hand"].setText(f"₹{cash_in_hand:,.2f}")
+            self.cards["Cash in Hand"].setText(f"₹{format_inr(cash_in_hand)}")
 
             # Bank Balances (sum from BankAccount table)
             banks = session.query(BankAccount).all()
             total_bank_balance = sum(b.balance for b in banks)
-            self.cards["Bank Balances"].setText(f"₹{total_bank_balance:,.2f}")
+            self.cards["Bank Balances"].setText(f"₹{format_inr(total_bank_balance)}")
 
             # Customer Outstanding (receivables)
             cust_outstanding = session.query(func.sum(Customer.outstanding_balance)).scalar() or 0.0
-            self.cards["Customer Outstanding"].setText(f"₹{cust_outstanding:,.2f}")
+            self.cards["Customer Outstanding"].setText(f"₹{format_inr(cust_outstanding)}")
 
             # Supplier Outstanding (payables)
             supp_outstanding = session.query(func.sum(Supplier.outstanding_balance)).scalar() or 0.0
-            self.cards["Supplier Outstanding"].setText(f"₹{supp_outstanding:,.2f}")
+            self.cards["Supplier Outstanding"].setText(f"₹{format_inr(supp_outstanding)}")
 
             # Low Stock Items Count
             self.low_stock_title_lbl.setText("Low Stock Alerts (Per-Item Limits)")
@@ -291,13 +292,13 @@ class DashboardView(QWidget):
             # Cash row first
             self.bank_table.setItem(row, 0, QTableWidgetItem("Cash Ledger"))
             self.bank_table.setItem(row, 1, QTableWidgetItem("Cash-in-Hand"))
-            self.bank_table.setItem(row, 2, QTableWidgetItem(f"₹{cash_in_hand:,.2f}"))
+            self.bank_table.setItem(row, 2, QTableWidgetItem(f"₹{format_inr(cash_in_hand)}"))
             
             for b in banks:
                 row += 1
                 self.bank_table.setItem(row, 0, QTableWidgetItem(b.bank_name))
                 self.bank_table.setItem(row, 1, QTableWidgetItem(b.account_name))
-                self.bank_table.setItem(row, 2, QTableWidgetItem(f"₹{b.balance:,.2f}"))
+                self.bank_table.setItem(row, 2, QTableWidgetItem(f"₹{format_inr(b.balance)}"))
 
             # Populate Low Stock List
             low_stock_products = session.query(Product).filter(Product.stock_qty <= Product.low_stock_limit).all()
@@ -344,7 +345,7 @@ class DashboardView(QWidget):
                 results.append({
                     "type": "Customer",
                     "ref": c.name,
-                    "details": f"Mobile: {c.mobile} | Outstanding: ₹{c.outstanding_balance:,.2f}",
+                    "details": f"Mobile: {c.mobile} | Outstanding: ₹{format_inr(c.outstanding_balance)}",
                     "id": c.id,
                     "obj_ref": c.mobile
                 })
@@ -358,7 +359,7 @@ class DashboardView(QWidget):
                 results.append({
                     "type": "Supplier",
                     "ref": s.name,
-                    "details": f"Mobile: {s.mobile} | Outstanding: ₹{s.outstanding_balance:,.2f}",
+                    "details": f"Mobile: {s.mobile} | Outstanding: ₹{format_inr(s.outstanding_balance)}",
                     "id": s.id,
                     "obj_ref": s.mobile
                 })
@@ -373,7 +374,7 @@ class DashboardView(QWidget):
                 results.append({
                     "type": "Sales Invoice",
                     "ref": s.invoice_number,
-                    "details": f"Customer: {s.customer.name if s.customer else 'Deleted'} | Total: ₹{s.total_amount:,.2f} | Date: {s.date.strftime('%Y-%m-%d')}",
+                    "details": f"Customer: {s.customer.name if s.customer else 'Deleted'} | Total: ₹{format_inr(s.total_amount)} | Date: {s.date.strftime('%Y-%m-%d')}",
                     "id": s.id,
                     "obj_ref": s.invoice_number
                 })
@@ -388,7 +389,7 @@ class DashboardView(QWidget):
                 results.append({
                     "type": "Purchase Bill",
                     "ref": p.invoice_number,
-                    "details": f"Supplier: {p.supplier.name if p.supplier else 'Deleted'} | Total: ₹{p.total_amount:,.2f} | Date: {p.date.strftime('%Y-%m-%d')}",
+                    "details": f"Supplier: {p.supplier.name if p.supplier else 'Deleted'} | Total: ₹{format_inr(p.total_amount)} | Date: {p.date.strftime('%Y-%m-%d')}",
                     "id": p.id,
                     "obj_ref": p.invoice_number
                 })
@@ -422,7 +423,7 @@ class DashboardView(QWidget):
                 results.append({
                     "type": "Product",
                     "ref": f"{prod.name}{bm}",
-                    "details": f"Code: {prod.product_code} | Stock: {prod.stock_qty} {prod.unit or 'Pcs'} | Price: ₹{prod.selling_price:,.2f}",
+                    "details": f"Code: {prod.product_code} | Stock: {prod.stock_qty} {prod.unit or 'Pcs'} | Price: ₹{format_inr(prod.selling_price)}",
                     "id": prod.id,
                     "obj_ref": prod.product_code
                 })
@@ -506,7 +507,7 @@ class DashboardView(QWidget):
             if cust.gst:
                 info_layout.addRow("GSTIN:", QLabel(cust.gst))
 
-            lbl_bal = QLabel(f"₹{cust.outstanding_balance:,.2f}")
+            lbl_bal = QLabel(f"₹{format_inr(cust.outstanding_balance)}")
             if cust.outstanding_balance > 0:
                 lbl_bal.setStyleSheet("font-weight: bold; font-size: 14px; color: #dc2626;")
             else:
@@ -538,13 +539,13 @@ class DashboardView(QWidget):
             rows = []
             for s in sales:
                 dt_str = s.date.strftime("%Y-%m-%d") if s.date else "-"
-                bal_str = f"Bal: ₹{s.balance_receivable:,.2f}" if s.balance_receivable > 0 else "Paid"
-                rows.append((s.date or datetime.date.min, dt_str, "Sales Invoice", s.invoice_number, f"{s.total_amount:,.2f}", bal_str))
+                bal_str = f"Bal: ₹{format_inr(s.balance_receivable)}" if s.balance_receivable > 0 else "Paid"
+                rows.append((s.date or datetime.date.min, dt_str, "Sales Invoice", s.invoice_number, f"{format_inr(s.total_amount)}", bal_str))
             for j in jobs:
                 j_dt = j.created_at.date() if isinstance(j.created_at, datetime.datetime) else j.created_at
                 dt_str = j_dt.strftime("%Y-%m-%d") if j_dt else "-"
-                bal_str = f"Bal: ₹{j.balance:,.2f}" if j.balance > 0 else j.status
-                rows.append((j_dt or datetime.date.min, dt_str, "Repair Job", f"{j.job_number} ({j.device_model})", f"{j.total_amount:,.2f}", bal_str))
+                bal_str = f"Bal: ₹{format_inr(j.balance)}" if j.balance > 0 else j.status
+                rows.append((j_dt or datetime.date.min, dt_str, "Repair Job", f"{j.job_number} ({j.device_model})", f"{format_inr(j.total_amount)}", bal_str))
 
             rows.sort(key=lambda r: r[0], reverse=True)
             table.setRowCount(len(rows))
@@ -638,7 +639,7 @@ class DashboardView(QWidget):
             if supp.gst:
                 info_layout.addRow("GSTIN:", QLabel(supp.gst))
 
-            lbl_bal = QLabel(f"₹{supp.outstanding_balance:,.2f}")
+            lbl_bal = QLabel(f"₹{format_inr(supp.outstanding_balance)}")
             if supp.outstanding_balance > 0:
                 lbl_bal.setStyleSheet("font-weight: bold; font-size: 14px; color: #dc2626;")
             else:
@@ -669,8 +670,8 @@ class DashboardView(QWidget):
                 dt_str = p.date.strftime("%Y-%m-%d") if p.date else "-"
                 table.setItem(i, 0, QTableWidgetItem(dt_str))
                 table.setItem(i, 1, QTableWidgetItem(p.invoice_number))
-                table.setItem(i, 2, QTableWidgetItem(f"{p.total_amount:,.2f}"))
-                bal_str = f"{p.balance_payable:,.2f}" if p.balance_payable > 0 else "Paid"
+                table.setItem(i, 2, QTableWidgetItem(f"{format_inr(p.total_amount)}"))
+                bal_str = f"{format_inr(p.balance_payable)}" if p.balance_payable > 0 else "Paid"
                 table.setItem(i, 3, QTableWidgetItem(bal_str))
 
             dlg_layout.addWidget(table)
@@ -754,8 +755,8 @@ class DashboardView(QWidget):
             info_layout.addRow("Category:", QLabel(str(prod.category) if prod.category else "-"))
             info_layout.addRow("Brand / Model:", QLabel(f"{prod.brand or '-'} / {prod.model or '-'}"))
             info_layout.addRow("Unit:", QLabel(prod.unit or "Pcs"))
-            info_layout.addRow("Selling Price (₹):", QLabel(f"₹{prod.selling_price:,.2f}"))
-            info_layout.addRow("Cost Price (₹):", QLabel(f"₹{prod.cost_price:,.2f}"))
+            info_layout.addRow("Selling Price (₹):", QLabel(f"₹{format_inr(prod.selling_price)}"))
+            info_layout.addRow("Cost Price (₹):", QLabel(f"₹{format_inr(prod.cost_price)}"))
 
             stock_lbl = QLabel(f"{prod.stock_qty} {prod.unit or 'Pcs'}")
             if prod.stock_qty <= prod.low_stock_limit:

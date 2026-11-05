@@ -1,4 +1,5 @@
 import os
+from utils.formatters import format_inr
 from PySide6.QtCore import QObject, QEvent, QTimer, Qt, QByteArray, QSize, QItemSelectionModel
 from PySide6.QtWidgets import (QApplication, QLineEdit, QComboBox, QAbstractSpinBox, 
                              QDateTimeEdit, QTextEdit, QPlainTextEdit, QAbstractButton, QCompleter,

@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
                              QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView)
 from PySide6.QtCore import Qt
+from utils.formatters import format_inr
 from database import Session
 from models import Supplier
 
@@ -206,7 +207,7 @@ class SuppliersView(QWidget):
                 self.table.setItem(i, 5, QTableWidgetItem(s.upi_id or "-"))
                 
                 # Outstanding
-                bal_item = QTableWidgetItem(f"₹{s.outstanding_balance:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(s.outstanding_balance)}")
                 if s.outstanding_balance > 0:
                     bal_item.setForeground(Qt.red)
                 self.table.setItem(i, 6, bal_item)

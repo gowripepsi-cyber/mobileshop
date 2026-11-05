@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineE
                              QHeaderView, QMessageBox, QFrame, QFormLayout, QTabWidget, QDialog, QDialogButtonBox,
                              QStackedWidget, QGridLayout)
 from PySide6.QtCore import Qt, QDate
+from utils.formatters import format_inr
 from database import Session, Setting
 from sqlalchemy import func
 from models import Payment, Customer, Supplier, BankAccount, CashTransaction, BankTransaction, FundTransfer, DirectTransaction
@@ -1194,7 +1195,7 @@ class PaymentsView(QWidget):
                     return
                 from_name = f"{bank_from.bank_name} ({bank_from.account_name})"
                 if bank_from.balance < amount:
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {from_name}.\nAvailable: ₹{bank_from.balance:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient balance in {from_name}.\nAvailable: ₹{format_inr(bank_from.balance)}")
                     session.close()
                     return
             else:
@@ -1203,7 +1204,7 @@ class PaymentsView(QWidget):
                 cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
                 cash_balance = cash_in - cash_out
                 if cash_balance < amount:
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in hand.\nAvailable: ₹{cash_balance:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in hand.\nAvailable: ₹{format_inr(cash_balance)}")
                     session.close()
                     return
 
@@ -1261,7 +1262,7 @@ class PaymentsView(QWidget):
                 session.add(tx_in)
 
             session.commit()
-            QMessageBox.information(self, "Success", f"Successfully transferred ₹{amount:,.2f} from {from_name} to {to_name}.")
+            QMessageBox.information(self, "Success", f"Successfully transferred ₹{format_inr(amount)} from {from_name} to {to_name}.")
             self.t_amount.setValue(0.0)
             self.t_remarks.clear()
             self.refresh_data()
@@ -1480,7 +1481,7 @@ class PaymentsView(QWidget):
                 target_name = f"{bank.bank_name} ({bank.account_name})"
                 
                 if tx_type == "withdrawal" and bank.balance < amount:
-                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient funds in bank account.\nAvailable: ₹{bank.balance:,.2f}")
+                    QMessageBox.warning(self, "Insufficient Funds", f"Insufficient funds in bank account.\nAvailable: ₹{format_inr(bank.balance)}")
                     session.close()
                     return
             else:
@@ -1490,7 +1491,7 @@ class PaymentsView(QWidget):
                     cash_out = session.query(func.sum(CashTransaction.amount)).filter(CashTransaction.transaction_type == 'out').scalar() or 0.0
                     cash_balance = cash_in - cash_out
                     if cash_balance < amount:
-                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in hand.\nAvailable: ₹{cash_balance:,.2f}")
+                        QMessageBox.warning(self, "Insufficient Funds", f"Insufficient cash in hand.\nAvailable: ₹{format_inr(cash_balance)}")
                         session.close()
                         return
 
@@ -1535,7 +1536,7 @@ class PaymentsView(QWidget):
                 session.add(tx)
 
             session.commit()
-            QMessageBox.information(self, "Success", f"Direct {tx_type.capitalize()} of ₹{amount:,.2f} recorded in {target_name} successfully.")
+            QMessageBox.information(self, "Success", f"Direct {tx_type.capitalize()} of ₹{format_inr(amount)} recorded in {target_name} successfully.")
             self.d_amount.setValue(0.0)
             self.d_desc.clear()
             self.refresh_data()
@@ -1751,7 +1752,7 @@ class PaymentsView(QWidget):
                     if s_obj: name = s_obj.name
                 self.history_table.setItem(i, 3, QTableWidgetItem(name))
 
-                val_item = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                val_item = QTableWidgetItem(f"₹{format_inr(p.amount)}")
                 if p.party_type == 'customer':
                     val_item.setForeground(Qt.green)
                 else:
@@ -1849,7 +1850,7 @@ class PaymentsView(QWidget):
                     to_lbl = "Cash Ledger"
                 self.transfer_table.setItem(i, 3, QTableWidgetItem(to_lbl))
                 
-                self.transfer_table.setItem(i, 4, QTableWidgetItem(f"₹{t.amount:,.2f}"))
+                self.transfer_table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(t.amount)}"))
                 
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
@@ -1904,7 +1905,7 @@ class PaymentsView(QWidget):
                     acc_lbl = "Cash Ledger"
                 self.direct_table.setItem(i, 3, QTableWidgetItem(acc_lbl))
                 
-                self.direct_table.setItem(i, 4, QTableWidgetItem(f"₹{t.amount:,.2f}"))
+                self.direct_table.setItem(i, 4, QTableWidgetItem(f"₹{format_inr(t.amount)}"))
                 self.direct_table.setItem(i, 5, QTableWidgetItem(t.description or ""))
                 
                 actions_widget = QWidget()
@@ -1968,7 +1969,7 @@ class PaymentsView(QWidget):
             try:
                 latest_cust = session.query(Customer).get(cust_id)
                 if latest_cust:
-                    self.c_outstanding_lbl.setText(f"Current Outstanding: ₹{latest_cust.outstanding_balance:,.2f}")
+                    self.c_outstanding_lbl.setText(f"Current Outstanding: ₹{format_inr(latest_cust.outstanding_balance)}")
             finally:
                 session.close()
             self.populate_cust_sales()
@@ -1998,7 +1999,7 @@ class PaymentsView(QWidget):
                     SalesMaster.balance_receivable > 0
                 ).order_by(SalesMaster.date.desc()).all()
                 for inv in invoices:
-                    self.c_sales_combo.addItem(f"Sales: {inv.invoice_number} (Bal: ₹{inv.balance_receivable:,.2f})", {"type": "sale", "id": inv.id})
+                    self.c_sales_combo.addItem(f"Sales: {inv.invoice_number} (Bal: ₹{format_inr(inv.balance_receivable)})", {"type": "sale", "id": inv.id})
 
                 if cust and cust.mobile:
                     jobs = session.query(ServiceJob).filter(
@@ -2006,7 +2007,7 @@ class PaymentsView(QWidget):
                         ServiceJob.balance > 0
                     ).order_by(ServiceJob.created_at.desc()).all()
                     for j in jobs:
-                        self.c_sales_combo.addItem(f"Repair Job: {j.job_number} - {j.device_model} (Bal: ₹{j.balance:,.2f})", {"type": "job", "id": j.id})
+                        self.c_sales_combo.addItem(f"Repair Job: {j.job_number} - {j.device_model} (Bal: ₹{format_inr(j.balance)})", {"type": "job", "id": j.id})
             except Exception as e:
                 print(f"Error loading customer invoices and jobs: {e}")
             finally:
@@ -2090,12 +2091,12 @@ class PaymentsView(QWidget):
             amt = self.c_amount.value()
             if hasattr(self, 'cust_live_calc_lbl'):
                 if amt <= 0:
-                    self.cust_live_calc_lbl.setText(f"Outstanding on this bill: ₹{bal:,.2f}. Enter amount above to preview settlement.")
+                    self.cust_live_calc_lbl.setText(f"Outstanding on this bill: ₹{format_inr(bal)}. Enter amount above to preview settlement.")
                 elif amt >= bal - 0.001:
-                    self.cust_live_calc_lbl.setText(f"🎉 Collecting ₹{amt:,.2f} will FULLY SETTLE this invoice/job! Remaining Balance: ₹0.00")
+                    self.cust_live_calc_lbl.setText(f"🎉 Collecting ₹{format_inr(amt)} will FULLY SETTLE this invoice/job! Remaining Balance: ₹0.00")
                 else:
                     rem = bal - amt
-                    self.cust_live_calc_lbl.setText(f"⚡ Collecting ₹{amt:,.2f} will reduce balance from ₹{bal:,.2f} to ₹{rem:,.2f}.")
+                    self.cust_live_calc_lbl.setText(f"⚡ Collecting ₹{format_inr(amt)} will reduce balance from ₹{format_inr(bal)} to ₹{format_inr(rem)}.")
         except Exception as e:
             print(f"Error updating customer live preview: {e}")
         finally:
@@ -2129,7 +2130,7 @@ class PaymentsView(QWidget):
             total_due = sum(s.balance_receivable for s in sales) + sum(j.balance for j in jobs)
 
             self.cust_pending_count_chip.setText(f"{total_items} Open Receivables")
-            self.cust_pending_total_chip.setText(f"Total Due: ₹{total_due:,.2f}")
+            self.cust_pending_total_chip.setText(f"Total Due: ₹{format_inr(total_due)}")
 
             # Populate pending table
             self.cust_pending_table.setRowCount(total_items)
@@ -2160,15 +2161,15 @@ class PaymentsView(QWidget):
                     item_type.setForeground(Qt.darkBlue)
                     self.cust_pending_table.setItem(row, 2, item_type)
 
-                    item_tot = QTableWidgetItem(f"₹{s.total_amount:,.2f}")
+                    item_tot = QTableWidgetItem(f"₹{format_inr(s.total_amount)}")
                     item_tot.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.cust_pending_table.setItem(row, 3, item_tot)
 
-                    item_paid = QTableWidgetItem(f"₹{s.paid_amount:,.2f}")
+                    item_paid = QTableWidgetItem(f"₹{format_inr(s.paid_amount)}")
                     item_paid.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.cust_pending_table.setItem(row, 4, item_paid)
 
-                    item_bal = QTableWidgetItem(f"₹{s.balance_receivable:,.2f}")
+                    item_bal = QTableWidgetItem(f"₹{format_inr(s.balance_receivable)}")
                     item_bal.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_bal.setForeground(Qt.red)
                     font_bal = item_bal.font()
@@ -2227,15 +2228,15 @@ class PaymentsView(QWidget):
                     self.cust_pending_table.setItem(row, 2, item_type)
 
                     tot_est = (j.advance_amount or 0.0) + (j.balance or 0.0)
-                    item_tot = QTableWidgetItem(f"₹{tot_est:,.2f}")
+                    item_tot = QTableWidgetItem(f"₹{format_inr(tot_est)}")
                     item_tot.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.cust_pending_table.setItem(row, 3, item_tot)
 
-                    item_paid = QTableWidgetItem(f"₹{(j.advance_amount or 0.0):,.2f}")
+                    item_paid = QTableWidgetItem(f"₹{format_inr((j.advance_amount or 0.0))}")
                     item_paid.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.cust_pending_table.setItem(row, 4, item_paid)
 
-                    item_bal = QTableWidgetItem(f"₹{j.balance:,.2f}")
+                    item_bal = QTableWidgetItem(f"₹{format_inr(j.balance)}")
                     item_bal.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_bal.setForeground(Qt.red)
                     font_bal = item_bal.font()
@@ -2296,7 +2297,7 @@ class PaymentsView(QWidget):
                 item_m.setTextAlignment(Qt.AlignCenter)
                 self.cust_vouchers_table.setItem(r, 2, item_m)
 
-                item_a = QTableWidgetItem(f"₹{v.amount:,.2f}")
+                item_a = QTableWidgetItem(f"₹{format_inr(v.amount)}")
                 item_a.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 item_a.setForeground(Qt.darkGreen)
                 font_a = item_a.font()
@@ -2354,9 +2355,9 @@ class PaymentsView(QWidget):
 
                 # KPI Cards
                 self.cust_kpi_date.setText(s.date.strftime("%d-%m-%Y") if s.date else "-")
-                self.cust_kpi_total.setText(f"₹{s.total_amount:,.2f}")
-                self.cust_kpi_paid.setText(f"₹{s.paid_amount:,.2f}")
-                self.cust_kpi_balance.setText(f"₹{s.balance_receivable:,.2f}")
+                self.cust_kpi_total.setText(f"₹{format_inr(s.total_amount)}")
+                self.cust_kpi_paid.setText(f"₹{format_inr(s.paid_amount)}")
+                self.cust_kpi_balance.setText(f"₹{format_inr(s.balance_receivable)}")
 
                 payments = session.query(Payment).filter(
                     Payment.party_type == 'customer',
@@ -2373,7 +2374,7 @@ class PaymentsView(QWidget):
                     self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
                     self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem("Invoice Down-Payment"))
                     self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem("Down-Payment"))
-                    item_amt = QTableWidgetItem(f"₹{s.paid_amount:,.2f}")
+                    item_amt = QTableWidgetItem(f"₹{format_inr(s.paid_amount)}")
                     item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_amt.setForeground(Qt.darkGreen)
                     self.cust_bill_ledger_table.setItem(row, 3, item_amt)
@@ -2385,7 +2386,7 @@ class PaymentsView(QWidget):
                     self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
                     self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem(f"Receipt REC-{p.id:04d}"))
                     self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem(p.payment_mode or "-"))
-                    item_amt = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                    item_amt = QTableWidgetItem(f"₹{format_inr(p.amount)}")
                     item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_amt.setForeground(Qt.darkGreen)
                     self.cust_bill_ledger_table.setItem(row, 3, item_amt)
@@ -2422,9 +2423,9 @@ class PaymentsView(QWidget):
 
                 tot_cost = (j.advance_amount or 0.0) + (j.balance or 0.0)
                 self.cust_kpi_date.setText(j.created_at.strftime("%d-%m-%Y") if j.created_at else "-")
-                self.cust_kpi_total.setText(f"₹{tot_cost:,.2f}")
-                self.cust_kpi_paid.setText(f"₹{(j.advance_amount or 0.0):,.2f}")
-                self.cust_kpi_balance.setText(f"₹{j.balance:,.2f}")
+                self.cust_kpi_total.setText(f"₹{format_inr(tot_cost)}")
+                self.cust_kpi_paid.setText(f"₹{format_inr((j.advance_amount or 0.0))}")
+                self.cust_kpi_balance.setText(f"₹{format_inr(j.balance)}")
 
                 payments = session.query(Payment).filter(
                     Payment.party_type == 'customer',
@@ -2441,7 +2442,7 @@ class PaymentsView(QWidget):
                     self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
                     self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem("Initial Advance Deposit"))
                     self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem("Advance"))
-                    item_amt = QTableWidgetItem(f"₹{j.advance_amount:,.2f}")
+                    item_amt = QTableWidgetItem(f"₹{format_inr(j.advance_amount)}")
                     item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_amt.setForeground(Qt.darkGreen)
                     self.cust_bill_ledger_table.setItem(row, 3, item_amt)
@@ -2453,7 +2454,7 @@ class PaymentsView(QWidget):
                     self.cust_bill_ledger_table.setItem(row, 0, QTableWidgetItem(d_str))
                     self.cust_bill_ledger_table.setItem(row, 1, QTableWidgetItem(f"Receipt REC-{p.id:04d}"))
                     self.cust_bill_ledger_table.setItem(row, 2, QTableWidgetItem(p.payment_mode or "-"))
-                    item_amt = QTableWidgetItem(f"₹{p.amount:,.2f}")
+                    item_amt = QTableWidgetItem(f"₹{format_inr(p.amount)}")
                     item_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_amt.setForeground(Qt.darkGreen)
                     self.cust_bill_ledger_table.setItem(row, 3, item_amt)
@@ -2520,7 +2521,7 @@ class PaymentsView(QWidget):
             try:
                 latest_supp = session.query(Supplier).get(supp_id)
                 if latest_supp:
-                    self.s_outstanding_lbl.setText(f"Current Outstanding: ₹{latest_supp.outstanding_balance:,.2f}")
+                    self.s_outstanding_lbl.setText(f"Current Outstanding: ₹{format_inr(latest_supp.outstanding_balance)}")
             finally:
                 session.close()
             self.populate_supp_purchases()
@@ -2549,7 +2550,7 @@ class PaymentsView(QWidget):
                     PurchaseMaster.balance_payable > 0
                 ).order_by(PurchaseMaster.date.desc(), PurchaseMaster.id.desc()).all()
                 for p in purchases:
-                    self.s_purchase_combo.addItem(f"{p.invoice_number} (Bal: ₹{p.balance_payable:,.2f})", p.id)
+                    self.s_purchase_combo.addItem(f"{p.invoice_number} (Bal: ₹{format_inr(p.balance_payable)})", p.id)
             except Exception as e:
                 print(f"Error loading supplier purchases: {e}")
             finally:
@@ -2608,7 +2609,7 @@ class PaymentsView(QWidget):
                 return
 
             self.supp_pending_title.setText(f"📋 Pending Bills — {supp.name}")
-            self.supp_pending_total_chip.setText(f"Total Due: ₹{supp.outstanding_balance:,.2f}")
+            self.supp_pending_total_chip.setText(f"Total Due: ₹{format_inr(supp.outstanding_balance)}")
 
             # 1. Fetch pending purchases
             purchases = session.query(PurchaseMaster).filter(
@@ -2642,17 +2643,17 @@ class PaymentsView(QWidget):
                     self.supp_pending_table.setItem(row, 1, item_date)
 
                     # Total Bill
-                    item_tot = QTableWidgetItem(f"₹{p.total_amount:,.2f}")
+                    item_tot = QTableWidgetItem(f"₹{format_inr(p.total_amount)}")
                     item_tot.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.supp_pending_table.setItem(row, 2, item_tot)
 
                     # Paid
-                    item_paid = QTableWidgetItem(f"₹{p.paid_amount:,.2f}")
+                    item_paid = QTableWidgetItem(f"₹{format_inr(p.paid_amount)}")
                     item_paid.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     self.supp_pending_table.setItem(row, 3, item_paid)
 
                     # Balance
-                    item_bal = QTableWidgetItem(f"₹{p.balance_payable:,.2f}")
+                    item_bal = QTableWidgetItem(f"₹{format_inr(p.balance_payable)}")
                     item_bal.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     item_bal.setForeground(Qt.red)
                     font_bal = item_bal.font()
@@ -2712,7 +2713,7 @@ class PaymentsView(QWidget):
                     mode_str += f" ({v.bank_account.bank_name})"
                 self.supp_vouchers_table.setItem(row, 2, QTableWidgetItem(mode_str))
                 # Amount
-                item_v_amt = QTableWidgetItem(f"₹{v.amount:,.2f}")
+                item_v_amt = QTableWidgetItem(f"₹{format_inr(v.amount)}")
                 item_v_amt.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 item_v_amt.setForeground(Qt.darkGreen)
                 font_v = item_v_amt.font()
@@ -2749,9 +2750,9 @@ class PaymentsView(QWidget):
             # Update Header & KPI cards
             self.supp_bill_title.setText(f"📖 Bill Payment Ledger: {p.invoice_number}")
             self.bill_kpi_date.setText(p.date.strftime("%d-%m-%Y") if p.date else "-")
-            self.bill_kpi_total.setText(f"₹{p.total_amount:,.2f}")
-            self.bill_kpi_paid.setText(f"₹{p.paid_amount:,.2f}")
-            self.bill_kpi_balance.setText(f"₹{p.balance_payable:,.2f}")
+            self.bill_kpi_total.setText(f"₹{format_inr(p.total_amount)}")
+            self.bill_kpi_paid.setText(f"₹{format_inr(p.paid_amount)}")
+            self.bill_kpi_balance.setText(f"₹{format_inr(p.balance_payable)}")
 
             # Status Badge
             if p.balance_payable <= 0.001:
@@ -2833,7 +2834,7 @@ class PaymentsView(QWidget):
                     self.supp_bill_ledger_table.setItem(row, 2, m_item)
 
                     # Amount
-                    a_item = QTableWidgetItem(f"₹{entry['amount']:,.2f}")
+                    a_item = QTableWidgetItem(f"₹{format_inr(entry['amount'])}")
                     a_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     a_item.setForeground(Qt.darkGreen)
                     font_a = a_item.font()
@@ -2873,22 +2874,22 @@ class PaymentsView(QWidget):
 
             if pay_now <= 0.001:
                 self.bill_live_calc_lbl.setText(
-                    f"Bill Balance: <b>₹{bal:,.2f}</b> | Enter payment amount on the left to preview settlement."
+                    f"Bill Balance: <b>₹{format_inr(bal)}</b> | Enter payment amount on the left to preview settlement."
                 )
                 self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
             elif rem < -0.01:
                 self.bill_live_calc_lbl.setText(
-                    f"⚠️ <b>Warning:</b> Paying <b>₹{pay_now:,.2f}</b> exceeds bill balance (₹{bal:,.2f}) by <b>₹{abs(rem):,.2f}</b>!"
+                    f"⚠️ <b>Warning:</b> Paying <b>₹{format_inr(pay_now)}</b> exceeds bill balance (₹{format_inr(bal)}) by <b>₹{format_inr(abs(rem))}</b>!"
                 )
                 self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #dc2626; font-weight: 500;")
             elif abs(rem) <= 0.01:
                 self.bill_live_calc_lbl.setText(
-                    f"🎉 <b>Full Settlement!</b> Paying <b>₹{pay_now:,.2f}</b> will clear this bill completely (Remaining: <b>₹0.00</b>)."
+                    f"🎉 <b>Full Settlement!</b> Paying <b>₹{format_inr(pay_now)}</b> will clear this bill completely (Remaining: <b>₹0.00</b>)."
                 )
                 self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #166534; font-weight: 500;")
             else:
                 self.bill_live_calc_lbl.setText(
-                    f"Paying <b>₹{pay_now:,.2f}</b> now → Remaining Balance will be <b style='color: #ef4444;'>₹{rem:,.2f}</b>."
+                    f"Paying <b>₹{format_inr(pay_now)}</b> now → Remaining Balance will be <b style='color: #ef4444;'>₹{format_inr(rem)}</b>."
                 )
                 self.bill_live_calc_lbl.setStyleSheet("font-size: 12.5px; color: #334155; font-weight: 500;")
         except Exception as e:
@@ -2933,7 +2934,7 @@ class PaymentsView(QWidget):
                 s = session.query(SalesMaster).get(sales_id)
                 if s:
                     if amount > s.balance_receivable + 0.01:
-                        QMessageBox.warning(self, "Validation Error", f"Collection amount (₹{amount:,.2f}) cannot exceed the invoice's pending balance (₹{s.balance_receivable:,.2f}).")
+                        QMessageBox.warning(self, "Validation Error", f"Collection amount (₹{format_inr(amount)}) cannot exceed the invoice's pending balance (₹{format_inr(s.balance_receivable)}).")
                         session.close()
                         return
                     s.balance_receivable -= amount
@@ -2942,7 +2943,7 @@ class PaymentsView(QWidget):
                 j = session.query(ServiceJob).get(job_id)
                 if j:
                     if amount > j.balance + 0.01:
-                        QMessageBox.warning(self, "Validation Error", f"Collection amount (₹{amount:,.2f}) cannot exceed the job card's pending balance (₹{j.balance:,.2f}).")
+                        QMessageBox.warning(self, "Validation Error", f"Collection amount (₹{format_inr(amount)}) cannot exceed the job card's pending balance (₹{format_inr(j.balance)}).")
                         session.close()
                         return
                     j.balance -= amount
@@ -3037,7 +3038,7 @@ class PaymentsView(QWidget):
                 p = session.query(PurchaseMaster).get(purchase_id)
                 if p:
                     if amount > p.balance_payable + 0.01:
-                        QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{amount:,.2f}) cannot exceed the bill's pending balance (₹{p.balance_payable:,.2f}).")
+                        QMessageBox.warning(self, "Validation Error", f"Payment amount (₹{format_inr(amount)}) cannot exceed the bill's pending balance (₹{format_inr(p.balance_payable)}).")
                         session.close()
                         return
                     p.balance_payable -= amount
@@ -3133,7 +3134,7 @@ class PaymentsView(QWidget):
             info_layout.addRow("Party Type:", QLabel(payment.party_type.capitalize()))
             info_layout.addRow("Party Name:", QLabel(party_name))
             info_layout.addRow("Party Contact:", QLabel(party_mobile))
-            info_layout.addRow("Amount Paid (₹):", QLabel(f"₹{payment.amount:,.2f}"))
+            info_layout.addRow("Amount Paid (₹):", QLabel(f"₹{format_inr(payment.amount)}"))
             info_layout.addRow("Payment Mode:", QLabel(payment.payment_mode))
             
             if payment.payment_mode == 'Bank' and payment.bank_id:

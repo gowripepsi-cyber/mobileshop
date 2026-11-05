@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QDate, QTime
 from PySide6.QtGui import QColor, QFont
 
+from utils.formatters import format_inr
 from database import (
     Session, Setting, BankAccount, CashTransaction, BankTransaction,
     Staff, StaffAttendance, StaffSalaryPayment,
@@ -371,7 +372,7 @@ class SalaryPaymentDialog(QDialog):
         gross = self.gross_input.value()
         ded = self.deductions_input.value()
         net = max(0.0, gross - ded)
-        self.net_lbl.setText(f"₹ {net:,.2f}")
+        self.net_lbl.setText(f"₹ {format_inr(net)}")
 
     def load_data(self):
         # Load Banks
@@ -544,9 +545,9 @@ class StaffLedgerDialog(QDialog):
                 self.table.setItem(i, 1, QTableWidgetItem(p.date.strftime("%Y-%m-%d") if p.date else "-"))
                 self.table.setItem(i, 2, QTableWidgetItem(p.payment_type))
                 self.table.setItem(i, 3, QTableWidgetItem(p.for_month or "-"))
-                self.table.setItem(i, 4, QTableWidgetItem(f"{p.amount:,.2f}"))
-                self.table.setItem(i, 5, QTableWidgetItem(f"{p.deductions:,.2f}"))
-                self.table.setItem(i, 6, QTableWidgetItem(f"{p.net_paid:,.2f}"))
+                self.table.setItem(i, 4, QTableWidgetItem(f"{format_inr(p.amount)}"))
+                self.table.setItem(i, 5, QTableWidgetItem(f"{format_inr(p.deductions)}"))
+                self.table.setItem(i, 6, QTableWidgetItem(f"{format_inr(p.net_paid)}"))
                 self.table.setItem(i, 7, QTableWidgetItem(p.payment_mode))
 
                 if p.payment_type == "Salary":
@@ -556,7 +557,7 @@ class StaffLedgerDialog(QDialog):
                 total_net += p.net_paid
 
             self.summary_lbl.setText(
-                f"Total Salary Earned: ₹{total_sal:,.2f}  |  Total Advances: ₹{total_adv:,.2f}  |  Total Net Paid: ₹{total_net:,.2f}"
+                f"Total Salary Earned: ₹{format_inr(total_sal)}  |  Total Advances: ₹{format_inr(total_adv)}  |  Total Net Paid: ₹{format_inr(total_net)}"
             )
         finally:
             session.close()
@@ -1099,7 +1100,7 @@ class StaffView(QWidget):
             self.card_total_staff.lbl_val.setText(str(tot_count))
             self.card_active_staff.lbl_val.setText(str(act_count))
             self.card_tech_count.lbl_val.setText(str(tech_count))
-            self.card_monthly_payroll.lbl_val.setText(f"₹{tot_payroll:,.2f}")
+            self.card_monthly_payroll.lbl_val.setText(f"₹{format_inr(tot_payroll)}")
 
             # Populate Table
             self.staff_table.setRowCount(len(staff_members))
@@ -1110,7 +1111,7 @@ class StaffView(QWidget):
                 self.staff_table.setItem(i, 3, QTableWidgetItem(st.mobile))
                 self.staff_table.setItem(i, 4, QTableWidgetItem(st.salary_type or "Monthly"))
 
-                sal_item = QTableWidgetItem(f"₹{(st.base_salary or 0.0):,.2f}")
+                sal_item = QTableWidgetItem(f"₹{format_inr((st.base_salary or 0.0))}")
                 sal_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.staff_table.setItem(i, 5, sal_item)
 
@@ -1200,9 +1201,9 @@ class StaffView(QWidget):
             adv_given_month = sum(r.net_paid for r in month_records if r.payment_type == 'Advance')
             tot_payout_month = sum(r.net_paid for r in month_records)
 
-            self.card_sal_paid_month.lbl_val.setText(f"₹{sal_paid_month:,.2f}")
-            self.card_adv_given_month.lbl_val.setText(f"₹{adv_given_month:,.2f}")
-            self.card_tot_payout_month.lbl_val.setText(f"₹{tot_payout_month:,.2f}")
+            self.card_sal_paid_month.lbl_val.setText(f"₹{format_inr(sal_paid_month)}")
+            self.card_adv_given_month.lbl_val.setText(f"₹{format_inr(adv_given_month)}")
+            self.card_tot_payout_month.lbl_val.setText(f"₹{format_inr(tot_payout_month)}")
 
             # Populate Table
             self.sal_table.setRowCount(len(records))
@@ -1215,15 +1216,15 @@ class StaffView(QWidget):
                 self.sal_table.setItem(i, 3, QTableWidgetItem(p.payment_type))
                 self.sal_table.setItem(i, 4, QTableWidgetItem(p.for_month or "-"))
 
-                gross_item = QTableWidgetItem(f"{p.amount:,.2f}")
+                gross_item = QTableWidgetItem(f"{format_inr(p.amount)}")
                 gross_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.sal_table.setItem(i, 5, gross_item)
 
-                ded_item = QTableWidgetItem(f"{p.deductions:,.2f}")
+                ded_item = QTableWidgetItem(f"{format_inr(p.deductions)}")
                 ded_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.sal_table.setItem(i, 6, ded_item)
 
-                net_item = QTableWidgetItem(f"{p.net_paid:,.2f}")
+                net_item = QTableWidgetItem(f"{format_inr(p.net_paid)}")
                 net_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.sal_table.setItem(i, 7, net_item)
 
@@ -1318,9 +1319,9 @@ class StaffView(QWidget):
             # Financial breakdown table
             fin_data = [
                 ["Description", "Amount (INR)"],
-                [f"Gross Amount ({p.payment_type})", f"{p.amount:,.2f}"],
-                ["Less: Deductions / Advance Adjustments", f"{p.deductions:,.2f}"],
-                ["NET PAYABLE / DISBURSED", f"{p.net_paid:,.2f}"]
+                [f"Gross Amount ({p.payment_type})", f"{format_inr(p.amount)}"],
+                ["Less: Deductions / Advance Adjustments", f"{format_inr(p.deductions)}"],
+                ["NET PAYABLE / DISBURSED", f"{format_inr(p.net_paid)}"]
             ]
             t_fin = Table(fin_data, colWidths=[350, 180])
             t_fin.setStyle(TableStyle([

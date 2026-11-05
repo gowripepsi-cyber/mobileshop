@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QAbstractItemView, QScrollArea, QSizePolicy
 )
 from PySide6.QtCore import Qt, QDate
+from utils.formatters import format_inr
 from database import Session, generate_next_po_number, Setting
 from models import Product, Supplier, Category, Unit, PurchaseOrderMaster, PurchaseOrderItem
 from utils.ui_helpers import SearchableProductComboBox, AutoClearSearchableComboBox
@@ -672,7 +673,7 @@ class PurchaseOrderDialog(QDialog):
 
         # 9. Total Amount (₹)
         total_val = qty * rate
-        total_item = QTableWidgetItem(f"{total_val:,.2f}")
+        total_item = QTableWidgetItem(f"{format_inr(total_val)}")
         total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         total_item.setForeground(Qt.darkGreen)
         self.items_table.setItem(row, 9, total_item)
@@ -746,11 +747,11 @@ class PurchaseOrderDialog(QDialog):
 
             tot_item = self.items_table.item(r, 9)
             if tot_item:
-                tot_item.setText(f"{row_total:,.2f}")
+                tot_item.setText(f"{format_inr(row_total)}")
 
         self.lbl_summary_items.setText(f"Total Items: {total_items}")
         self.lbl_summary_qty.setText(f"Total Qty: {total_qty} Units")
-        self.lbl_summary_total.setText(f"Estimated Total: ₹{total_amount:,.2f}")
+        self.lbl_summary_total.setText(f"Estimated Total: ₹{format_inr(total_amount)}")
 
     # -------------------------------------------------------------------------
     # SUPPLIER INTERACTION
@@ -1167,7 +1168,7 @@ class PurchaseOrderDialog(QDialog):
             qty_item.setTextAlignment(Qt.AlignCenter)
             self.history_table.setItem(row, 5, qty_item)
 
-            tot_item = QTableWidgetItem(f"₹{po.total_amount:,.2f}")
+            tot_item = QTableWidgetItem(f"₹{format_inr(po.total_amount)}")
             tot_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.history_table.setItem(row, 6, tot_item)
 
@@ -1260,13 +1261,13 @@ class PurchaseOrderDialog(QDialog):
                 tbl.setItem(idx, 2, QTableWidgetItem(it.item_name))
                 tbl.setItem(idx, 3, QTableWidgetItem(it.brand_model or "-"))
                 tbl.setItem(idx, 4, QTableWidgetItem(f"{it.qty} {it.unit or 'Pcs'}"))
-                tbl.setItem(idx, 5, QTableWidgetItem(f"{it.rate:,.2f}"))
-                tbl.setItem(idx, 6, QTableWidgetItem(f"{it.total_amount:,.2f}"))
+                tbl.setItem(idx, 5, QTableWidgetItem(f"{format_inr(it.rate)}"))
+                tbl.setItem(idx, 6, QTableWidgetItem(f"{format_inr(it.total_amount)}"))
 
             layout.addWidget(tbl, 1)
 
             btn_layout = QHBoxLayout()
-            tot_lbl = QLabel(f"<b>Total Qty:</b> {po.total_qty} Units &nbsp;|&nbsp; <b>Total Amount:</b> ₹{po.total_amount:,.2f}")
+            tot_lbl = QLabel(f"<b>Total Qty:</b> {po.total_qty} Units &nbsp;|&nbsp; <b>Total Amount:</b> ₹{format_inr(po.total_amount)}")
             tot_lbl.setStyleSheet("font-size: 13px; color: #d97706;")
             btn_layout.addWidget(tot_lbl)
             btn_layout.addStretch()

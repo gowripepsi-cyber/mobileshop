@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTable
                              QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
+from utils.formatters import format_inr
 from database import Session
 from sqlalchemy.orm import joinedload
 from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, PurchaseItem, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
@@ -616,7 +617,7 @@ class ReportsView(QWidget):
                 self.cash_table.setItem(i, 1, QTableWidgetItem(tx.description))
                 
                 prefix = "+" if tx.transaction_type == 'in' else "-"
-                amt_item = QTableWidgetItem(f"{prefix} ₹{tx.amount:,.2f}")
+                amt_item = QTableWidgetItem(f"{prefix} ₹{format_inr(tx.amount)}")
                 if tx.transaction_type == 'in':
                     amt_item.setForeground(Qt.green)
                     total_cash_in += tx.amount
@@ -626,7 +627,7 @@ class ReportsView(QWidget):
                 self.cash_table.setItem(i, 2, amt_item)
             
             cash_balance = total_cash_in - total_cash_out
-            self.cash_balance_lbl.setText(f"Cash in Hand: ₹{cash_balance:,.2f}")
+            self.cash_balance_lbl.setText(f"Cash in Hand: ₹{format_inr(cash_balance)}")
 
             # 2. Populate Bank Ledger
             bank_tx = session.query(BankTransaction).order_by(BankTransaction.date.desc()).all()
@@ -637,7 +638,7 @@ class ReportsView(QWidget):
                 self.bank_table.setItem(i, 2, QTableWidgetItem(tx.description))
                 
                 prefix = "+" if tx.transaction_type == 'deposit' else "-"
-                amt_item = QTableWidgetItem(f"{prefix} ₹{tx.amount:,.2f}")
+                amt_item = QTableWidgetItem(f"{prefix} ₹{format_inr(tx.amount)}")
                 if tx.transaction_type == 'deposit':
                     amt_item.setForeground(Qt.green)
                 else:
@@ -646,7 +647,7 @@ class ReportsView(QWidget):
 
             banks = session.query(BankAccount).all()
             total_bank_balance = sum(b.balance for b in banks)
-            self.bank_balance_lbl.setText(f"Total Bank Balances: ₹{total_bank_balance:,.2f}")
+            self.bank_balance_lbl.setText(f"Total Bank Balances: ₹{format_inr(total_bank_balance)}")
 
             # 3. Populate Profitability Report
             if hasattr(self, 'pl_date_filter_combo'):
@@ -899,11 +900,11 @@ class ReportsView(QWidget):
                 self.avg_days = tot_days / tot_qty if tot_qty > 0 else 0.0
 
                 # Set KPI labels text
-                self.kpi_purchase_val.setText(f"₹{self.tot_purchase_val:,.2f}")
-                self.kpi_sales_val.setText(f"₹{self.tot_sales_val:,.2f}")
-                self.kpi_gross_profit.setText(f"₹{self.tot_gross_profit:,.2f}")
-                self.kpi_interest_cost.setText(f"₹{self.tot_interest_cost:,.2f}")
-                self.kpi_net_profit.setText(f"₹{self.tot_net_profit:,.2f}")
+                self.kpi_purchase_val.setText(f"₹{format_inr(self.tot_purchase_val)}")
+                self.kpi_sales_val.setText(f"₹{format_inr(self.tot_sales_val)}")
+                self.kpi_gross_profit.setText(f"₹{format_inr(self.tot_gross_profit)}")
+                self.kpi_interest_cost.setText(f"₹{format_inr(self.tot_interest_cost)}")
+                self.kpi_net_profit.setText(f"₹{format_inr(self.tot_net_profit)}")
                 self.kpi_avg_days.setText(f"{self.avg_days:.1f} Days")
 
                 # Compute Fast & Slow Moving top 3
@@ -984,9 +985,9 @@ class ReportsView(QWidget):
                 name_item.setData(Qt.UserRole, c.id)
                 self.receivables_table.setItem(i, 0, name_item)
                 self.receivables_table.setItem(i, 1, QTableWidgetItem(c.mobile))
-                self.receivables_table.setItem(i, 2, QTableWidgetItem(f"₹{c.outstanding_balance:,.2f}"))
+                self.receivables_table.setItem(i, 2, QTableWidgetItem(f"₹{format_inr(c.outstanding_balance)}"))
                 total_receivable += c.outstanding_balance
-            self.receivables_total_lbl.setText(f"Total: ₹{total_receivable:,.2f}")
+            self.receivables_total_lbl.setText(f"Total: ₹{format_inr(total_receivable)}")
 
             # 5. Populate Supplier Payables List
             suppliers = session.query(Supplier).filter(Supplier.outstanding_balance != 0).all()
@@ -997,9 +998,9 @@ class ReportsView(QWidget):
                 name_item.setData(Qt.UserRole, s.id)
                 self.payables_table.setItem(i, 0, name_item)
                 self.payables_table.setItem(i, 1, QTableWidgetItem(s.mobile))
-                self.payables_table.setItem(i, 2, QTableWidgetItem(f"₹{s.outstanding_balance:,.2f}"))
+                self.payables_table.setItem(i, 2, QTableWidgetItem(f"₹{format_inr(s.outstanding_balance)}"))
                 total_payable += s.outstanding_balance
-            self.payables_total_lbl.setText(f"Total: ₹{total_payable:,.2f}")
+            self.payables_total_lbl.setText(f"Total: ₹{format_inr(total_payable)}")
 
         except Exception as e:
             print(f"Error loading reports: {e}")
@@ -1436,20 +1437,20 @@ class ReportsView(QWidget):
                 self.customer_breakup_table.setItem(i, 1, ref_item)
                 self.customer_breakup_table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
                 
-                deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
+                deb_item = QTableWidgetItem(f"₹{format_inr(tx['debit'])}" if tx["debit"] > 0 else "-")
                 if tx["debit"] > 0:
                     deb_item.setForeground(Qt.red)
                 self.customer_breakup_table.setItem(i, 3, deb_item)
 
-                cred_item = QTableWidgetItem(f"₹{tx['credit']:,.2f}" if tx["credit"] > 0 else "-")
+                cred_item = QTableWidgetItem(f"₹{format_inr(tx['credit'])}" if tx["credit"] > 0 else "-")
                 if tx["credit"] > 0:
                     cred_item.setForeground(Qt.green)
                 self.customer_breakup_table.setItem(i, 4, cred_item)
 
-                bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(running_balance)}")
                 self.customer_breakup_table.setItem(i, 5, bal_item)
 
-            self.customer_total_outstanding_lbl.setText(f"Net Outstanding: ₹{running_balance:,.2f}")
+            self.customer_total_outstanding_lbl.setText(f"Net Outstanding: ₹{format_inr(running_balance)}")
             self.c_view_statement_btn.setEnabled(True)
 
         except Exception as e:
@@ -1549,20 +1550,20 @@ class ReportsView(QWidget):
                 self.supplier_breakup_table.setItem(i, 1, ref_item)
                 self.supplier_breakup_table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
                 
-                deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
+                deb_item = QTableWidgetItem(f"₹{format_inr(tx['debit'])}" if tx["debit"] > 0 else "-")
                 if tx["debit"] > 0:
                     deb_item.setForeground(Qt.green)
                 self.supplier_breakup_table.setItem(i, 3, deb_item)
 
-                cred_item = QTableWidgetItem(f"₹{tx['credit']:,.2f}" if tx["credit"] > 0 else "-")
+                cred_item = QTableWidgetItem(f"₹{format_inr(tx['credit'])}" if tx["credit"] > 0 else "-")
                 if tx["credit"] > 0:
                     cred_item.setForeground(Qt.red)
                 self.supplier_breakup_table.setItem(i, 4, cred_item)
 
-                bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
+                bal_item = QTableWidgetItem(f"₹{format_inr(running_balance)}")
                 self.supplier_breakup_table.setItem(i, 5, bal_item)
 
-            self.supplier_total_payable_lbl.setText(f"Net Payable: ₹{running_balance:,.2f}")
+            self.supplier_total_payable_lbl.setText(f"Net Payable: ₹{format_inr(running_balance)}")
             self.s_view_statement_btn.setEnabled(True)
 
         except Exception as e:
@@ -2057,51 +2058,51 @@ class ReportsView(QWidget):
                 tot_net += net_pos
 
                 self.gst_slabs_table.setItem(row_idx, 0, QTableWidgetItem(slab_labels[r]))
-                self.gst_slabs_table.setItem(row_idx, 1, QTableWidgetItem(f"{s_d['taxable']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 2, QTableWidgetItem(f"{s_d['cgst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 3, QTableWidgetItem(f"{s_d['sgst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 4, QTableWidgetItem(f"{s_d['igst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 5, QTableWidgetItem(f"{s_d['total_gst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 6, QTableWidgetItem(f"{p_d['taxable']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 7, QTableWidgetItem(f"{p_d['cgst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 8, QTableWidgetItem(f"{p_d['sgst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 9, QTableWidgetItem(f"{p_d['igst']:,.2f}"))
-                self.gst_slabs_table.setItem(row_idx, 10, QTableWidgetItem(f"{p_d['total_gst']:,.2f}"))
+                self.gst_slabs_table.setItem(row_idx, 1, QTableWidgetItem(f"{format_inr(s_d['taxable'])}"))
+                self.gst_slabs_table.setItem(row_idx, 2, QTableWidgetItem(f"{format_inr(s_d['cgst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 3, QTableWidgetItem(f"{format_inr(s_d['sgst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 4, QTableWidgetItem(f"{format_inr(s_d['igst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 5, QTableWidgetItem(f"{format_inr(s_d['total_gst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 6, QTableWidgetItem(f"{format_inr(p_d['taxable'])}"))
+                self.gst_slabs_table.setItem(row_idx, 7, QTableWidgetItem(f"{format_inr(p_d['cgst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 8, QTableWidgetItem(f"{format_inr(p_d['sgst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 9, QTableWidgetItem(f"{format_inr(p_d['igst'])}"))
+                self.gst_slabs_table.setItem(row_idx, 10, QTableWidgetItem(f"{format_inr(p_d['total_gst'])}"))
                 
-                net_txt = f"₹{net_pos:,.2f} (Payable)" if net_pos >= 0 else f"₹{abs(net_pos):,.2f} (ITC)"
+                net_txt = f"₹{format_inr(net_pos)} (Payable)" if net_pos >= 0 else f"₹{format_inr(abs(net_pos))} (ITC)"
                 net_item = QTableWidgetItem(net_txt)
                 self.gst_slabs_table.setItem(row_idx, 11, net_item)
 
             # Summary Total Row
             tot_row = len(slabs)
             self.gst_slabs_table.setItem(tot_row, 0, QTableWidgetItem("TOTAL ALL SLABS"))
-            self.gst_slabs_table.setItem(tot_row, 1, QTableWidgetItem(f"{tot_s_taxable:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 2, QTableWidgetItem(f"{tot_s_cgst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 3, QTableWidgetItem(f"{tot_s_sgst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 4, QTableWidgetItem(f"{tot_s_igst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 5, QTableWidgetItem(f"{tot_s_gst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 6, QTableWidgetItem(f"{tot_p_taxable:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 7, QTableWidgetItem(f"{tot_p_cgst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 8, QTableWidgetItem(f"{tot_p_sgst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 9, QTableWidgetItem(f"{tot_p_igst:,.2f}"))
-            self.gst_slabs_table.setItem(tot_row, 10, QTableWidgetItem(f"{tot_p_gst:,.2f}"))
+            self.gst_slabs_table.setItem(tot_row, 1, QTableWidgetItem(f"{format_inr(tot_s_taxable)}"))
+            self.gst_slabs_table.setItem(tot_row, 2, QTableWidgetItem(f"{format_inr(tot_s_cgst)}"))
+            self.gst_slabs_table.setItem(tot_row, 3, QTableWidgetItem(f"{format_inr(tot_s_sgst)}"))
+            self.gst_slabs_table.setItem(tot_row, 4, QTableWidgetItem(f"{format_inr(tot_s_igst)}"))
+            self.gst_slabs_table.setItem(tot_row, 5, QTableWidgetItem(f"{format_inr(tot_s_gst)}"))
+            self.gst_slabs_table.setItem(tot_row, 6, QTableWidgetItem(f"{format_inr(tot_p_taxable)}"))
+            self.gst_slabs_table.setItem(tot_row, 7, QTableWidgetItem(f"{format_inr(tot_p_cgst)}"))
+            self.gst_slabs_table.setItem(tot_row, 8, QTableWidgetItem(f"{format_inr(tot_p_sgst)}"))
+            self.gst_slabs_table.setItem(tot_row, 9, QTableWidgetItem(f"{format_inr(tot_p_igst)}"))
+            self.gst_slabs_table.setItem(tot_row, 10, QTableWidgetItem(f"{format_inr(tot_p_gst)}"))
             
-            net_tot_txt = f"₹{tot_net:,.2f} (Payable)" if tot_net >= 0 else f"₹{abs(tot_net):,.2f} (ITC)"
+            net_tot_txt = f"₹{format_inr(tot_net)} (Payable)" if tot_net >= 0 else f"₹{format_inr(abs(tot_net))} (ITC)"
             self.gst_slabs_table.setItem(tot_row, 11, QTableWidgetItem(net_tot_txt))
 
             # Update summary header cards
-            self.lbl_taxable_sales.setText(f"₹{total_taxable_sales:,.2f}")
-            self.lbl_output_tax.setText(f"₹{total_output_tax:,.2f}")
+            self.lbl_taxable_sales.setText(f"₹{format_inr(total_taxable_sales)}")
+            self.lbl_output_tax.setText(f"₹{format_inr(total_output_tax)}")
 
-            self.lbl_taxable_purchases.setText(f"₹{total_taxable_purchases:,.2f}")
-            self.lbl_input_tax.setText(f"₹{total_input_tax:,.2f}")
+            self.lbl_taxable_purchases.setText(f"₹{format_inr(total_taxable_purchases)}")
+            self.lbl_input_tax.setText(f"₹{format_inr(total_input_tax)}")
 
             net_payable = total_output_tax - total_input_tax
             if net_payable >= 0:
-                self.lbl_net_payable.setText(f"₹{net_payable:,.2f} (Payable)")
+                self.lbl_net_payable.setText(f"₹{format_inr(net_payable)} (Payable)")
                 self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #ef4444;")
             else:
-                self.lbl_net_payable.setText(f"₹{abs(net_payable):,.2f} (ITC Refund)")
+                self.lbl_net_payable.setText(f"₹{format_inr(abs(net_payable))} (ITC Refund)")
                 self.lbl_net_payable.setStyleSheet("font-size: 24px; font-weight: bold; color: #8fd53b;")
 
         except Exception as e:
@@ -2574,9 +2575,9 @@ class ProductDrillDownDialog(QDialog):
 
             self.kpi_stock.setText(str(current_stock))
             self.kpi_avg_days.setText(f"{avg_days:.1f} Days")
-            self.kpi_profit.setText(f"₹{tot_gross_profit:,.2f}")
-            self.kpi_interest.setText(f"₹{tot_interest_cost:,.2f}")
-            self.kpi_net.setText(f"₹{tot_net_profit:,.2f}")
+            self.kpi_profit.setText(f"₹{format_inr(tot_gross_profit)}")
+            self.kpi_interest.setText(f"₹{format_inr(tot_interest_cost)}")
+            self.kpi_net.setText(f"₹{format_inr(tot_net_profit)}")
 
             # 2. Populate Purchase Lot History Table
             db_purchases = session.query(
@@ -2598,8 +2599,8 @@ class ProductDrillDownDialog(QDialog):
                 self.purchase_table.setItem(i, 1, QTableWidgetItem(pdate_str))
                 self.purchase_table.setItem(i, 2, QTableWidgetItem(p_info.name))
                 self.purchase_table.setItem(i, 3, QTableWidgetItem(str(qty_val)))
-                self.purchase_table.setItem(i, 4, QTableWidgetItem(f"{rate_val:,.2f}"))
-                self.purchase_table.setItem(i, 5, QTableWidgetItem(f"{total_val:,.2f}"))
+                self.purchase_table.setItem(i, 4, QTableWidgetItem(f"{format_inr(rate_val)}"))
+                self.purchase_table.setItem(i, 5, QTableWidgetItem(f"{format_inr(total_val)}"))
 
             # 3. Populate Sales History Table
             db_sales = session.query(
@@ -2623,9 +2624,9 @@ class ProductDrillDownDialog(QDialog):
                 self.sales_table.setItem(i, 1, QTableWidgetItem(sdate_str))
                 self.sales_table.setItem(i, 2, QTableWidgetItem(s_info.name))
                 self.sales_table.setItem(i, 3, QTableWidgetItem(str(qty_val)))
-                self.sales_table.setItem(i, 4, QTableWidgetItem(f"{rate_val:,.2f}"))
-                self.sales_table.setItem(i, 5, QTableWidgetItem(f"{discount_val:,.2f}"))
-                self.sales_table.setItem(i, 6, QTableWidgetItem(f"{total_val:,.2f}"))
+                self.sales_table.setItem(i, 4, QTableWidgetItem(f"{format_inr(rate_val)}"))
+                self.sales_table.setItem(i, 5, QTableWidgetItem(f"{format_inr(discount_val)}"))
+                self.sales_table.setItem(i, 6, QTableWidgetItem(f"{format_inr(total_val)}"))
 
         except Exception as e:
             print(f"Error loading drill-down data: {e}")

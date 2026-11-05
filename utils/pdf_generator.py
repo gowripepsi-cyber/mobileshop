@@ -1,4 +1,5 @@
 import os
+from utils.formatters import format_inr
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus.flowables import HRFlowable
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
@@ -207,10 +208,10 @@ def generate_sales_pdf(invoice_data, file_path):
             table_data.append([
                 Paragraph(item['name'], style_sub),
                 Paragraph(str(item['qty']), style_sub),
-                Paragraph(f"{item['rate']:,.2f}", style_sub),
+                Paragraph(f"{format_inr(item['rate'])}", style_sub),
                 Paragraph(f"{g_rate:.0f}%", style_sub),
-                Paragraph(f"{t_amt:,.2f}", style_sub),
-                Paragraph(f"{item['total']:,.2f}", style_bold)
+                Paragraph(f"{format_inr(t_amt)}", style_sub),
+                Paragraph(f"{format_inr(item['total'])}", style_bold)
             ])
         items_table = Table(table_data, colWidths=[200, 40, 75, 55, 80, 90])
     else:
@@ -228,9 +229,9 @@ def generate_sales_pdf(invoice_data, file_path):
             table_data.append([
                 Paragraph(item['name'], style_sub),
                 Paragraph(str(item['qty']), style_sub),
-                Paragraph(f"{item['rate']:,.2f}", style_sub),
-                Paragraph(f"{item.get('discount', 0.0):,.2f}", style_sub),
-                Paragraph(f"{item['total']:,.2f}", style_bold)
+                Paragraph(f"{format_inr(item['rate'])}", style_sub),
+                Paragraph(f"{format_inr(item.get('discount', 0.0))}", style_sub),
+                Paragraph(f"{format_inr(item['total'])}", style_bold)
             ])
         items_table = Table(table_data, colWidths=[240, 40, 90, 80, 90])
 
@@ -259,7 +260,7 @@ def generate_sales_pdf(invoice_data, file_path):
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
-                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(f"{format_inr(p['amount'])}", style_bold),
                 Paragraph(p['remarks'], style_sub)
             ])
         p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
@@ -277,19 +278,19 @@ def generate_sales_pdf(invoice_data, file_path):
     # 4. Summary / Totals block
     summary_data = []
     if invoice_data.get('gst_enabled'):
-        summary_data.append([Paragraph("", style_sub), Paragraph("Taxable Amount:", style_bold), Paragraph(f"Rs. {invoice_data.get('taxable_amount', 0.0):,.2f}", style_bold)])
+        summary_data.append([Paragraph("", style_sub), Paragraph("Taxable Amount:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data.get('taxable_amount', 0.0))}", style_bold)])
         if invoice_data.get('total_cgst', 0.0) > 0:
-            summary_data.append([Paragraph("", style_sub), Paragraph("CGST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_cgst', 0.0):,.2f}", style_bold)])
+            summary_data.append([Paragraph("", style_sub), Paragraph("CGST:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data.get('total_cgst', 0.0))}", style_bold)])
         if invoice_data.get('total_sgst', 0.0) > 0:
-            summary_data.append([Paragraph("", style_sub), Paragraph("SGST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_sgst', 0.0):,.2f}", style_bold)])
+            summary_data.append([Paragraph("", style_sub), Paragraph("SGST:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data.get('total_sgst', 0.0))}", style_bold)])
         if invoice_data.get('total_igst', 0.0) > 0:
-            summary_data.append([Paragraph("", style_sub), Paragraph("IGST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_igst', 0.0):,.2f}", style_bold)])
-        summary_data.append([Paragraph("", style_sub), Paragraph("Total GST:", style_bold), Paragraph(f"Rs. {invoice_data.get('total_gst', 0.0):,.2f}", style_bold)])
+            summary_data.append([Paragraph("", style_sub), Paragraph("IGST:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data.get('total_igst', 0.0))}", style_bold)])
+        summary_data.append([Paragraph("", style_sub), Paragraph("Total GST:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data.get('total_gst', 0.0))}", style_bold)])
         
     summary_data.extend([
-        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {invoice_data['total_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {invoice_data['paid_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Balance Outstanding:", style_bold), Paragraph(f"Rs. {invoice_data['balance']:,.2f}", style_bold)]
+        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data['total_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data['paid_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Outstanding:", style_bold), Paragraph(f"Rs. {format_inr(invoice_data['balance'])}", style_bold)]
     ])
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
@@ -468,10 +469,10 @@ def generate_purchase_pdf(purchase_data, file_path):
             table_data.append([
                 Paragraph(item['name'], style_sub),
                 Paragraph(str(item['qty']), style_sub),
-                Paragraph(f"{item['rate']:,.2f}", style_sub),
+                Paragraph(f"{format_inr(item['rate'])}", style_sub),
                 Paragraph(f"{g_rate:.0f}%", style_sub),
-                Paragraph(f"{t_amt:,.2f}", style_sub),
-                Paragraph(f"{item['total']:,.2f}", style_bold)
+                Paragraph(f"{format_inr(t_amt)}", style_sub),
+                Paragraph(f"{format_inr(item['total'])}", style_bold)
             ])
         items_table = Table(table_data, colWidths=[200, 40, 75, 55, 80, 90])
     else:
@@ -488,8 +489,8 @@ def generate_purchase_pdf(purchase_data, file_path):
             table_data.append([
                 Paragraph(item['name'], style_sub),
                 Paragraph(str(item['qty']), style_sub),
-                Paragraph(f"{item['rate']:,.2f}", style_sub),
-                Paragraph(f"{item['total']:,.2f}", style_bold)
+                Paragraph(f"{format_inr(item['rate'])}", style_sub),
+                Paragraph(f"{format_inr(item['total'])}", style_bold)
             ])
         items_table = Table(table_data, colWidths=[320, 50, 80, 90])
 
@@ -518,7 +519,7 @@ def generate_purchase_pdf(purchase_data, file_path):
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
-                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(f"{format_inr(p['amount'])}", style_bold),
                 Paragraph(p['remarks'], style_sub)
             ])
         p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
@@ -536,19 +537,19 @@ def generate_purchase_pdf(purchase_data, file_path):
     # 4. Summary / Totals block
     summary_data = []
     if purchase_data.get('gst_enabled'):
-        summary_data.append([Paragraph("", style_sub), Paragraph("Taxable Amount:", style_bold), Paragraph(f"Rs. {purchase_data.get('taxable_amount', 0.0):,.2f}", style_bold)])
+        summary_data.append([Paragraph("", style_sub), Paragraph("Taxable Amount:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data.get('taxable_amount', 0.0))}", style_bold)])
         if purchase_data.get('total_cgst', 0.0) > 0:
-            summary_data.append([Paragraph("", style_sub), Paragraph("CGST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_cgst', 0.0):,.2f}", style_bold)])
+            summary_data.append([Paragraph("", style_sub), Paragraph("CGST:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data.get('total_cgst', 0.0))}", style_bold)])
         if purchase_data.get('total_sgst', 0.0) > 0:
-            summary_data.append([Paragraph("", style_sub), Paragraph("SGST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_sgst', 0.0):,.2f}", style_bold)])
+            summary_data.append([Paragraph("", style_sub), Paragraph("SGST:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data.get('total_sgst', 0.0))}", style_bold)])
         if purchase_data.get('total_igst', 0.0) > 0:
-            summary_data.append([Paragraph("", style_sub), Paragraph("IGST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_igst', 0.0):,.2f}", style_bold)])
-        summary_data.append([Paragraph("", style_sub), Paragraph("Total GST:", style_bold), Paragraph(f"Rs. {purchase_data.get('total_gst', 0.0):,.2f}", style_bold)])
+            summary_data.append([Paragraph("", style_sub), Paragraph("IGST:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data.get('total_igst', 0.0))}", style_bold)])
+        summary_data.append([Paragraph("", style_sub), Paragraph("Total GST:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data.get('total_gst', 0.0))}", style_bold)])
         
     summary_data.extend([
-        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {purchase_data['total_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {purchase_data['paid_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Balance Payable:", style_bold), Paragraph(f"Rs. {purchase_data['balance']:,.2f}", style_bold)]
+        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data['total_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data['paid_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Payable:", style_bold), Paragraph(f"Rs. {format_inr(purchase_data['balance'])}", style_bold)]
     ])
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
@@ -731,8 +732,8 @@ def generate_service_pdf(service_data, file_path):
     table_data.append([
         Paragraph("Service Labor & Diagnostic Charges", style_sub),
         Paragraph("1", style_sub),
-        Paragraph(f"{service_data['service_charge']:,.2f}", style_sub),
-        Paragraph(f"{service_data['service_charge']:,.2f}", style_bold)
+        Paragraph(f"{format_inr(service_data['service_charge'])}", style_sub),
+        Paragraph(f"{format_inr(service_data['service_charge'])}", style_bold)
     ])
 
     # Add spare parts
@@ -740,8 +741,8 @@ def generate_service_pdf(service_data, file_path):
         table_data.append([
             Paragraph(item['name'], style_sub),
             Paragraph(str(item['qty']), style_sub),
-            Paragraph(f"{item['cost']:,.2f}", style_sub),
-            Paragraph(f"{item['total']:,.2f}", style_bold)
+            Paragraph(f"{format_inr(item['cost'])}", style_sub),
+            Paragraph(f"{format_inr(item['total'])}", style_bold)
         ])
 
     items_table = Table(table_data, colWidths=[320, 50, 80, 90])
@@ -770,7 +771,7 @@ def generate_service_pdf(service_data, file_path):
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
-                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(f"{format_inr(p['amount'])}", style_bold),
                 Paragraph(p['remarks'], style_sub)
             ])
         p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
@@ -787,9 +788,9 @@ def generate_service_pdf(service_data, file_path):
 
     # 4. Summary / Totals block
     summary_data = [
-        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {service_data['total_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {service_data['paid_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Balance Due:", style_bold), Paragraph(f"Rs. {service_data['balance']:,.2f}", style_bold)]
+        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {format_inr(service_data['total_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {format_inr(service_data['paid_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Due:", style_bold), Paragraph(f"Rs. {format_inr(service_data['balance'])}", style_bold)]
     ]
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
@@ -908,7 +909,7 @@ def generate_payment_pdf(payment_data, file_path):
         ],
         [
             Paragraph("<b>AMOUNT:</b>", style_bold),
-            Paragraph(f"<b>Rs. {payment_data['amount']:,.2f}</b>", style_bold)
+            Paragraph(f"<b>Rs. {format_inr(payment_data['amount'])}</b>", style_bold)
         ],
         [
             Paragraph("<b>PAYMENT MODE:</b>", style_bold),
@@ -1101,20 +1102,20 @@ def generate_ledger_pdf(ledger_data, file_path):
     for tx in ledger_data['transactions']:
         # debit formatting
         if tx['debit'] > 0:
-            debit_val = f"{tx['debit']:,.2f}"
+            debit_val = f"{format_inr(tx['debit'])}"
             debit_p = Paragraph(debit_val, style_red if ledger_data['party_type'] == 'customer' else style_green)
         else:
             debit_p = Paragraph("-", style_sub)
             
         # credit formatting
         if tx['credit'] > 0:
-            credit_val = f"{tx['credit']:,.2f}"
+            credit_val = f"{format_inr(tx['credit'])}"
             credit_p = Paragraph(credit_val, style_green if ledger_data['party_type'] == 'customer' else style_red)
         else:
             credit_p = Paragraph("-", style_sub)
             
         # balance formatting
-        bal_val = f"{tx['balance']:,.2f}"
+        bal_val = f"{format_inr(tx['balance'])}"
         
         table_data.append([
             Paragraph(tx['date'], style_sub),
@@ -1139,7 +1140,7 @@ def generate_ledger_pdf(ledger_data, file_path):
 
     # 4. Summary / Outstanding
     summary_data = [
-        [Paragraph("", style_sub), Paragraph(f"{ledger_data['balance_label']}:", style_bold), Paragraph(f"Rs. {ledger_data['net_balance']:,.2f}", style_bold)]
+        [Paragraph("", style_sub), Paragraph(f"{ledger_data['balance_label']}:", style_bold), Paragraph(f"Rs. {format_inr(ledger_data['net_balance'])}", style_bold)]
     ]
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
@@ -1281,15 +1282,15 @@ def generate_money_transfer_pdf(transfer_data, file_path):
     details.extend([
         [
             Paragraph("<b>TRANSFER AMOUNT:</b>", style_bold),
-            Paragraph(f"Rs. {transfer_data['amount']:,.2f}", style_bold)
+            Paragraph(f"Rs. {format_inr(transfer_data['amount'])}", style_bold)
         ],
         [
             Paragraph("<b>SERVICE CHARGE:</b>", style_bold),
-            Paragraph(f"Rs. {transfer_data['service_charge']:,.2f}", style_sub)
+            Paragraph(f"Rs. {format_inr(transfer_data['service_charge'])}", style_sub)
         ],
         [
             Paragraph("<b>TOTAL PAYABLE:</b>", style_bold),
-            Paragraph(f"Rs. {transfer_data['total_amount']:,.2f}", style_bold)
+            Paragraph(f"Rs. {format_inr(transfer_data['total_amount'])}", style_bold)
         ],
         [
             Paragraph("<b>DEADLINE DATE:</b>", style_bold),
@@ -1566,14 +1567,14 @@ def generate_outstanding_pdf(report_data, file_path):
         table_data.append([
             Paragraph(item['name'], style_sub),
             Paragraph(item['mobile'], style_sub),
-            Paragraph(f"Rs. {item['balance']:,.2f}", style_bold)
+            Paragraph(f"Rs. {format_inr(item['balance'])}", style_bold)
         ])
 
     # Add Total Row
     table_data.append([
         Paragraph("<b>TOTAL</b>", style_bold),
         Paragraph("", style_sub),
-        Paragraph(f"<b>Rs. {report_data['total_amount']:,.2f}</b>", style_bold)
+        Paragraph(f"<b>Rs. {format_inr(report_data['total_amount'])}</b>", style_bold)
     ])
 
     items_table = Table(table_data, colWidths=[240, 160, 140])
@@ -1734,8 +1735,8 @@ def generate_sales_return_pdf(return_data, file_path):
         table_data.append([
             Paragraph(item['name'], style_sub),
             Paragraph(str(item['qty']), style_sub),
-            Paragraph(f"{item['rate']:,.2f}", style_sub),
-            Paragraph(f"{item['total']:,.2f}", style_bold)
+            Paragraph(f"{format_inr(item['rate'])}", style_sub),
+            Paragraph(f"{format_inr(item['total'])}", style_bold)
         ])
 
     items_table = Table(table_data, colWidths=[320, 50, 80, 90])
@@ -1764,7 +1765,7 @@ def generate_sales_return_pdf(return_data, file_path):
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
-                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(f"{format_inr(p['amount'])}", style_bold),
                 Paragraph(p['remarks'], style_sub)
             ])
         p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
@@ -1781,9 +1782,9 @@ def generate_sales_return_pdf(return_data, file_path):
 
     # 4. Summary / Totals block
     summary_data = [
-        [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {return_data['total_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Refund Paid (Cash/Bank):", style_bold), Paragraph(f"Rs. {return_data['refund_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Balance Adjusted:", style_bold), Paragraph(f"Rs. {return_data['balance_deducted']:,.2f}", style_bold)]
+        [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {format_inr(return_data['total_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Refund Paid (Cash/Bank):", style_bold), Paragraph(f"Rs. {format_inr(return_data['refund_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Adjusted:", style_bold), Paragraph(f"Rs. {format_inr(return_data['balance_deducted'])}", style_bold)]
     ]
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
@@ -1940,8 +1941,8 @@ def generate_purchase_return_pdf(return_data, file_path):
         table_data.append([
             Paragraph(item['name'], style_sub),
             Paragraph(str(item['qty']), style_sub),
-            Paragraph(f"{item['rate']:,.2f}", style_sub),
-            Paragraph(f"{item['total']:,.2f}", style_bold)
+            Paragraph(f"{format_inr(item['rate'])}", style_sub),
+            Paragraph(f"{format_inr(item['total'])}", style_bold)
         ])
 
     items_table = Table(table_data, colWidths=[320, 50, 80, 90])
@@ -1970,7 +1971,7 @@ def generate_purchase_return_pdf(return_data, file_path):
             pay_table_data.append([
                 Paragraph(p['date'], style_sub),
                 Paragraph(p['mode'], style_sub),
-                Paragraph(f"{p['amount']:,.2f}", style_bold),
+                Paragraph(f"{format_inr(p['amount'])}", style_bold),
                 Paragraph(p['remarks'], style_sub)
             ])
         p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
@@ -1987,9 +1988,9 @@ def generate_purchase_return_pdf(return_data, file_path):
 
     # 4. Summary / Totals block
     summary_data = [
-        [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {return_data['total_amount']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Refund Received (Cash/Bank):", style_bold), Paragraph(f"Rs. {return_data['refund_received']:,.2f}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Balance Adjusted:", style_bold), Paragraph(f"Rs. {return_data['balance_deducted']:,.2f}", style_bold)]
+        [Paragraph("", style_sub), Paragraph("Total Return Value:", style_bold), Paragraph(f"Rs. {format_inr(return_data['total_amount'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Refund Received (Cash/Bank):", style_bold), Paragraph(f"Rs. {format_inr(return_data['refund_received'])}", style_bold)],
+        [Paragraph("", style_sub), Paragraph("Balance Adjusted:", style_bold), Paragraph(f"Rs. {format_inr(return_data['balance_deducted'])}", style_bold)]
     ]
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
@@ -2122,11 +2123,11 @@ def generate_inventory_profit_pdf(report_data, file_path):
     
     kpi_data = [
         [
-            Paragraph("<font size=8 color='#64748b'>TOTAL PURCHASE VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{report_data['total_purchase_value']:,.2f}" + "</font></b>", style_sub),
-            Paragraph("<font size=8 color='#64748b'>TOTAL SALES VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{report_data['total_sales_value']:,.2f}" + "</font></b>", style_sub),
-            Paragraph("<font size=8 color='#64748b'>TOTAL GROSS PROFIT</font><br/><b><font size=11 color='#8fd53b'>Rs. " + f"{report_data['total_gross_profit']:,.2f}" + "</font></b>", style_sub),
-            Paragraph("<font size=8 color='#64748b'>TOTAL INTEREST COST</font><br/><b><font size=11 color='#ef4444'>Rs. " + f"{report_data['total_interest_cost']:,.2f}" + "</font></b>", style_sub),
-            Paragraph("<font size=8 color='#64748b'>TOTAL NET PROFIT</font><br/><b><font size=11 color='#6366f1'>Rs. " + f"{report_data['total_net_profit']:,.2f}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL PURCHASE VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{format_inr(report_data['total_purchase_value'])}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL SALES VALUE</font><br/><b><font size=11 color='#1e293b'>Rs. " + f"{format_inr(report_data['total_sales_value'])}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL GROSS PROFIT</font><br/><b><font size=11 color='#8fd53b'>Rs. " + f"{format_inr(report_data['total_gross_profit'])}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL INTEREST COST</font><br/><b><font size=11 color='#ef4444'>Rs. " + f"{format_inr(report_data['total_interest_cost'])}" + "</font></b>", style_sub),
+            Paragraph("<font size=8 color='#64748b'>TOTAL NET PROFIT</font><br/><b><font size=11 color='#6366f1'>Rs. " + f"{format_inr(report_data['total_net_profit'])}" + "</font></b>", style_sub),
             Paragraph("<font size=8 color='#64748b'>AVG DAYS IN STOCK</font><br/><b><font size=11 color='#3b82f6'>" + f"{report_data['avg_days']:.1f}" + " Days</font></b>", style_sub),
         ]
     ]
@@ -2158,7 +2159,7 @@ def generate_inventory_profit_pdf(report_data, file_path):
         sdate = row['sale_date'].strftime("%Y-%m-%d") if isinstance(row['sale_date'], datetime.date) else str(row['sale_date'])
         
         net_prof = row['net_profit']
-        net_prof_str = f"{net_prof:,.2f}"
+        net_prof_str = f"{format_inr(net_prof)}"
         if net_prof < 0:
             net_style = ParagraphStyle('net_red', parent=style_cell, textColor=colors.HexColor('#ef4444'))
         else:
@@ -2171,10 +2172,10 @@ def generate_inventory_profit_pdf(report_data, file_path):
             Paragraph(sdate, style_cell),
             Paragraph(str(row['days']), style_cell),
             Paragraph(str(row['qty']), style_cell),
-            Paragraph(f"{row['purchase_price']:,.2f}", style_cell),
-            Paragraph(f"{row['sale_price']:,.2f}", style_cell),
-            Paragraph(f"{row['gross_profit']:,.2f}", style_cell),
-            Paragraph(f"{row['interest_cost']:,.2f}", style_cell),
+            Paragraph(f"{format_inr(row['purchase_price'])}", style_cell),
+            Paragraph(f"{format_inr(row['sale_price'])}", style_cell),
+            Paragraph(f"{format_inr(row['gross_profit'])}", style_cell),
+            Paragraph(f"{format_inr(row['interest_cost'])}", style_cell),
             Paragraph(net_prof_str, net_style)
         ])
         
@@ -2187,9 +2188,9 @@ def generate_inventory_profit_pdf(report_data, file_path):
         Paragraph(str(sum(r['qty'] for r in report_data['items'])), style_cell_bold),
         Paragraph("", style_cell),
         Paragraph("", style_cell),
-        Paragraph(f"{report_data['total_gross_profit']:,.2f}", style_cell_bold),
-        Paragraph(f"{report_data['total_interest_cost']:,.2f}", style_cell_bold),
-        Paragraph(f"{report_data['total_net_profit']:,.2f}", style_cell_bold),
+        Paragraph(f"{format_inr(report_data['total_gross_profit'])}", style_cell_bold),
+        Paragraph(f"{format_inr(report_data['total_interest_cost'])}", style_cell_bold),
+        Paragraph(f"{format_inr(report_data['total_net_profit'])}", style_cell_bold),
     ])
     
     col_widths = [45, 145, 55, 75, 35, 30, 60, 60, 80, 80, 105]
@@ -2424,8 +2425,8 @@ def generate_purchase_order_pdf(po_data, file_path):
             Paragraph(p_bm, style_td),
             Paragraph(str(qty), style_td_right),
             Paragraph(unit, style_td),
-            Paragraph(f"{rate:,.2f}", style_td_right),
-            Paragraph(f"{row_tot:,.2f}", style_td_right)
+            Paragraph(f"{format_inr(rate)}", style_td_right),
+            Paragraph(f"{format_inr(row_tot)}", style_td_right)
         ])
 
     # Total Row
@@ -2438,7 +2439,7 @@ def generate_purchase_order_pdf(po_data, file_path):
         Paragraph(f"<b>{po_data.get('total_qty', 0)}</b>", style_td_right),
         Paragraph("", style_td),
         Paragraph("<b>Estimated Total:</b>", style_td_right),
-        Paragraph(f"<b>₹{tot_amount:,.2f}</b>", style_td_bold_right)
+        Paragraph(f"<b>₹{format_inr(tot_amount)}</b>", style_td_bold_right)
     ])
 
     col_widths = [26, 50, 184, 80, 40, 36, 62, 62]

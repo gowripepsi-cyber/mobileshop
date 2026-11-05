@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from database import Session, Setting
 from models import Customer, Supplier, SalesMaster, PurchaseMaster, ServiceJob, Payment, SalesReturnMaster, PurchaseReturnMaster
 from utils.pdf_generator import generate_ledger_pdf
+from utils.formatters import format_inr
 
 
 class LedgerBreakupDialog(QDialog):
@@ -193,21 +194,21 @@ class LedgerBreakupDialog(QDialog):
                     self.table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
                     self.table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
                     
-                    deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
+                    deb_item = QTableWidgetItem(format_inr(tx['debit'], symbol=True) if tx["debit"] > 0 else "-")
                     if tx["debit"] > 0:
                         deb_item.setForeground(Qt.red)
                     self.table.setItem(i, 3, deb_item)
 
-                    cred_item = QTableWidgetItem(f"₹{tx['credit']:,.2f}" if tx["credit"] > 0 else "-")
+                    cred_item = QTableWidgetItem(format_inr(tx['credit'], symbol=True) if tx["credit"] > 0 else "-")
                     if tx["credit"] > 0:
                         cred_item.setForeground(Qt.green)
                     self.table.setItem(i, 4, cred_item)
 
-                    bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
+                    bal_item = QTableWidgetItem(format_inr(running_balance, symbol=True))
                     self.table.setItem(i, 5, bal_item)
 
                 self.net_balance = running_balance
-                self.total_lbl.setText(f"Net Outstanding Balance: ₹{running_balance:,.2f}")
+                self.total_lbl.setText(f"Net Outstanding Balance: {format_inr(running_balance, symbol=True)}")
                 if running_balance > 0:
                     self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #f59e0b;")
                 else:
@@ -298,21 +299,21 @@ class LedgerBreakupDialog(QDialog):
                     self.table.setItem(i, 1, QTableWidgetItem(tx["ref"]))
                     self.table.setItem(i, 2, QTableWidgetItem(tx["desc"]))
                     
-                    deb_item = QTableWidgetItem(f"₹{tx['debit']:,.2f}" if tx["debit"] > 0 else "-")
+                    deb_item = QTableWidgetItem(format_inr(tx['debit'], symbol=True) if tx["debit"] > 0 else "-")
                     if tx["debit"] > 0:
                         deb_item.setForeground(Qt.green)
                     self.table.setItem(i, 3, deb_item)
 
-                    cred_item = QTableWidgetItem(f"₹{tx['credit']:,.2f}" if tx["credit"] > 0 else "-")
+                    cred_item = QTableWidgetItem(format_inr(tx['credit'], symbol=True) if tx["credit"] > 0 else "-")
                     if tx["credit"] > 0:
                         cred_item.setForeground(Qt.red)
                     self.table.setItem(i, 4, cred_item)
 
-                    bal_item = QTableWidgetItem(f"₹{running_balance:,.2f}")
+                    bal_item = QTableWidgetItem(format_inr(running_balance, symbol=True))
                     self.table.setItem(i, 5, bal_item)
 
                 self.net_balance = running_balance
-                self.total_lbl.setText(f"Net Payable Balance: ₹{running_balance:,.2f}")
+                self.total_lbl.setText(f"Net Payable Balance: {format_inr(running_balance, symbol=True)}")
                 if running_balance > 0:
                     self.total_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #ef4444;")
                 else:
