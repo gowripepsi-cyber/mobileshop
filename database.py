@@ -1,4 +1,5 @@
 import hashlib
+import re
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit, ExpenseCategory, Expense, Staff, StaffAttendance, StaffSalaryPayment, ExistingStockMaster, ExistingStockItem, PurchaseOrderMaster, PurchaseOrderItem
@@ -93,6 +94,40 @@ def generate_next_po_number(session) -> str:
             pass
     count = session.query(PurchaseOrderMaster).count()
     return f"PO-{1001 + count}"
+
+
+def generate_next_sales_return_number(session) -> str:
+    from models import SalesReturnMaster
+    returns = session.query(SalesReturnMaster.return_number).all()
+    max_num = 1000
+    for (r_no,) in returns:
+        if r_no:
+            match = re.search(r'(\d+)$', r_no.strip())
+            if match:
+                try:
+                    num = int(match.group(1))
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    pass
+    return f"SR-{max_num + 1}"
+
+
+def generate_next_purchase_return_number(session) -> str:
+    from models import PurchaseReturnMaster
+    returns = session.query(PurchaseReturnMaster.return_number).all()
+    max_num = 1000
+    for (r_no,) in returns:
+        if r_no:
+            match = re.search(r'(\d+)$', r_no.strip())
+            if match:
+                try:
+                    num = int(match.group(1))
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    pass
+    return f"PR-{max_num + 1}"
 
 
 def init_db():

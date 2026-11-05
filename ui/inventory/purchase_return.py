@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate, QTimer
 from utils.formatters import format_inr
-from database import Session, Setting
+from database import Session, Setting, generate_next_purchase_return_number
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, PurchaseReturnMaster, PurchaseReturnItem
 from utils.pdf_generator import generate_purchase_return_pdf
 from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, AutoClearSearchableComboBox
@@ -18,6 +18,7 @@ class PurchaseReturnEntryWidget(QWidget):
         self.return_items = []  # list of dicts: {"product_id": int, "name": str, "qty": int, "rate": float}
         self.products_cache = {}
         self.init_ui()
+        self.refresh_data()
 
     def init_ui(self):
         # Vertical stacked layout: Top = Block 1 (Purchase Return Parameters), Bottom = Block 2 (Items Entry & Table)
@@ -122,6 +123,7 @@ class PurchaseReturnEntryWidget(QWidget):
         # 4. Ref Purchase Invoice
         self.invoice_combo = QComboBox()
         self.invoice_combo.setStyleSheet(input_style)
+        self.invoice_combo.currentIndexChanged.connect(self.on_invoice_selected)
         f_inv = make_field("Ref Purchase Invoice", self.invoice_combo)
 
         # 5. Refund Mode
@@ -288,13 +290,13 @@ class PurchaseReturnEntryWidget(QWidget):
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setColumnWidth(0, 85)   # Code
-        self.table.setColumnWidth(2, 65)   # Qty
-        self.table.setColumnWidth(3, 90)   # Rate (₹)
-        self.table.setColumnWidth(4, 95)   # Total (₹)
+        self.table.setColumnWidth(2, 80)   # Qty
+        self.table.setColumnWidth(3, 100)  # Rate (₹)
+        self.table.setColumnWidth(4, 110)  # Total (₹)
         header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 75)   # Action
+        self.table.setColumnWidth(5, 85)   # Action
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.verticalHeader().setDefaultSectionSize(44)
         bottom_layout.addWidget(self.table, 1)
 
         # Totals Summary Bar
@@ -381,6 +383,69 @@ class PurchaseReturnEntryWidget(QWidget):
             finally:
                 session.close()
         self.invoice_combo.blockSignals(False)
+        if any(item.get("from_invoice") for item in self.return_items):
+            self.return_items.clear()
+            self.update_table()
+
+    def on_invoice_selected(self):
+        inv_id = self.invoice_combo.currentData()
+        if not inv_id:
+            if any(item.get("from_invoice") for item in self.return_items):
+                self.return_items.clear()
+                self.update_table()
+            return
+
+        session = Session()
+        try:
+            purchase = session.query(PurchaseMaster).get(inv_id)
+            if not purchase:
+                return
+
+            self.return_items.clear()
+            for item in purchase.items:
+                if item.product:
+                    p_id = item.product.id
+                    p_code = item.product.product_code or "-"
+                    bm = getattr(item.product, 'brand_model', None) or getattr(item.product, 'brand', '') or ''
+                    p_name = f"{item.product.name} ({bm})" if bm else item.product.name
+                else:
+                    p_id = item.product_id
+                    p_code = "-"
+                    p_name = f"Product #{item.product_id}"
+
+                self.return_items.append({
+                    "product_id": p_id,
+                    "product_code": p_code,
+                    "name": p_name,
+                    "qty": item.qty,
+                    "max_qty": item.qty,
+                    "rate": item.rate,
+                    "unit": getattr(item, 'unit', 'Pcs') or 'Pcs',
+                    "from_invoice": True
+                })
+
+            self.update_table()
+
+            # Suggest refund received vs balance deduction
+            total_return = sum(it["qty"] * it["rate"] for it in self.return_items)
+            paid_amount = getattr(purchase, 'paid_amount', 0.0) or 0.0
+            suggested_refund = min(paid_amount, total_return)
+            self.refund_input.setValue(suggested_refund)
+            self.update_summary()
+
+        except Exception as e:
+            print(f"Error loading purchase items for return: {e}")
+        finally:
+            session.close()
+
+    def on_item_qty_changed(self, row_idx, val):
+        if 0 <= row_idx < len(self.return_items):
+            self.return_items[row_idx]["qty"] = val
+            subtotal = val * self.return_items[row_idx]["rate"]
+            tot_item = self.table.item(row_idx, 4)
+            if tot_item:
+                tot_item.setText(f"{subtotal:,.2f}")
+            self.update_summary()
 
     def filter_products_by_category(self):
         self.product_combo.blockSignals(True)
@@ -494,12 +559,14 @@ class PurchaseReturnEntryWidget(QWidget):
             for b in banks:
                 self.bank_combo.addItem(f"{b.bank_name} ({b.account_name})", b.id)
 
+            # Clear Ref Purchase Invoice combo
+            self.invoice_combo.blockSignals(True)
+            self.invoice_combo.clear()
+            self.invoice_combo.addItem("-- Select Purchase Invoice (Optional) --", None)
+            self.invoice_combo.blockSignals(False)
+
             # Auto-suggest Return Number
-            last_pr = session.query(PurchaseReturnMaster).order_by(PurchaseReturnMaster.id.desc()).first()
-            if last_pr:
-                self.return_no_input.setText(f"PR-{last_pr.id + 1001}")
-            else:
-                self.return_no_input.setText("PR-1001")
+            self.return_no_input.setText(generate_next_purchase_return_number(session))
 
             self.supplier_combo.blockSignals(False)
             self.category_combo.blockSignals(False)
@@ -581,22 +648,54 @@ class PurchaseReturnEntryWidget(QWidget):
     def update_table(self):
         self.table.setRowCount(len(self.return_items))
         for i, item in enumerate(self.return_items):
-            self.table.setItem(i, 0, QTableWidgetItem(item.get("product_code", "-")))
-            self.table.setItem(i, 1, QTableWidgetItem(item["name"]))
-            self.table.setItem(i, 2, QTableWidgetItem(str(item["qty"])))
-            self.table.setItem(i, 3, QTableWidgetItem(f"{item['rate']:.2f}"))
-            
-            subtotal = item["qty"] * item["rate"]
-            self.table.setItem(i, 4, QTableWidgetItem(f"{subtotal:.2f}"))
+            # Code
+            c_item = QTableWidgetItem(item.get("product_code", "-"))
+            c_item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(i, 0, c_item)
 
+            # Name
+            self.table.setItem(i, 1, QTableWidgetItem(item["name"]))
+
+            # Qty: Editable QSpinBox with max allowable return qty
+            qty_container = QWidget()
+            qty_layout = QHBoxLayout(qty_container)
+            qty_layout.setContentsMargins(4, 2, 4, 2)
+            qty_layout.setSpacing(0)
+            qty_layout.setAlignment(Qt.AlignCenter)
+            qty_spin = QSpinBox()
+            max_q = item.get("max_qty", 99999) or 99999
+            qty_spin.setRange(1, max_q)
+            qty_spin.setValue(item["qty"])
+            qty_spin.setFixedSize(60, 28)
+            qty_spin.setAlignment(Qt.AlignCenter)
+            qty_spin.setStyleSheet("QSpinBox { background: white; border: 1.5px solid #cbd5e1; border-radius: 4px; padding: 2px 4px; font-size: 12px; font-weight: bold; color: #0f172a; } QSpinBox:focus { border-color: #f59e0b; }")
+            qty_spin.valueChanged.connect(lambda val, idx=i: self.on_item_qty_changed(idx, val))
+            qty_layout.addWidget(qty_spin)
+            self.table.setCellWidget(i, 2, qty_container)
+
+            # Rate
+            r_item = QTableWidgetItem(f"{item['rate']:,.2f}")
+            r_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.table.setItem(i, 3, r_item)
+            
+            # Total
+            subtotal = item["qty"] * item["rate"]
+            tot_item = QTableWidgetItem(f"{subtotal:,.2f}")
+            tot_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            tot_item.setForeground(Qt.darkGreen)
+            self.table.setItem(i, 4, tot_item)
+
+            # Delete Action
             btn_container = QWidget()
             btn_layout = QHBoxLayout(btn_container)
-            btn_layout.setContentsMargins(4, 4, 4, 4)
+            btn_layout.setContentsMargins(4, 2, 4, 2)
             btn_layout.setSpacing(0)
             btn_layout.setAlignment(Qt.AlignCenter)
 
             del_btn = QPushButton("Delete")
             del_btn.setProperty("class", "btn-action-delete")
+            del_btn.setFixedSize(60, 26)
+            del_btn.setCursor(Qt.PointingHandCursor)
             del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
             btn_layout.addWidget(del_btn)
             self.table.setCellWidget(i, 5, btn_container)
@@ -620,17 +719,27 @@ class PurchaseReturnEntryWidget(QWidget):
             self.adj_badge.setText(f"Outstanding Adj: ₹{format_inr(adj)}")
 
     def save_purchase_return(self):
+        if hasattr(self, 'save_btn'):
+            self.save_btn.setEnabled(False)
+        if hasattr(self, 'save_bottom_btn'):
+            self.save_bottom_btn.setEnabled(False)
         return_no = self.return_no_input.text().strip()
         supp_id = self.supplier_combo.currentData()
         
         if not return_no:
             QMessageBox.warning(self, "Validation Error", "Please enter Return Number.")
+            if hasattr(self, 'save_btn'): self.save_btn.setEnabled(True)
+            if hasattr(self, 'save_bottom_btn'): self.save_bottom_btn.setEnabled(True)
             return
         if not supp_id:
             QMessageBox.warning(self, "Validation Error", "Please select a Supplier.")
+            if hasattr(self, 'save_btn'): self.save_btn.setEnabled(True)
+            if hasattr(self, 'save_bottom_btn'): self.save_bottom_btn.setEnabled(True)
             return
         if not self.return_items:
             QMessageBox.warning(self, "Validation Error", "Please add at least one item to the return.")
+            if hasattr(self, 'save_btn'): self.save_btn.setEnabled(True)
+            if hasattr(self, 'save_bottom_btn'): self.save_bottom_btn.setEnabled(True)
             return
 
         total = sum(item["qty"] * item["rate"] for item in self.return_items)
@@ -649,7 +758,15 @@ class PurchaseReturnEntryWidget(QWidget):
             # Check duplicate return number
             existing = session.query(PurchaseReturnMaster).filter_by(return_number=return_no).first()
             if existing:
-                QMessageBox.warning(self, "Duplicate Return", f"Return number {return_no} already exists.")
+                next_no = generate_next_purchase_return_number(session)
+                QMessageBox.warning(
+                    self,
+                    "Duplicate Return Number",
+                    f"Return number '{return_no}' already exists in the database.\n\n"
+                    f"Next available return number '{next_no}' has been assigned automatically.\n"
+                    f"If you wish to save a new return, please review and click Save again."
+                )
+                self.return_no_input.setText(next_no)
                 return
 
             # Check final validation for product stocks
@@ -786,6 +903,10 @@ class PurchaseReturnEntryWidget(QWidget):
             session.rollback()
             QMessageBox.critical(self, "Error", f"Failed to save purchase return: {e}")
         finally:
+            if hasattr(self, 'save_btn'):
+                self.save_btn.setEnabled(True)
+            if hasattr(self, 'save_bottom_btn'):
+                self.save_bottom_btn.setEnabled(True)
             session.close()
 
 

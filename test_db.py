@@ -18,7 +18,7 @@ class TestInventoryDB(unittest.TestCase):
 
     def test_01_product_creation(self):
         # Clear existing test products if any
-        self.session.query(Product).filter_by(name="Test Phone").delete()
+        self.session.query(Product).filter_by(imei="TEST-IMEI-101").delete()
         self.session.commit()
 
         # Add new test product
