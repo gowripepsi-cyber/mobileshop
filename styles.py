@@ -626,7 +626,7 @@ QTableWidget, QTableView {
 }
 
 QTableWidget::item, QTableView::item {
-    padding: 9px;
+    padding: 3px 6px;
     border-bottom: 1px solid #f1f5f9;
     outline: none;
     color: #0f172a;

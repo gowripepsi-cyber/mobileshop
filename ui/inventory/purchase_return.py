@@ -306,7 +306,8 @@ class PurchaseReturnEntryWidget(QWidget):
         header.setSectionResizeMode(5, QHeaderView.Fixed)
         self.table.setColumnWidth(5, 95)   # Action
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(42)
+        self.table.verticalHeader().setDefaultSectionSize(44)
+        self.table.setStyleSheet("QTableWidget::item { padding: 2px 6px; }")
         bottom_layout.addWidget(self.table, 1)
 
         # Totals Summary Bar
@@ -669,7 +670,9 @@ class PurchaseReturnEntryWidget(QWidget):
             self.table.setItem(i, 0, c_item)
 
             # Name
-            self.table.setItem(i, 1, QTableWidgetItem(item["name"]))
+            n_item = QTableWidgetItem(item["name"])
+            n_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.table.setItem(i, 1, n_item)
 
             # Qty: Editable QSpinBox with max allowable return qty
             qty_container = QWidget()
