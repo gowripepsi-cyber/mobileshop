@@ -38,7 +38,7 @@ class SalesReturnEntryWidget(QWidget):
                 w.setFixedWidth(width)
             return w
 
-        input_style = "min-height: 28px; max-height: 28px; padding: 2px 8px;"
+        input_style = "min-height: 28px; padding: 2px 8px;"
 
         # =========================================================================
         # BLOCK 1 (Top Block): Sales Return Details Card

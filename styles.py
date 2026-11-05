@@ -392,6 +392,8 @@ QComboBox QAbstractItemView, QListView {
     selection-background-color: __THEME_PRIMARY__;
     selection-color: __THEME_TEXT_PRIMARY__;
     padding: 5px;
+    outline: 0;
+    min-height: 28px;
 }
 
 QComboBox QAbstractItemView::item, QListView::item {

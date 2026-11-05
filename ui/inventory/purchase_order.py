@@ -78,7 +78,7 @@ class PurchaseOrderDialog(QDialog):
             return box
 
         common_input_style = (
-            "min-height: 32px; max-height: 32px; font-size: 12px; color: #0f172a; "
+            "min-height: 32px; font-size: 12px; color: #0f172a; "
             "padding: 2px 8px; border-radius: 6px;"
         )
 

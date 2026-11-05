@@ -114,7 +114,7 @@ class ExistingStockView(QWidget):
             return w
 
         # Common input styling to guarantee EXACT same 36px height as Item Name combo box
-        input_style = "min-height: 28px; max-height: 28px; padding: 2px 8px;"
+        input_style = "min-height: 28px; padding: 2px 8px;"
 
         # 1. Product Code (6 digits max)
         self.product_code_input = QLineEdit()
