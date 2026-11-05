@@ -284,19 +284,29 @@ class PurchaseReturnEntryWidget(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Code", "Name", "Qty", "Rate (₹)", "Total (₹)", "Action"])
+        header_labels = ["Code", "Name", "Qty", "Rate (₹)", "Total (₹)", "Action"]
+        self.table.setColumnCount(len(header_labels))
+        for col, label in enumerate(header_labels):
+            h_item = QTableWidgetItem(label)
+            if col in [0, 2, 5]:  # Code, Qty, Action
+                h_item.setTextAlignment(Qt.AlignCenter)
+            elif col in [3, 4]:  # Rate, Total
+                h_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                h_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.table.setHorizontalHeaderItem(col, h_item)
+
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setColumnWidth(0, 85)   # Code
-        self.table.setColumnWidth(2, 80)   # Qty
-        self.table.setColumnWidth(3, 100)  # Rate (₹)
-        self.table.setColumnWidth(4, 110)  # Total (₹)
+        self.table.setColumnWidth(0, 90)   # Code
+        self.table.setColumnWidth(2, 110)  # Qty (wide enough for centered spinbox)
+        self.table.setColumnWidth(3, 120)  # Rate (₹)
+        self.table.setColumnWidth(4, 130)  # Total (₹)
         header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 85)   # Action
+        self.table.setColumnWidth(5, 95)   # Action
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(44)
+        self.table.verticalHeader().setDefaultSectionSize(42)
         bottom_layout.addWidget(self.table, 1)
 
         # Totals Summary Bar
@@ -413,13 +423,18 @@ class PurchaseReturnEntryWidget(QWidget):
                     p_code = "-"
                     p_name = f"Product #{item.product_id}"
 
+                # Calculate effective charged rate per item (accounting for taxes)
+                item_tax = getattr(item, 'tax_amount', 0.0) or 0.0
+                charged_subtotal = (item.qty * item.rate) + item_tax
+                effective_rate = round(charged_subtotal / item.qty, 2) if item.qty > 0 else item.rate
+
                 self.return_items.append({
                     "product_id": p_id,
                     "product_code": p_code,
                     "name": p_name,
                     "qty": item.qty,
                     "max_qty": item.qty,
-                    "rate": item.rate,
+                    "rate": effective_rate,
                     "unit": getattr(item, 'unit', 'Pcs') or 'Pcs',
                     "from_invoice": True
                 })
@@ -658,17 +673,23 @@ class PurchaseReturnEntryWidget(QWidget):
 
             # Qty: Editable QSpinBox with max allowable return qty
             qty_container = QWidget()
+            qty_container.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
             qty_layout = QHBoxLayout(qty_container)
-            qty_layout.setContentsMargins(4, 2, 4, 2)
+            qty_layout.setContentsMargins(0, 0, 0, 0)
             qty_layout.setSpacing(0)
             qty_layout.setAlignment(Qt.AlignCenter)
             qty_spin = QSpinBox()
             max_q = item.get("max_qty", 99999) or 99999
             qty_spin.setRange(1, max_q)
             qty_spin.setValue(item["qty"])
-            qty_spin.setFixedSize(60, 28)
+            qty_spin.setFixedSize(76, 28)
             qty_spin.setAlignment(Qt.AlignCenter)
-            qty_spin.setStyleSheet("QSpinBox { background: white; border: 1.5px solid #cbd5e1; border-radius: 4px; padding: 2px 4px; font-size: 12px; font-weight: bold; color: #0f172a; } QSpinBox:focus { border-color: #f59e0b; }")
+            qty_spin.setStyleSheet(
+                "QSpinBox { background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 6px; "
+                "padding: 0px 4px !important; min-height: 28px !important; max-height: 28px !important; height: 28px !important; "
+                "font-size: 13px; font-weight: bold; color: #0f172a; margin: 0px !important; } "
+                "QSpinBox:focus { border: 1.5px solid #f59e0b; background-color: #fffbeb; }"
+            )
             qty_spin.valueChanged.connect(lambda val, idx=i: self.on_item_qty_changed(idx, val))
             qty_layout.addWidget(qty_spin)
             self.table.setCellWidget(i, 2, qty_container)
@@ -687,14 +708,15 @@ class PurchaseReturnEntryWidget(QWidget):
 
             # Delete Action
             btn_container = QWidget()
+            btn_container.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
             btn_layout = QHBoxLayout(btn_container)
-            btn_layout.setContentsMargins(4, 2, 4, 2)
+            btn_layout.setContentsMargins(0, 0, 0, 0)
             btn_layout.setSpacing(0)
             btn_layout.setAlignment(Qt.AlignCenter)
 
             del_btn = QPushButton("Delete")
             del_btn.setProperty("class", "btn-action-delete")
-            del_btn.setFixedSize(60, 26)
+            del_btn.setFixedSize(68, 26)
             del_btn.setCursor(Qt.PointingHandCursor)
             del_btn.clicked.connect(lambda checked, idx=i: self.delete_item(idx))
             btn_layout.addWidget(del_btn)
