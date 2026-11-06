@@ -826,36 +826,7 @@ def generate_service_pdf(service_data, file_path):
     story.append(info_table)
     story.append(Spacer(1, 14))
 
-    # 3b. Payment History Installments block
-    if service_data.get('payments'):
-        story.append(Paragraph("<b>Payment Installments Received:</b>", style_bold))
-        story.append(Spacer(1, 4))
-        pay_table_data = [[
-            Paragraph("<b>Date</b>", style_bold),
-            Paragraph("<b>Payment Mode</b>", style_bold),
-            Paragraph("<b>Amount (Rs.)</b>", style_bold),
-            Paragraph("<b>Remarks</b>", style_bold)
-        ]]
-        for p in service_data['payments']:
-            pay_table_data.append([
-                Paragraph(p['date'], style_sub),
-                Paragraph(p['mode'], style_sub),
-                Paragraph(f"{format_inr(p['amount'])}", style_bold),
-                Paragraph(p['remarks'], style_sub)
-            ])
-        p_table = Table(pay_table_data, colWidths=[100, 100, 100, 240])
-        p_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
-        ]))
-        story.append(p_table)
-        story.append(Spacer(1, 12))
-
-    # 4. Summary / Totals block (Separate Advance Payment Display)
+    # 3. Summary / Totals block (Grand Total, Advance, Balance Due)
     adv_amt = float(service_data.get('advance_payment') or 0.0)
     total_paid = float(service_data.get('paid_amount') or 0.0)
     addl_paid = max(0.0, total_paid - adv_amt)
@@ -903,7 +874,36 @@ def generate_service_pdf(service_data, file_path):
         ('BOTTOMPADDING', (0,0), (-1,-1), 5),
     ]))
     story.append(summary_table)
-    story.append(Spacer(1, 30))
+    story.append(Spacer(1, 14))
+
+    # 4. Payment History (Installments) block - positioned below Balance Due and above Terms
+    if service_data.get('payments'):
+        story.append(Paragraph("<b>Payment History (Installments):</b>", style_bold))
+        story.append(Spacer(1, 5))
+        pay_table_data = [[
+            Paragraph("<b>Date</b>", style_bold),
+            Paragraph("<b>Payment Mode</b>", style_bold),
+            Paragraph("<b>Amount (Rs.)</b>", style_bold),
+            Paragraph("<b>Remarks / Note</b>", style_bold)
+        ]]
+        for p in service_data['payments']:
+            pay_table_data.append([
+                Paragraph(p['date'], style_sub),
+                Paragraph(p['mode'], style_sub),
+                Paragraph(f"{format_inr(p['amount'])}", style_bold),
+                Paragraph(p['remarks'], style_sub)
+            ])
+        p_table = Table(pay_table_data, colWidths=[90, 100, 90, 260])
+        p_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ]))
+        story.append(p_table)
+        story.append(Spacer(1, 16))
 
     # 5. Footer & Sign-off
     footer_text = "<b>Terms & Conditions:</b><br/>1. 30 days warranty on spare parts replaced (does not cover physical/liquid damage).<br/>2. Please collect device within 15 days of repair completion."

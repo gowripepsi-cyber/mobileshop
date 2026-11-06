@@ -2004,7 +2004,10 @@ class ServicesView(QWidget):
                 t_item.setFont(t_font)
                 items_table.setItem(i, 3, t_item)
                 
-            items_table.setFixedHeight(min(180, 36 * len(items) + 38))
+            items_header_h = max(36, items_table.horizontalHeader().sizeHint().height())
+            items_table.setFixedHeight(items_header_h + (len(items) * 36) + (items_table.frameWidth() * 2) + 4)
+            items_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            items_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             paper_layout.addWidget(items_table)
 
             # 4. Center-aligned Device, Technician & Complaint Information Block
@@ -2151,34 +2154,77 @@ class ServicesView(QWidget):
             totals_container.addLayout(totals_box)
             paper_layout.addLayout(totals_container)
 
-            # 6. Payment History Installments
+            # 6. Payment History Installments (Dynamic Height - No Clipping)
             job_payments = session.query(Payment).filter_by(job_id=job.id).order_by(Payment.id.asc()).all()
             if job_payments:
                 hist_lbl = QLabel("<b>Payment History (Installments):</b>")
-                hist_lbl.setStyleSheet("font-size: 12px; font-weight: bold; color: #0f172a; margin-top: 6px;")
+                hist_lbl.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b; margin-top: 16px; margin-bottom: 4px;")
                 paper_layout.addWidget(hist_lbl)
 
                 pay_table = QTableWidget()
                 pay_table.setColumnCount(4)
                 pay_table.setHorizontalHeaderLabels(["Date", "Payment Mode", "Amount (₹)", "Remarks / Note"])
-                pay_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
                 pay_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                pay_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
                 pay_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+                pay_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
                 pay_table.verticalHeader().setVisible(False)
+                pay_table.setStyleSheet("""
+                    QTableWidget {
+                        border: 1px solid #e2e8f0;
+                        background-color: #ffffff;
+                        gridline-color: #f1f5f9;
+                        font-size: 12px;
+                    }
+                    QHeaderView::section {
+                        background-color: #f1f5f9;
+                        color: #1e293b;
+                        font-weight: bold;
+                        font-size: 11px;
+                        padding: 6px 10px;
+                        border: none;
+                        border-bottom: 1px solid #cbd5e1;
+                    }
+                    QTableWidget::item {
+                        padding: 6px 10px;
+                    }
+                """)
                 pay_table.setRowCount(len(job_payments))
                 for idx, jp in enumerate(job_payments):
-                    pay_table.setItem(idx, 0, QTableWidgetItem(jp.date.strftime("%Y-%m-%d")))
-                    pay_table.setItem(idx, 1, QTableWidgetItem(jp.payment_mode))
+                    # Set explicit row height for generous readability
+                    pay_table.setRowHeight(idx, 34)
+
+                    d_item = QTableWidgetItem(jp.date.strftime("%Y-%m-%d"))
+                    d_item.setTextAlignment(Qt.AlignCenter)
+                    pay_table.setItem(idx, 0, d_item)
+
+                    m_item = QTableWidgetItem(jp.payment_mode)
+                    m_item.setTextAlignment(Qt.AlignCenter)
+                    pay_table.setItem(idx, 1, m_item)
+
                     amt_item = QTableWidgetItem(f"₹{format_inr(jp.amount)}")
                     amt_item.setForeground(Qt.darkGreen)
+                    amt_font = amt_item.font()
+                    amt_font.setBold(True)
+                    amt_item.setFont(amt_font)
+                    amt_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     pay_table.setItem(idx, 2, amt_item)
-                    pay_table.setItem(idx, 3, QTableWidgetItem(jp.remarks or "-"))
-                pay_table.setFixedHeight(min(120, 32 * len(job_payments) + 32))
+
+                    rem_item = QTableWidgetItem(jp.remarks or "-")
+                    rem_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    pay_table.setItem(idx, 3, rem_item)
+
+                # Dynamically calculate exact required height to display ALL rows without clipping or nested scrollbars
+                header_h = max(34, pay_table.horizontalHeader().sizeHint().height())
+                total_pay_h = header_h + (len(job_payments) * 34) + (pay_table.frameWidth() * 2) + 4
+                pay_table.setFixedHeight(total_pay_h)
+                pay_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+                pay_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
                 paper_layout.addWidget(pay_table)
 
-            # 7. Terms & Conditions and Thank You note
+            # 7. Terms & Conditions and Thank You note (Clean spacing after Payment History)
             terms_lbl = QLabel("<b>Terms & Conditions:</b><br/>1. 30 days warranty on spare parts replaced (does not cover physical/liquid damage).<br/>2. Please collect device within 15 days of repair completion.")
-            terms_lbl.setStyleSheet("font-size: 10px; color: #64748b; line-height: 1.4; margin-top: 10px;")
+            terms_lbl.setStyleSheet("font-size: 10px; color: #64748b; line-height: 1.4; margin-top: 16px; margin-bottom: 4px;")
             paper_layout.addWidget(terms_lbl)
 
             thank_lbl = QLabel("<b>Thank you! Visit again.</b>")
