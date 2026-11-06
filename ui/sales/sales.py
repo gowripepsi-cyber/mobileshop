@@ -246,18 +246,10 @@ class SalesView(QWidget):
         self.product_code_input.setStyleSheet(input_style)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
         self.product_code_input._skip_enter_nav = True
-        f_pcode = make_field("Product Code", self.product_code_input, width=90)
+        f_pcode = make_field("Product Code", self.product_code_input, width=95)
         item_row.addWidget(f_pcode)
 
-        # 2. Category Filter (160px width)
-        self.category_combo = SearchableComboBox()
-        self.category_combo.setPlaceholderText("Select Category")
-        self.category_combo.setStyleSheet(input_style)
-        self.category_combo.currentIndexChanged.connect(self.filter_products_by_category)
-        f_pcat = make_field("Category", self.category_combo, width=160)
-        item_row.addWidget(f_pcat)
-
-        # 3. Item Name + Quick Add Button
+        # 2. Item Name + Quick Add Button (Expanded across available space)
         self.product_combo = SearchableProductComboBox()
         self.product_combo.setPlaceholderText("Select / Search Product")
         self.product_combo.currentIndexChanged.connect(self.update_rate_on_product_change)
@@ -284,22 +276,22 @@ class SalesView(QWidget):
         f_pname = make_field("Item Name *", prod_item_widget)
         item_row.addWidget(f_pname, 1)
 
-        # 4. Quantity
+        # 3. Quantity
         self.qty_input = QSpinBox()
         self.qty_input.setRange(1, 100000)
         self.qty_input.setValue(1)
         self.qty_input.setStyleSheet(input_style)
-        f_pqty = make_field("Quantity", self.qty_input, width=70)
+        f_pqty = make_field("Quantity", self.qty_input, width=75)
         item_row.addWidget(f_pqty)
 
-        # 5. Unit
+        # 4. Unit
         self.unit_combo = QComboBox()
         self.unit_combo.setStyleSheet(input_style)
         self.load_units()
         f_punit = make_field("Unit", self.unit_combo, width=75)
         item_row.addWidget(f_punit)
 
-        # 6. Rate (per unit)
+        # 5. Rate (per unit)
         self.rate_input = QDoubleSpinBox()
         self.rate_input.setRange(0.0, 9999999.0)
         self.rate_input.setValue(0.0)
@@ -457,12 +449,11 @@ class SalesView(QWidget):
         self.history_table.verticalScrollBar().valueChanged.connect(self.handle_history_scroll)
 
     def filter_products_by_category(self):
-        cat_name = self.category_combo.currentText().strip()
-        filtered_products = []
-        for prod_id, p in self.products_cache.items():
-            if not cat_name or cat_name == "-- All Categories --" or p.category == cat_name:
-                filtered_products.append(p)
-        self.product_combo.set_products(filtered_products)
+        self.product_combo.set_products(list(self.products_cache.values()))
+        placeholder = "Select / Search Product"
+        self.product_combo.setPlaceholderText(placeholder)
+        if self.product_combo.lineEdit():
+            self.product_combo.lineEdit().setPlaceholderText(placeholder)
         self.update_rate_on_product_change()
         if hasattr(self, 'add_product_btn'):
             self.check_product_match()
@@ -553,9 +544,7 @@ class SalesView(QWidget):
         typed_text = self.product_combo.currentText().strip()
         if typed_text == "Select Product":
             typed_text = ""
-        current_cat = self.category_combo.currentText().strip()
-        def_cat = current_cat if (current_cat and current_cat != "-- All Categories --") else None
-        dlg = ProductDialog(initial_name=typed_text, default_category=def_cat, parent=self)
+        dlg = ProductDialog(initial_name=typed_text, parent=self)
         if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_product_id'):
             self.refresh_data()
             self.product_combo.select_product_id(dlg.saved_product_id)
@@ -589,20 +578,10 @@ class SalesView(QWidget):
 
             # 2. Block combo box signals during update
             self.customer_combo.blockSignals(True)
-            self.category_combo.blockSignals(True)
             self.bank_combo.blockSignals(True)
 
             # Load Customers
             self.load_customers()
-
-            # Load Categories
-            self.category_combo.clear()
-            self.category_combo.addItem("-- All Categories --")
-            categories = session.query(Category).all()
-            for c in categories:
-                self.category_combo.addItem(c.name)
-            self.category_combo.setCurrentIndex(-1)
-            self.category_combo.update_completer()
 
             # Load Bank Accounts
             self.bank_combo.clear()
@@ -620,7 +599,6 @@ class SalesView(QWidget):
 
             # 3. Unblock signals and filter/load
             self.customer_combo.blockSignals(False)
-            self.category_combo.blockSignals(False)
             self.bank_combo.blockSignals(False)
 
             # Load global GST setting
