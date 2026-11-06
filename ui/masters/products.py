@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
                              QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter, QTabWidget)
 from PySide6.QtCore import Qt
 from database import Session
-from models import Product, Category, Brand, ProductModel
+from models import Product, Category, Brand, ProductModel, Unit
 from utils.ui_helpers import enable_quick_add_auto_select
 
 class ModelEditDialog(QDialog):
@@ -716,7 +716,7 @@ class ProductDialog(QDialog):
         self.initial_name = initial_name
         self.default_category = default_category
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        self.setFixedSize(450, 240)
+        self.setFixedSize(460, 295)
         self.init_ui()
 
     def load_categories(self, select_category=None):
@@ -800,6 +800,60 @@ class ProductDialog(QDialog):
         elif self.brand_combo.count() > 0:
             self.brand_combo.setCurrentIndex(0)
 
+    def load_units(self, select_unit=None):
+        current_txt = select_unit if select_unit else (self.unit_combo.currentText() if hasattr(self, 'unit_combo') else "")
+        self.unit_combo.blockSignals(True)
+        self.unit_combo.clear()
+        session = Session()
+        try:
+            units = session.query(Unit).order_by(Unit.name.asc()).all()
+            for u in units:
+                self.unit_combo.addItem(u.name)
+        except Exception as e:
+            print(f"Error loading units in dialog: {e}")
+        finally:
+            session.close()
+
+        if self.unit_combo.count() == 0:
+            self.unit_combo.addItems(["Pcs", "Box", "Kg", "Grams", "Ltr", "Mtr", "Nos", "Pack", "Set"])
+
+        self.unit_combo.blockSignals(False)
+
+        completer = QCompleter(self.unit_combo.model(), self.unit_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.unit_combo.setCompleter(completer)
+
+        target_unit = current_txt or (self.product.unit if self.product else "Pcs")
+        if target_unit:
+            idx = self.unit_combo.findText(target_unit)
+            if idx >= 0:
+                self.unit_combo.setCurrentIndex(idx)
+            else:
+                self.unit_combo.setEditText(target_unit)
+        elif self.unit_combo.count() > 0:
+            pcs_idx = self.unit_combo.findText("Pcs")
+            if pcs_idx >= 0:
+                self.unit_combo.setCurrentIndex(pcs_idx)
+            else:
+                self.unit_combo.setCurrentIndex(0)
+
+    def quick_add_unit(self):
+        from ui.masters.units import UnitDialog
+        dlg = UnitDialog(parent=self)
+        if dlg.exec() == QDialog.Accepted and getattr(dlg, 'saved_unit_id', None):
+            session = Session()
+            try:
+                saved_u = session.query(Unit).get(dlg.saved_unit_id)
+                saved_name = saved_u.name if saved_u else None
+            except Exception:
+                saved_name = None
+            finally:
+                session.close()
+            if saved_name:
+                self.load_units(select_unit=saved_name)
+
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -843,12 +897,36 @@ class ProductDialog(QDialog):
 
         self.brand_input = self.brand_combo.lineEdit()
 
+        # Unit combo with quick add button
+        unit_layout = QHBoxLayout()
+        unit_layout.setContentsMargins(0, 0, 0, 0)
+        unit_layout.setSpacing(6)
+
+        self.unit_combo = QComboBox()
+        self.unit_combo.setEditable(True)
+        self.unit_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.unit_combo.setPlaceholderText("Select or enter unit (e.g. Pcs, Box)")
+        enable_quick_add_auto_select(self.unit_combo)
+
+        self.add_unit_btn = QPushButton("+")
+        self.add_unit_btn.setToolTip("Add new unit")
+        self.add_unit_btn.setProperty("class", "btn-quick-add")
+        self.add_unit_btn.setFixedSize(36, 36)
+        self.add_unit_btn.clicked.connect(self.quick_add_unit)
+
+        unit_layout.addWidget(self.unit_combo, 1)
+        unit_layout.addWidget(self.add_unit_btn)
+
+        init_unit = self.product.unit if self.product else "Pcs"
+        self.load_units(select_unit=init_unit)
+
         if not self.product and self.initial_name:
             self.name_input.setText(self.initial_name)
 
         form_layout.addRow("Product Name *:", self.name_input)
         form_layout.addRow("Category *:", cat_layout)
         form_layout.addRow("Brand / Model *:", self.brand_combo)
+        form_layout.addRow("Unit *:", unit_layout)
 
         layout.addLayout(form_layout)
 
@@ -875,11 +953,18 @@ class ProductDialog(QDialog):
                     self.brand_combo.setCurrentIndex(b_idx)
                 else:
                     self.brand_combo.setEditText(brand_val)
+            unit_val = self.product.unit or "Pcs"
+            u_idx = self.unit_combo.findText(unit_val)
+            if u_idx >= 0:
+                self.unit_combo.setCurrentIndex(u_idx)
+            else:
+                self.unit_combo.setEditText(unit_val)
 
     def handle_save(self):
         name = self.name_input.text().strip()
         category = self.category_combo.currentText().strip() or "General"
         brand_model = self.brand_combo.currentText().strip()
+        unit = self.unit_combo.currentText().strip() or "Pcs"
 
         if not name:
             QMessageBox.warning(self, "Validation Error", "Product Name is required.")
@@ -889,6 +974,11 @@ class ProductDialog(QDialog):
         if not brand_model:
             QMessageBox.warning(self, "Validation Error", "Brand / Model is required.")
             self.brand_combo.setFocus()
+            return
+
+        if not unit:
+            QMessageBox.warning(self, "Validation Error", "Unit is required.")
+            self.unit_combo.setFocus()
             return
 
         session = Session()
@@ -902,6 +992,7 @@ class ProductDialog(QDialog):
                 prod.category = category
                 prod.brand = brand_model
                 prod.model = brand_model
+                prod.unit = unit
                 self.saved_product_id = prod.id
                 self.saved_product_name = prod.name
             else:
@@ -911,7 +1002,7 @@ class ProductDialog(QDialog):
                     category=category,
                     brand=brand_model,
                     model=brand_model,
-                    unit='Pcs',
+                    unit=unit,
                     purchase_price=0.0,
                     selling_price=0.0,
                     stock_qty=0,
@@ -935,6 +1026,12 @@ class ProductDialog(QDialog):
                 if not b_obj:
                     session.add(Brand(name=brand_model))
 
+            # Auto-save unit into Unit table if new
+            if unit:
+                u_obj = session.query(Unit).filter(Unit.name.ilike(unit)).first()
+                if not u_obj:
+                    session.add(Unit(name=unit, description=unit))
+
             session.commit()
             self.accept()
         except Exception as e:
@@ -948,6 +1045,7 @@ class ProductsView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
+        self.refresh_data()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -994,18 +1092,26 @@ class ProductsView(QWidget):
         self.categories_btn.clicked.connect(self.open_categories)
         top_bar.addWidget(self.categories_btn, 1)
 
+        self.units_btn = QPushButton("📏 Units")
+        self.units_btn.setToolTip("Manage Units (Ctrl+Shift+U)")
+        self.units_btn.setProperty("class", "btn-secondary")
+        self.units_btn.setFixedHeight(38)
+        self.units_btn.clicked.connect(self.open_units)
+        top_bar.addWidget(self.units_btn, 1)
+
         layout.addLayout(top_bar)
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Product Name", "Category", "Brand / Model", "Current Stock"
+            "ID", "Product Name", "Category", "Brand / Model", "Unit", "Current Stock"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -1021,6 +1127,18 @@ class ProductsView(QWidget):
         else:
             from ui.masters.categories import CategoryManagerDialog
             dlg = CategoryManagerDialog(parent=self)
+            dlg.exec()
+            self.refresh_data()
+
+    def open_units(self):
+        parent_widget = self.parent()
+        if hasattr(parent_widget, 'units_view'):
+            parent_widget.tabs.setCurrentWidget(parent_widget.units_view)
+        elif hasattr(self.window(), 'open_master_tab'):
+            self.window().open_master_tab(4)
+        else:
+            from ui.masters.units import UnitDialog
+            dlg = UnitDialog(parent=self)
             dlg.exec()
             self.refresh_data()
 
@@ -1070,13 +1188,17 @@ class ProductsView(QWidget):
 
                 self.table.setItem(i, 3, QTableWidgetItem(p.brand_model or p.brand or "-"))
 
+                unit_item = QTableWidgetItem(p.unit or "Pcs")
+                unit_item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(i, 4, unit_item)
+
                 stock_item = QTableWidgetItem(str(p.stock_qty))
                 stock_item.setTextAlignment(Qt.AlignCenter)
                 if p.stock_qty <= 0:
                     stock_item.setForeground(Qt.red)
                 elif p.stock_qty <= p.low_stock_limit:
                     stock_item.setForeground(Qt.yellow)
-                self.table.setItem(i, 4, stock_item)
+                self.table.setItem(i, 5, stock_item)
 
         except Exception as e:
             print(f"Error loading products: {e}")

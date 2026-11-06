@@ -117,11 +117,11 @@ class PurchaseView(QWidget):
         top_grid.setColumnStretch(2, 2)
         top_grid.setColumnStretch(3, 1)
 
-        # 1. Invoice Number
+        # 1. Invoice Number (Supplier Invoice / Bill No.)
         self.invoice_input = QLineEdit()
-        self.invoice_input.setPlaceholderText("e.g. PUR-1004")
+        self.invoice_input.setPlaceholderText("Enter Supplier Invoice No.")
         self.invoice_input.setStyleSheet(input_style)
-        f_invoice = make_field("Invoice Number *", self.invoice_input)
+        f_invoice = make_field("Supplier Invoice No. *", self.invoice_input)
 
         # 2. Invoice Date
         self.date_input = QDateEdit()
@@ -686,13 +686,7 @@ class PurchaseView(QWidget):
             for b in banks:
                 self.bank_combo.addItem(f"{b.bank_name} ({b.account_name})", b.id)
 
-            # Suggest an invoice number (if not editing)
-            if not self.editing_purchase_id:
-                last_p = session.query(PurchaseMaster).order_by(PurchaseMaster.id.desc()).first()
-                if last_p:
-                    self.invoice_input.setText(f"PUR-{last_p.id + 1001}")
-                else:
-                    self.invoice_input.setText("PUR-1001")
+            # Supplier invoice number is provided by supplier on the bill; left as an empty text box
 
             # 3. Unblock signals and filter/load
             self.supplier_combo.blockSignals(False)
@@ -1139,7 +1133,7 @@ class PurchaseView(QWidget):
         supp_id = self.supplier_combo.currentData()
         
         if not invoice_no:
-            QMessageBox.warning(self, "Validation Error", "Please enter Invoice Number.")
+            QMessageBox.warning(self, "Validation Error", "Please enter Supplier Invoice Number.")
             return
         if not self.bill_items:
             QMessageBox.warning(self, "Validation Error", "Please add at least one item to the bill.")
