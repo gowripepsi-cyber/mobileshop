@@ -677,30 +677,13 @@ def generate_service_pdf(service_data, file_path):
     story.append(header_table)
     story.append(Spacer(1, 15))
 
-    # 2. Customer & Device details
+    # 2. Customer details (top-left, no device details in top-right)
     details_data = [
-        [
-            Paragraph("<b>CUSTOMER DETAILS:</b>", style_bold), 
-            Paragraph("<b>DEVICE DETAILS:</b>", style_bold)
-        ],
-        [
-            Paragraph(f"Name: {service_data['customer_name']}", style_sub),
-            Paragraph(f"Device Detail: {service_data['device_model']}", style_sub)
-        ],
-        [
-            Paragraph(f"Mobile: {service_data['customer_mobile']}", style_sub),
-            Paragraph(f"Device ID: {service_data.get('imei') or '-'}", style_sub)
-        ],
-        [
-            Paragraph("", style_sub),
-            Paragraph(f"Technician: {service_data['technician'] or '-'}", style_sub)
-        ],
-        [
-            Paragraph("", style_sub),
-            Paragraph(f"Complaint: {service_data['complaint'] or '-'}", style_sub)
-        ]
+        [Paragraph("<b>CUSTOMER DETAILS:</b>", style_bold)],
+        [Paragraph(f"Name: {service_data['customer_name']}", style_sub)],
+        [Paragraph(f"Mobile: {service_data['customer_mobile']}", style_sub)]
     ]
-    details_table = Table(details_data, colWidths=[270, 270])
+    details_table = Table(details_data, colWidths=[540])
     details_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('LINEBELOW', (0,-1), (-1,-1), 1, colors.HexColor('#cbd5e1')),
@@ -755,7 +738,93 @@ def generate_service_pdf(service_data, file_path):
         ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
     ]))
     story.append(items_table)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 14))
+
+    # 3a. Reorganized Device, Technician & Complaint Information Block
+    # Center-aligned, visually distinct, invoice-styled block immediately BELOW the table
+    style_sec_title = ParagraphStyle(
+        'SecTitleService',
+        fontName=FONT_BOLD,
+        fontSize=9.5,
+        leading=13,
+        textColor=colors.HexColor('#1e1b4b')
+    )
+    style_info_head = ParagraphStyle(
+        'InfoHeadService',
+        fontName=FONT_BOLD,
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#4338ca')
+    )
+    style_info_val = ParagraphStyle(
+        'InfoValService',
+        fontName=FONT_BOLD,
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#1e293b')
+    )
+    style_complaint_text = ParagraphStyle(
+        'ComplaintTextService',
+        fontName=FONT_REGULAR,
+        fontSize=8.5,
+        leading=12,
+        textColor=colors.HexColor('#334155')
+    )
+
+    dev_model_str = service_data.get('device_model') or '-'
+    dev_id_str = service_data.get('imei') or '-'
+    tech_str = service_data.get('technician') or '-'
+    complaint_str = service_data.get('complaint') or '-'
+    status_str = service_data.get('status') or '-'
+
+    info_block_data = [
+        # Top banner title
+        [
+            Paragraph("<b>DEVICE & REPAIR SPECIFICATIONS</b>", style_sec_title),
+            ""
+        ],
+        # Section Subheaders
+        [
+            Paragraph("<b>DEVICE DETAILS</b>", style_info_head),
+            Paragraph("<b>TECHNICIAN & REPAIR STATUS</b>", style_info_head)
+        ],
+        # Row 1
+        [
+            Paragraph(f"<font color='#64748b'>Device Model / Detail:</font> <b>{dev_model_str}</b>", style_info_val),
+            Paragraph(f"<font color='#64748b'>Assigned Technician:</font> <b>{tech_str}</b>", style_info_val)
+        ],
+        # Row 2
+        [
+            Paragraph(f"<font color='#64748b'>Device ID / IMEI / Serial:</font> <b>{dev_id_str}</b>", style_info_val),
+            Paragraph(f"<font color='#64748b'>Job Status:</font> <b>{status_str}</b>", style_info_val)
+        ],
+        # Row 3: Complaint details spanning full width
+        [
+            Paragraph(f"<b>COMPLAINT & REPAIR ISSUE DETAILS:</b><br/><font color='#334155'>{complaint_str}</font>", style_complaint_text),
+            ""
+        ]
+    ]
+
+    info_table = Table(info_block_data, colWidths=[270, 270])
+    info_table.setStyle(TableStyle([
+        ('SPAN', (0, 0), (1, 0)),  # Span main title across both columns
+        ('SPAN', (0, 4), (1, 4)),  # Span complaint across both columns
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f1f5f9')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#cbd5e1')),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#cbd5e1')),
+        ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.HexColor('#e2e8f0')),
+        ('LINEBELOW', (0, 3), (-1, 3), 0.5, colors.HexColor('#e2e8f0')),
+        ('LINEBEFORE', (1, 1), (1, 3), 0.5, colors.HexColor('#e2e8f0')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+    ]))
+
+    story.append(info_table)
+    story.append(Spacer(1, 14))
 
     # 3b. Payment History Installments block
     if service_data.get('payments'):

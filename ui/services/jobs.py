@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, 
                              QFrame, QFormLayout, QDialog, QTextEdit, QDoubleSpinBox, QSpacerItem, QSizePolicy,
-                             QApplication, QScrollArea, QSpinBox, QDialogButtonBox)
+                             QApplication, QScrollArea, QSpinBox, QDialogButtonBox, QGridLayout)
 from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QRegularExpression
 from PySide6.QtGui import QColor, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import QCompleter
@@ -1713,16 +1713,46 @@ class ServicesView(QWidget):
 
             dialog = QDialog(self)
             dialog.setWindowTitle(f"Job Card Details - {job.job_number}")
-            dialog.setMinimumSize(600, 500)
+            dialog.setMinimumSize(680, 580)
+            dialog.resize(740, 680)
             
-            dlg_layout = QVBoxLayout(dialog)
+            main_dlg_layout = QVBoxLayout(dialog)
+            main_dlg_layout.setContentsMargins(10, 10, 10, 10)
+
+            # Scroll Area for responsive desktop & mobile viewing
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            scroll_area.setFrameShape(QFrame.NoFrame)
+            scroll_area.setStyleSheet("QScrollArea { background: transparent; border: none; }")
             
-            # Header info
-            info_frame = QFrame()
-            info_frame.setProperty("class", "CardFrame")
-            info_layout = QFormLayout(info_frame)
-            info_layout.addRow("Job Number:", QLabel(job.job_number))
-            info_layout.addRow("Date Created:", QLabel(job.created_at.strftime("%Y-%m-%d %H:%M") if job.created_at else "-"))
+            scroll_content = QWidget()
+            dlg_layout = QVBoxLayout(scroll_content)
+            dlg_layout.setContentsMargins(8, 8, 8, 8)
+            dlg_layout.setSpacing(12)
+            
+            # 1. Header info frame (Customer details on Left, Job info on Right - no Device Details here)
+            header_frame = QFrame()
+            header_frame.setProperty("class", "CardFrame")
+            header_frame_layout = QHBoxLayout(header_frame)
+            header_frame_layout.setContentsMargins(14, 12, 14, 12)
+            header_frame_layout.setSpacing(20)
+
+            # Left side: Customer Details
+            cust_box = QFormLayout()
+            cust_title = QLabel("CUSTOMER DETAILS")
+            cust_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 4px;")
+            cust_box.addRow(cust_title)
+            cust_box.addRow("Customer Name:", QLabel(f"<b>{job.customer_name}</b>"))
+            cust_box.addRow("Customer Contact:", QLabel(job.mobile or "-"))
+            header_frame_layout.addLayout(cust_box, 1)
+
+            # Right side: Job Identifiers
+            job_box = QFormLayout()
+            job_title = QLabel("JOB DETAILS")
+            job_title.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 4px;")
+            job_box.addRow(job_title)
+            job_box.addRow("Job Number:", QLabel(f"<b>{job.job_number}</b>"))
+            job_box.addRow("Date Created:", QLabel(job.created_at.strftime("%Y-%m-%d %H:%M") if job.created_at else "-"))
             if job.created_at:
                 diff_days = max(0, (datetime.date.today() - job.created_at.date()).days)
                 days_lbl = QLabel(f"{diff_days} Days")
@@ -1735,21 +1765,24 @@ class ServicesView(QWidget):
                         days_lbl.setStyleSheet("font-weight: bold; color: #16a34a;")
             else:
                 days_lbl = QLabel("-")
-            info_layout.addRow("Days Since Received:", days_lbl)
-            info_layout.addRow("Customer Name:", QLabel(job.customer_name))
-            info_layout.addRow("Customer Contact:", QLabel(job.mobile))
-            info_layout.addRow("Device Detail:", QLabel(job.device_model))
-            info_layout.addRow("Device ID:", QLabel(job.imei or "-"))
-            info_layout.addRow("Complaint details:", QLabel(job.complaint or "-"))
-            info_layout.addRow("Mechanic / Attender:", QLabel(job.technician or "-"))
-            info_layout.addRow("Job Status:", QLabel(job.status))
-            dlg_layout.addWidget(info_frame)
+            job_box.addRow("Days Since Received:", days_lbl)
+            job_box.addRow("Current Status:", QLabel(f"<b>{job.status}</b>"))
+            header_frame_layout.addLayout(job_box, 1)
+
+            dlg_layout.addWidget(header_frame)
             
-            # Items table
+            # 2. Service / Part Description Table (Displayed prominently first)
+            table_sec_lbl = QLabel("Service / Part Description")
+            table_sec_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a; margin-top: 4px;")
+            dlg_layout.addWidget(table_sec_lbl)
+
             items_table = QTableWidget()
             items_table.setColumnCount(4)
-            items_table.setHorizontalHeaderLabels(["Description", "Qty", "Rate (₹)", "Total (₹)"])
+            items_table.setHorizontalHeaderLabels(["Service / Part Description", "Qty", "Rate (₹)", "Total (₹)"])
             items_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            items_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+            items_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+            items_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
             items_table.verticalHeader().setVisible(False)
             
             # Row items list
@@ -1764,11 +1797,91 @@ class ServicesView(QWidget):
             items_table.setRowCount(len(items))
             for i, (desc, qty, rate, subtotal) in enumerate(items):
                 items_table.setItem(i, 0, QTableWidgetItem(desc))
-                items_table.setItem(i, 1, QTableWidgetItem(str(qty)))
-                items_table.setItem(i, 2, QTableWidgetItem(f"{rate:.2f}"))
-                items_table.setItem(i, 3, QTableWidgetItem(f"{subtotal:.2f}"))
+                q_item = QTableWidgetItem(str(qty))
+                q_item.setTextAlignment(Qt.AlignCenter)
+                items_table.setItem(i, 1, q_item)
+                r_item = QTableWidgetItem(f"₹{format_inr(rate)}")
+                r_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                items_table.setItem(i, 2, r_item)
+                t_item = QTableWidgetItem(f"₹{format_inr(subtotal)}")
+                t_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                items_table.setItem(i, 3, t_item)
                 
+            items_table.setFixedHeight(min(160, 36 * len(items) + 36))
             dlg_layout.addWidget(items_table)
+
+            # 3. Center-aligned Device, Technician & Complaint Information Block
+            # Positioned immediately BELOW the Service / Part Description table
+            info_block = QFrame()
+            info_block.setObjectName("repair_info_block")
+            info_block.setStyleSheet("""
+                QFrame#repair_info_block {
+                    background-color: #f8fafc;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                }
+                QFrame#repair_info_block QLabel {
+                    border: none;
+                    background: transparent;
+                }
+            """)
+            info_block_layout = QVBoxLayout(info_block)
+            info_block_layout.setContentsMargins(18, 14, 18, 14)
+            info_block_layout.setSpacing(10)
+
+            block_title = QLabel("DEVICE & REPAIR SPECIFICATIONS")
+            block_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;")
+            info_block_layout.addWidget(block_title)
+
+            details_grid = QGridLayout()
+            details_grid.setHorizontalSpacing(40)
+            details_grid.setVerticalSpacing(8)
+
+            # Col 0: Device Details
+            sec1_head = QLabel("DEVICE DETAILS")
+            sec1_head.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; text-transform: uppercase;")
+            details_grid.addWidget(sec1_head, 0, 0)
+
+            lbl_m = QLabel(f"<span style='color: #64748b;'>Device Model / Detail:</span> <b>{job.device_model or '-'}</b>")
+            lbl_m.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_m, 1, 0)
+
+            lbl_i = QLabel(f"<span style='color: #64748b;'>Device ID / IMEI / Serial:</span> <b>{job.imei or '-'}</b>")
+            lbl_i.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_i, 2, 0)
+
+            # Col 1: Technician Details
+            sec2_head = QLabel("TECHNICIAN & REPAIR STATUS")
+            sec2_head.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; text-transform: uppercase;")
+            details_grid.addWidget(sec2_head, 0, 1)
+
+            lbl_t = QLabel(f"<span style='color: #64748b;'>Assigned Technician:</span> <b>{job.technician or '-'}</b>")
+            lbl_t.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_t, 1, 1)
+
+            lbl_s = QLabel(f"<span style='color: #64748b;'>Job Status:</span> <b>{job.status or '-'}</b>")
+            lbl_s.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_s, 2, 1)
+
+            info_block_layout.addLayout(details_grid)
+
+            # Divider line inside card
+            c_div = QFrame()
+            c_div.setFrameShape(QFrame.HLine)
+            c_div.setStyleSheet("border: none; border-top: 1px solid #e2e8f0; margin-top: 4px; margin-bottom: 4px;")
+            info_block_layout.addWidget(c_div)
+
+            # Complaint Details (full width, wrapping long text cleanly)
+            sec3_head = QLabel("COMPLAINT & ISSUE DETAILS")
+            sec3_head.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; text-transform: uppercase;")
+            info_block_layout.addWidget(sec3_head)
+
+            lbl_c = QLabel(job.complaint or "-")
+            lbl_c.setWordWrap(True)
+            lbl_c.setStyleSheet("font-size: 12px; color: #334155; line-height: 1.4;")
+            info_block_layout.addWidget(lbl_c)
+
+            dlg_layout.addWidget(info_block)
             
             # Totals
             totals_frame = QFrame()
@@ -1803,20 +1916,27 @@ class ServicesView(QWidget):
                 pay_table.setFixedHeight(min(140, 36 * len(job_payments) + 32))
                 dlg_layout.addWidget(pay_table)
             
-            # Bottom Buttons (Print & Close)
+            scroll_area.setWidget(scroll_content)
+            main_dlg_layout.addWidget(scroll_area, 1)
+
+            # Pinned Bottom Buttons (Print & Close) - Always visible
             btn_layout = QHBoxLayout()
+            btn_layout.setContentsMargins(10, 8, 10, 4)
             btn_layout.addStretch()
             
             print_btn = QPushButton("Print Invoice")
+            print_btn.setProperty("class", "btn-success")
+            print_btn.setStyleSheet("font-weight: bold; padding: 8px 22px; font-size: 13px;")
             print_btn.clicked.connect(lambda: self.print_job_invoice(job_number))
             btn_layout.addWidget(print_btn)
             
             close_btn = QPushButton("Close")
             close_btn.setProperty("class", "btn-secondary")
+            close_btn.setStyleSheet("padding: 8px 20px; font-size: 13px;")
             close_btn.clicked.connect(dialog.accept)
             btn_layout.addWidget(close_btn)
             
-            dlg_layout.addLayout(btn_layout)
+            main_dlg_layout.addLayout(btn_layout)
             
             dialog.exec()
         except Exception as e:
