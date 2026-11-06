@@ -855,12 +855,44 @@ def generate_service_pdf(service_data, file_path):
         story.append(p_table)
         story.append(Spacer(1, 12))
 
-    # 4. Summary / Totals block
+    # 4. Summary / Totals block (Separate Advance Payment Display)
+    adv_amt = float(service_data.get('advance_payment') or 0.0)
+    total_paid = float(service_data.get('paid_amount') or 0.0)
+    addl_paid = max(0.0, total_paid - adv_amt)
+
     summary_data = [
-        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {format_inr(service_data['total_amount'])}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Amount Paid:", style_bold), Paragraph(f"Rs. {format_inr(service_data['paid_amount'])}", style_bold)],
-        [Paragraph("", style_sub), Paragraph("Balance Due:", style_bold), Paragraph(f"Rs. {format_inr(service_data['balance'])}", style_bold)]
+        [Paragraph("", style_sub), Paragraph("Grand Total:", style_bold), Paragraph(f"Rs. {format_inr(service_data['total_amount'])}", style_bold)]
     ]
+
+    if adv_amt > 0:
+        summary_data.append([
+            Paragraph("", style_sub),
+            Paragraph("Advance Payment Received:", style_bold),
+            Paragraph(f"Rs. {format_inr(adv_amt)}", style_bold)
+        ])
+        if addl_paid > 0:
+            summary_data.append([
+                Paragraph("", style_sub),
+                Paragraph("Additional Payments:", style_bold),
+                Paragraph(f"Rs. {format_inr(addl_paid)}", style_bold)
+            ])
+            summary_data.append([
+                Paragraph("", style_sub),
+                Paragraph("Total Amount Paid:", style_bold),
+                Paragraph(f"Rs. {format_inr(total_paid)}", style_bold)
+            ])
+    else:
+        summary_data.append([
+            Paragraph("", style_sub),
+            Paragraph("Amount Paid:", style_bold),
+            Paragraph(f"Rs. {format_inr(total_paid)}", style_bold)
+        ])
+
+    summary_data.append([
+        Paragraph("", style_sub),
+        Paragraph("Balance Due:", style_bold),
+        Paragraph(f"Rs. {format_inr(service_data['balance'])}", style_bold)
+    ])
     
     summary_table = Table(summary_data, colWidths=[300, 140, 100])
     summary_table.setStyle(TableStyle([

@@ -177,6 +177,7 @@ class ServiceJob(Base):
     technician = Column(String)
     status = Column(String, default='Received')  # Received, Under Repair, Ready, Delivered
     service_charge = Column(Float, default=0.0)
+    advance_payment = Column(Float, default=0.0)
     total_amount = Column(Float, default=0.0)
     paid_amount = Column(Float, default=0.0)
     balance = Column(Float, default=0.0)

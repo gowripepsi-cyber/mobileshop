@@ -125,6 +125,14 @@ class JobCardDialog(QDialog):
 
         # Backward compatibility alias
         self.technician_input = self.technician_combo.lineEdit()
+
+        # Advance Payment (Rs.)
+        self.advance_payment_input = QLineEdit()
+        self.advance_payment_input.setPlaceholderText("Enter advance amount (optional)")
+        validator = QRegularExpressionValidator(QRegularExpression(r"^\d{0,9}(\.\d{0,2})?$"))
+        self.advance_payment_input.setValidator(validator)
+        self.advance_payment_input.setText("0.00")
+        self.advance_payment_input.setStyleSheet("font-size: 13px; font-weight: bold;")
         
         # Only show Job Status dropdown when editing an existing job card (new jobs are always 'Received' by default)
         if self.job:
@@ -140,6 +148,7 @@ class JobCardDialog(QDialog):
         form_layout.addRow("Device ID:", self.imei_input)
         form_layout.addRow("Complaint details:", self.complaint_input)
         form_layout.addRow("Mechanic / Attender:", self.technician_combo)
+        form_layout.addRow("Advance Payment (Rs.):", self.advance_payment_input)
         if self.status_combo:
             form_layout.addRow("Job Status:", self.status_combo)
 
@@ -168,6 +177,8 @@ class JobCardDialog(QDialog):
             self.device_model_input.setText(self.job.device_model)
             self.imei_input.setText(self.job.imei)
             self.complaint_input.setPlainText(self.job.complaint or "")
+            adv_val = getattr(self.job, 'advance_payment', 0.0) or 0.0
+            self.advance_payment_input.setText(f"{adv_val:.2f}")
             if self.status_combo:
                 self.status_combo.setCurrentText(self.job.status or "Received")
         else:
@@ -378,18 +389,41 @@ class JobCardDialog(QDialog):
             QMessageBox.warning(self, "Validation Error", "Job ID must be exactly 6 digits.")
             return
 
+        # Advance payment validation
+        adv_text = self.advance_payment_input.text().strip()
+        try:
+            adv_val = float(adv_text) if adv_text else 0.0
+        except ValueError:
+            QMessageBox.warning(self, "Validation Error", "Please enter a valid numeric advance payment amount.")
+            return
+
+        if adv_val < 0:
+            QMessageBox.warning(self, "Validation Error", "Advance payment cannot be negative.")
+            return
+
+        if adv_val > 50000:
+            confirm_adv = QMessageBox.question(
+                self, "Confirm Advance Amount",
+                f"You entered an advance payment of ₹{format_inr(adv_val)}. Is this amount correct?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if confirm_adv != QMessageBox.Yes:
+                return
+
         session = Session()
         try:
+            from sqlalchemy import func
             # 1. Handle Customer Account Creation / Association
             cust = session.query(Customer).filter_by(mobile=mobile).first()
             if not cust:
                 new_cust = Customer(name=name, mobile=mobile, address="Logged via Service Center")
                 session.add(new_cust)
-                session.commit()
+                session.flush()
 
             if self.job:
                 # Update
                 db_job = session.query(ServiceJob).get(self.job.id)
+                old_adv = float(getattr(db_job, 'advance_payment', 0.0) or 0.0)
                 db_job.mobile = mobile
                 db_job.customer_name = name
                 db_job.device_model = model
@@ -397,6 +431,54 @@ class JobCardDialog(QDialog):
                 db_job.complaint = complaint
                 db_job.technician = tech
                 db_job.status = status
+
+                if abs(adv_val - old_adv) > 0.001:
+                    db_job.advance_payment = adv_val
+                    
+                    # Update or create Payment record
+                    adv_p = session.query(Payment).filter(
+                        Payment.job_id == db_job.id,
+                        Payment.remarks.like("%Advance payment%")
+                    ).first()
+                    
+                    if adv_p:
+                        adv_p.amount = adv_val
+                    elif adv_val > 0:
+                        adv_p = Payment(
+                            date=datetime.date.today(),
+                            party_type='customer',
+                            party_id=cust.id if cust else 1,
+                            amount=adv_val,
+                            payment_mode='Cash',
+                            job_id=db_job.id,
+                            remarks=f"Advance payment for job card {db_job.job_number}"
+                        )
+                        session.add(adv_p)
+                        
+                    # Update or create CashTransaction
+                    cash_tx = session.query(CashTransaction).filter(
+                        CashTransaction.source_type == 'service',
+                        CashTransaction.source_id == db_job.id,
+                        CashTransaction.description.like("%Advance payment%")
+                    ).first()
+                    
+                    if cash_tx:
+                        cash_tx.amount = adv_val
+                    elif adv_val > 0:
+                        cash_tx = CashTransaction(
+                            date=datetime.date.today(),
+                            transaction_type='in',
+                            amount=adv_val,
+                            source_type='service',
+                            source_id=db_job.id,
+                            description=f"Advance payment for repair job card {db_job.job_number}"
+                        )
+                        session.add(cash_tx)
+
+                    # Recompute total paid and balance
+                    all_payments = session.query(func.sum(Payment.amount)).filter_by(job_id=db_job.id).scalar() or 0.0
+                    db_job.paid_amount = all_payments
+                    db_job.balance = max(0.0, float(db_job.total_amount or 0.0) - all_payments)
             else:
                 # Add
                 # Check uniqueness
@@ -409,9 +491,37 @@ class JobCardDialog(QDialog):
                 new_job = ServiceJob(
                     job_number=job_num, customer_name=name, mobile=mobile,
                     device_model=model, imei=imei, complaint=complaint,
-                    technician=tech, status=status
+                    technician=tech, status=status,
+                    advance_payment=adv_val,
+                    paid_amount=adv_val,
+                    total_amount=0.0,
+                    balance=0.0
                 )
                 session.add(new_job)
+                session.flush()
+
+                if adv_val > 0:
+                    adv_payment = Payment(
+                        date=datetime.date.today(),
+                        party_type='customer',
+                        party_id=cust.id if cust else 1,
+                        amount=adv_val,
+                        payment_mode='Cash',
+                        job_id=new_job.id,
+                        remarks=f"Advance payment for job card {new_job.job_number}"
+                    )
+                    session.add(adv_payment)
+                    session.flush()
+
+                    cash_tx = CashTransaction(
+                        date=datetime.date.today(),
+                        transaction_type='in',
+                        amount=adv_val,
+                        source_type='service',
+                        source_id=new_job.id,
+                        description=f"Advance payment for repair job card {new_job.job_number}"
+                    )
+                    session.add(cash_tx)
 
             session.commit()
             self.accept()
@@ -667,9 +777,25 @@ class BillingDialog(QDialog):
         total_card_layout.addWidget(self.total_lbl)
         right_content_layout.addWidget(total_card)
 
-        # Balances Row (Already Paid + Remaining Balance)
+        # Balances Row (Advance Received + Already Paid + Remaining Balance)
         bal_row = QHBoxLayout()
         bal_row.setSpacing(8)
+
+        # Advance Received Box (if advance payment was recorded)
+        adv_received = float(getattr(self.job, 'advance_payment', 0.0) or 0.0)
+        if adv_received > 0:
+            adv_card = QFrame()
+            adv_card.setStyleSheet("background-color: #f0fdf4; border: 1.5px solid #86efac; border-left: 5px solid #059669; border-radius: 10px; padding: 6px 10px;")
+            adv_card_layout = QVBoxLayout(adv_card)
+            adv_card_layout.setContentsMargins(4, 4, 4, 4)
+            adv_card_layout.setSpacing(2)
+            adv_title = QLabel("ADVANCE RECEIVED")
+            adv_title.setStyleSheet("font-size: 9px; font-weight: bold; color: #047857; text-transform: uppercase;")
+            self.advance_rec_lbl = QLabel(f"₹{format_inr(adv_received)}")
+            self.advance_rec_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #059669;")
+            adv_card_layout.addWidget(adv_title)
+            adv_card_layout.addWidget(self.advance_rec_lbl)
+            bal_row.addWidget(adv_card, 1)
         
         # Already Paid Box
         paid_card = QFrame()
@@ -1954,7 +2080,7 @@ class ServicesView(QWidget):
 
             paper_layout.addWidget(info_block)
             
-            # 5. Right-Aligned Summary & Totals Block
+            # 5. Right-Aligned Summary & Totals Block (Separate Advance Payment Display)
             totals_container = QHBoxLayout()
             totals_container.addStretch()
 
@@ -1962,29 +2088,65 @@ class ServicesView(QWidget):
             totals_box.setHorizontalSpacing(24)
             totals_box.setVerticalSpacing(6)
 
+            adv_amt = float(getattr(job, 'advance_payment', 0.0) or 0.0)
+            total_paid = float(job.paid_amount or 0.0)
+            addl_paid = max(0.0, total_paid - adv_amt)
+
+            row_idx = 0
             tot_lbl1 = QLabel("Grand Total:")
             tot_lbl1.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b;")
             tot_val1 = QLabel(f"₹{format_inr(job.total_amount)}")
             tot_val1.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b;")
             tot_val1.setAlignment(Qt.AlignRight)
-            totals_box.addWidget(tot_lbl1, 0, 0)
-            totals_box.addWidget(tot_val1, 0, 1)
+            totals_box.addWidget(tot_lbl1, row_idx, 0)
+            totals_box.addWidget(tot_val1, row_idx, 1)
+            row_idx += 1
 
-            tot_lbl2 = QLabel("Amount Paid:")
-            tot_lbl2.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b;")
-            tot_val2 = QLabel(f"₹{format_inr(job.paid_amount)}")
-            tot_val2.setStyleSheet("font-size: 12px; font-weight: bold; color: #16a34a;")
-            tot_val2.setAlignment(Qt.AlignRight)
-            totals_box.addWidget(tot_lbl2, 1, 0)
-            totals_box.addWidget(tot_val2, 1, 1)
+            if adv_amt > 0:
+                tot_lbl_adv = QLabel("Advance Payment Received:")
+                tot_lbl_adv.setStyleSheet("font-size: 12px; font-weight: bold; color: #047857;")
+                tot_val_adv = QLabel(f"₹{format_inr(adv_amt)}")
+                tot_val_adv.setStyleSheet("font-size: 12px; font-weight: bold; color: #059669;")
+                tot_val_adv.setAlignment(Qt.AlignRight)
+                totals_box.addWidget(tot_lbl_adv, row_idx, 0)
+                totals_box.addWidget(tot_val_adv, row_idx, 1)
+                row_idx += 1
+
+                if addl_paid > 0:
+                    tot_lbl_addl = QLabel("Additional Payments:")
+                    tot_lbl_addl.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b;")
+                    tot_val_addl = QLabel(f"₹{format_inr(addl_paid)}")
+                    tot_val_addl.setStyleSheet("font-size: 12px; font-weight: bold; color: #16a34a;")
+                    tot_val_addl.setAlignment(Qt.AlignRight)
+                    totals_box.addWidget(tot_lbl_addl, row_idx, 0)
+                    totals_box.addWidget(tot_val_addl, row_idx, 1)
+                    row_idx += 1
+
+                    tot_lbl_tot = QLabel("Total Amount Paid:")
+                    tot_lbl_tot.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b;")
+                    tot_val_tot = QLabel(f"₹{format_inr(total_paid)}")
+                    tot_val_tot.setStyleSheet("font-size: 12px; font-weight: bold; color: #16a34a;")
+                    tot_val_tot.setAlignment(Qt.AlignRight)
+                    totals_box.addWidget(tot_lbl_tot, row_idx, 0)
+                    totals_box.addWidget(tot_val_tot, row_idx, 1)
+                    row_idx += 1
+            else:
+                tot_lbl2 = QLabel("Amount Paid:")
+                tot_lbl2.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b;")
+                tot_val2 = QLabel(f"₹{format_inr(job.paid_amount)}")
+                tot_val2.setStyleSheet("font-size: 12px; font-weight: bold; color: #16a34a;")
+                tot_val2.setAlignment(Qt.AlignRight)
+                totals_box.addWidget(tot_lbl2, row_idx, 0)
+                totals_box.addWidget(tot_val2, row_idx, 1)
+                row_idx += 1
 
             tot_lbl3 = QLabel("Balance Due:")
             tot_lbl3.setStyleSheet("font-size: 13px; font-weight: bold; color: #1e1b4b; border-bottom: 2px solid #6366f1; padding-bottom: 3px;")
             tot_val3 = QLabel(f"₹{format_inr(job.balance)}")
             tot_val3.setStyleSheet("font-size: 13px; font-weight: bold; color: #dc2626; border-bottom: 2px solid #6366f1; padding-bottom: 3px;")
             tot_val3.setAlignment(Qt.AlignRight)
-            totals_box.addWidget(tot_lbl3, 2, 0)
-            totals_box.addWidget(tot_val3, 2, 1)
+            totals_box.addWidget(tot_lbl3, row_idx, 0)
+            totals_box.addWidget(tot_val3, row_idx, 1)
 
             totals_container.addLayout(totals_box)
             paper_layout.addLayout(totals_container)
@@ -2104,6 +2266,7 @@ class ServicesView(QWidget):
                 "status": job.status,
                 "technician": job.technician,
                 "service_charge": job.service_charge,
+                "advance_payment": float(getattr(job, 'advance_payment', 0.0) or 0.0),
                 "parts": pdf_parts,
                 "payments": pdf_payments,
                 "total_amount": job.total_amount,

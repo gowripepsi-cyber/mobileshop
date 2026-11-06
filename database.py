@@ -266,6 +266,12 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
 
+    # Schema migration: check and add advance_payment to service_jobs
+    serv_cols = [c['name'] for c in inspector.get_columns('service_jobs')]
+    if 'advance_payment' not in serv_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN advance_payment REAL DEFAULT 0.0"))
+
     # Schema migration: check and add missing GST columns to suppliers
     if 'gst' not in supp_columns:
         with engine.begin() as conn:
