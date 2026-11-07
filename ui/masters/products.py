@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
-                             QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter, QTabWidget)
+                             QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter, QTabWidget, QSpinBox)
 from PySide6.QtCore import Qt
-from database import Session
+from PySide6.QtGui import QColor
+from database import Session, Setting
 from models import Product, Category, Brand, ProductModel, Unit
 from utils.ui_helpers import enable_quick_add_auto_select
 
@@ -716,7 +717,7 @@ class ProductDialog(QDialog):
         self.initial_name = initial_name
         self.default_category = default_category
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        self.setFixedSize(460, 295)
+        self.setFixedSize(480, 345)
         self.init_ui()
 
     def load_categories(self, select_category=None):
@@ -920,6 +921,23 @@ class ProductDialog(QDialog):
         init_unit = self.product.unit if self.product else "Pcs"
         self.load_units(select_unit=init_unit)
 
+        self.low_limit_spin = QSpinBox()
+        self.low_limit_spin.setRange(0, 99999)
+        self.low_limit_spin.setFixedHeight(36)
+        self.low_limit_spin.setSuffix(" items")
+        self.low_limit_spin.setToolTip("Minimum stock threshold before triggering low stock alerts")
+
+        # Load global default low stock limit setting if adding new product
+        session_set = Session()
+        try:
+            s_lim = session_set.query(Setting).filter_by(key='low_stock_limit').first()
+            def_lim = int(s_lim.value) if s_lim and s_lim.value and s_lim.value.isdigit() else 5
+        except Exception:
+            def_lim = 5
+        finally:
+            session_set.close()
+        self.low_limit_spin.setValue(def_lim)
+
         if not self.product and self.initial_name:
             self.name_input.setText(self.initial_name)
 
@@ -927,6 +945,7 @@ class ProductDialog(QDialog):
         form_layout.addRow("Category *:", cat_layout)
         form_layout.addRow("Brand / Model *:", self.brand_combo)
         form_layout.addRow("Unit *:", unit_layout)
+        form_layout.addRow("Low Stock Alert Limit *:", self.low_limit_spin)
 
         layout.addLayout(form_layout)
 
@@ -959,12 +978,14 @@ class ProductDialog(QDialog):
                 self.unit_combo.setCurrentIndex(u_idx)
             else:
                 self.unit_combo.setEditText(unit_val)
+            self.low_limit_spin.setValue(self.product.low_stock_limit if self.product.low_stock_limit is not None else 5)
 
     def handle_save(self):
         name = self.name_input.text().strip()
         category = self.category_combo.currentText().strip() or "General"
         brand_model = self.brand_combo.currentText().strip()
         unit = self.unit_combo.currentText().strip() or "Pcs"
+        low_limit = self.low_limit_spin.value()
 
         if not name:
             QMessageBox.warning(self, "Validation Error", "Product Name is required.")
@@ -993,6 +1014,7 @@ class ProductDialog(QDialog):
                 prod.brand = brand_model
                 prod.model = brand_model
                 prod.unit = unit
+                prod.low_stock_limit = low_limit
                 self.saved_product_id = prod.id
                 self.saved_product_name = prod.name
             else:
@@ -1006,7 +1028,7 @@ class ProductDialog(QDialog):
                     purchase_price=0.0,
                     selling_price=0.0,
                     stock_qty=0,
-                    low_stock_limit=5
+                    low_stock_limit=low_limit
                 )
                 session.add(new_prod)
                 session.flush()
@@ -1103,15 +1125,16 @@ class ProductsView(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Product Name", "Category", "Brand / Model", "Unit", "Current Stock"
+            "ID", "Product Name", "Category", "Brand / Model", "Unit", "Current Stock", "Low Limit Alert"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -1196,9 +1219,20 @@ class ProductsView(QWidget):
                 stock_item.setTextAlignment(Qt.AlignCenter)
                 if p.stock_qty <= 0:
                     stock_item.setForeground(Qt.red)
+                    font = stock_item.font()
+                    font.setBold(True)
+                    stock_item.setFont(font)
                 elif p.stock_qty <= p.low_stock_limit:
-                    stock_item.setForeground(Qt.yellow)
+                    stock_item.setForeground(QColor("#f59e0b"))
+                    font = stock_item.font()
+                    font.setBold(True)
+                    stock_item.setFont(font)
                 self.table.setItem(i, 5, stock_item)
+
+                limit_val = p.low_stock_limit if p.low_stock_limit is not None else 5
+                limit_item = QTableWidgetItem(str(limit_val))
+                limit_item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(i, 6, limit_item)
 
         except Exception as e:
             print(f"Error loading products: {e}")

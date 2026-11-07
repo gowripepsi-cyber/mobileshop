@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QApplication, QWidget, QColorDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                              QPushButton, QMessageBox, QFrame, QFormLayout, QTabWidget, QFileDialog,
                              QCheckBox, QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
-                             QScrollArea, QGridLayout, QSizePolicy)
+                             QScrollArea, QGridLayout, QSizePolicy, QSpinBox)
 import os
 import shutil
 import datetime
@@ -464,10 +464,18 @@ class SettingsView(QWidget):
         self.shop_gst_input = QLineEdit()
         self.enable_gst_checkbox = QCheckBox("Enable GST Taxation System")
 
+        self.default_low_stock_spin = QSpinBox()
+        self.default_low_stock_spin.setRange(1, 9999)
+        self.default_low_stock_spin.setValue(5)
+        self.default_low_stock_spin.setFixedHeight(36)
+        self.default_low_stock_spin.setSuffix(" items")
+        self.default_low_stock_spin.setToolTip("Default low stock threshold for newly created products")
+
         form_layout.addRow("Shop / Business Name *:", self.shop_name_input)
         form_layout.addRow("Contact Number *:", self.shop_contact_input)
         form_layout.addRow("Billing Address:", self.shop_address_input)
         form_layout.addRow("Shop GSTIN:", self.shop_gst_input)
+        form_layout.addRow("Default Low Stock Alert Limit:", self.default_low_stock_spin)
         form_layout.addRow("", self.enable_gst_checkbox)
 
         self.save_shop_btn = QPushButton("Save Details")
@@ -657,6 +665,10 @@ class SettingsView(QWidget):
             if enable_gst_setting:
                 self.enable_gst_checkbox.setChecked(enable_gst_setting.value == 'true')
 
+            s_lim = session.query(Setting).filter_by(key='low_stock_limit').first()
+            if s_lim and s_lim.value and s_lim.value.isdigit():
+                self.default_low_stock_spin.setValue(int(s_lim.value))
+
             if hasattr(self, 'user_mgmt_tab'):
                 self.user_mgmt_tab.refresh_data()
 
@@ -720,6 +732,13 @@ class SettingsView(QWidget):
                 enable_gst_setting = Setting(key='enable_gst', value='false')
                 session.add(enable_gst_setting)
             enable_gst_setting.value = 'true' if self.enable_gst_checkbox.isChecked() else 'false'
+
+            s_lim = session.query(Setting).filter_by(key='low_stock_limit').first()
+            if not s_lim:
+                s_lim = Setting(key='low_stock_limit', value=str(self.default_low_stock_spin.value()))
+                session.add(s_lim)
+            else:
+                s_lim.value = str(self.default_low_stock_spin.value())
 
             session.commit()
             QMessageBox.information(self, "Success", "Shop profile details updated successfully.")
