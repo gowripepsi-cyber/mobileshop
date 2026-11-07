@@ -1088,6 +1088,12 @@ class PurchaseView(QWidget):
             taxable_amount = total
 
         paid = self.paid_input.value()
+        if paid > total + 0.001:
+            QMessageBox.warning(
+                self, "Invalid Payment",
+                f"Paid amount (₹{format_inr(paid)}) cannot exceed total bill amount (₹{format_inr(total)})!"
+            )
+            return
         balance = total - paid
         if balance < 0:
             balance = 0.0
@@ -1116,6 +1122,25 @@ class PurchaseView(QWidget):
                     QMessageBox.warning(self, "Error", "Purchase bill to update was not found.")
                     session.close()
                     return
+
+                # Check if modifying stock would cause negative stock
+                net_qty_by_prod = {}
+                for item in purchase.items:
+                    net_qty_by_prod[item.product_id] = net_qty_by_prod.get(item.product_id, 0) - item.qty
+                for item in self.bill_items:
+                    net_qty_by_prod[item["product_id"]] = net_qty_by_prod.get(item["product_id"], 0) + item["qty"]
+
+                for prod_id, net_diff in net_qty_by_prod.items():
+                    if net_diff < 0:
+                        prod = session.query(Product).get(prod_id)
+                        if prod and (prod.stock_qty + net_diff) < 0:
+                            QMessageBox.warning(
+                                self, "Insufficient Stock",
+                                f"Cannot update purchase bill: reducing quantity of '{prod.name}' by {-net_diff} "
+                                f"would result in negative stock. Current stock is {prod.stock_qty} (some items have already been sold or used)."
+                            )
+                            session.close()
+                            return
 
                 # 2. Revert Old Stock (subtracting stock received)
                 for item in purchase.items:
@@ -1580,6 +1605,23 @@ class PurchaseView(QWidget):
                 QMessageBox.warning(self, "Error", "Purchase bill not found.")
                 session.close()
                 return
+
+            # Check if reverting any item would cause negative stock
+            required_revert = {}
+            for item in purchase.items:
+                required_revert[item.product_id] = required_revert.get(item.product_id, 0) + item.qty
+
+            for prod_id, req_qty in required_revert.items():
+                prod = session.query(Product).get(prod_id)
+                if prod and prod.stock_qty < req_qty:
+                    QMessageBox.warning(
+                        self, "Cannot Delete Purchase Bill",
+                        f"Cannot delete this purchase bill because product '{prod.name}' currently has only "
+                        f"{prod.stock_qty} in stock, but this bill added {req_qty}. Some items have already been sold or used. "
+                        f"Deleting this bill would cause negative stock."
+                    )
+                    session.close()
+                    return
                 
             # Revert inventory stock (deduct stock since we received it in purchase)
             for item in purchase.items:

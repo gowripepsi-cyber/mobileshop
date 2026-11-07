@@ -752,6 +752,14 @@ class SalesReturnEntryWidget(QWidget):
 
         total = sum(item["qty"] * item["rate"] for item in self.return_items)
         refund = self.refund_input.value()
+        if refund > total + 0.001:
+            QMessageBox.warning(
+                self, "Invalid Refund",
+                f"Refund amount (₹{format_inr(refund)}) cannot exceed total return value (₹{format_inr(total)})!"
+            )
+            if hasattr(self, 'save_btn'): self.save_btn.setEnabled(True)
+            if hasattr(self, 'save_bottom_btn'): self.save_bottom_btn.setEnabled(True)
+            return
         adj = total - refund
 
         date_q = self.date_input.date()
@@ -1210,6 +1218,23 @@ class SalesReturnHistoryWidget(QWidget):
             if not ret:
                 QMessageBox.warning(self, "Error", "Return record not found.")
                 return
+
+            # Check if reverting any item would cause negative stock
+            required_revert = {}
+            for item in ret.items:
+                required_revert[item.product_id] = required_revert.get(item.product_id, 0) + item.qty
+
+            for prod_id, req_qty in required_revert.items():
+                prod = session.query(Product).get(prod_id)
+                if prod and prod.stock_qty < req_qty:
+                    QMessageBox.warning(
+                        self, "Cannot Delete Return",
+                        f"Cannot delete this return record because product '{prod.name}' currently has only "
+                        f"{prod.stock_qty} in stock, but cancelling requires deducting {req_qty}. "
+                        f"Some returned items have already been sold or used. Deleting would cause negative stock."
+                    )
+                    session.close()
+                    return
 
             # Revert stock additions
             for item in ret.items:

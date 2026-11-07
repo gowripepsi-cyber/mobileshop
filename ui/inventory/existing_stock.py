@@ -884,11 +884,28 @@ class ExistingStockView(QWidget):
                 QMessageBox.warning(self, "Error", "Stock entry record not found.")
                 return
 
+            # Check if reverting any item would cause negative stock
+            required_revert = {}
+            for itm in master.items:
+                required_revert[itm.product_id] = required_revert.get(itm.product_id, 0) + itm.qty
+
+            for prod_id, req_qty in required_revert.items():
+                prod = session.query(Product).get(prod_id)
+                if prod and prod.stock_qty < req_qty:
+                    QMessageBox.warning(
+                        self, "Cannot Revert Stock Entry",
+                        f"Cannot revert this stock entry because product '{prod.name}' currently has only "
+                        f"{prod.stock_qty} in stock, but reverting requires deducting {req_qty}. "
+                        f"Some items have already been sold or used. Reverting would cause negative stock."
+                    )
+                    session.close()
+                    return
+
             # Revert stock quantities
             for itm in master.items:
                 prod = session.query(Product).get(itm.product_id)
                 if prod:
-                    prod.stock_qty = max(0, prod.stock_qty - itm.qty)
+                    prod.stock_qty -= itm.qty
 
             session.delete(master)
             session.commit()

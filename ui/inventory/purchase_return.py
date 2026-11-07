@@ -769,6 +769,14 @@ class PurchaseReturnEntryWidget(QWidget):
 
         total = sum(item["qty"] * item["rate"] for item in self.return_items)
         refund = self.refund_input.value()
+        if refund > total + 0.001:
+            QMessageBox.warning(
+                self, "Invalid Refund",
+                f"Refund received (₹{format_inr(refund)}) cannot exceed total return value (₹{format_inr(total)})!"
+            )
+            if hasattr(self, 'save_btn'): self.save_btn.setEnabled(True)
+            if hasattr(self, 'save_bottom_btn'): self.save_bottom_btn.setEnabled(True)
+            return
         adj = total - refund
 
         date_q = self.date_input.date()

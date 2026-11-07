@@ -765,6 +765,22 @@ class SalesView(QWidget):
         rate = self.rate_input.value()
         disc = self.discount_input.value() if hasattr(self, 'discount_input') else 0.0
 
+        if qty <= 0:
+            QMessageBox.warning(self, "Invalid Quantity", "Quantity must be greater than zero.")
+            return
+        if rate < 0:
+            QMessageBox.warning(self, "Invalid Rate", "Rate cannot be negative.")
+            return
+        if disc < 0:
+            QMessageBox.warning(self, "Invalid Discount", "Discount cannot be negative.")
+            return
+        if disc > (qty * rate):
+            QMessageBox.warning(
+                self, "Invalid Discount",
+                f"Discount (₹{format_inr(disc)}) cannot exceed item total (₹{format_inr(qty * rate)})!"
+            )
+            return
+
         gst_active = getattr(self, 'gst_globally_enabled', False) and self.gst_enabled_checkbox.isChecked()
         if gst_active:
             gst_rate_text = self.gst_rate_combo.currentText().replace("%", "")
@@ -810,10 +826,18 @@ class SalesView(QWidget):
         # Check if already added (match by product_id AND unit AND gst_rate)
         for item in self.invoice_items:
             if item["product_id"] == prod_id and item.get("unit") == unit and item.get("gst_rate", 0.0) == gst_rate:
-                item["qty"] += qty
+                combined_qty = item["qty"] + qty
+                combined_disc = item.get("discount", 0.0) + disc
+                if combined_disc > (combined_qty * rate):
+                    QMessageBox.warning(
+                        self, "Invalid Discount",
+                        f"Combined discount (₹{format_inr(combined_disc)}) cannot exceed item total (₹{format_inr(combined_qty * rate)})!"
+                    )
+                    return
+                item["qty"] = combined_qty
                 item["rate"] = rate  
-                item["discount"] = disc
-                item["taxable_value"] = (item["qty"] * rate) - disc
+                item["discount"] = combined_disc
+                item["taxable_value"] = max(0.0, (item["qty"] * rate) - combined_disc)
                 item["tax_amount"] = item["taxable_value"] * (gst_rate / 100.0)
                 self.update_table()
                 self.reset_item_inputs()
@@ -829,7 +853,7 @@ class SalesView(QWidget):
             "discount": disc,
             "gst_rate": gst_rate,
             "tax_amount": tax_amount,
-            "taxable_value": taxable_value - disc
+            "taxable_value": max(0.0, taxable_value - disc)
         })
         
         self.update_table()
@@ -976,6 +1000,12 @@ class SalesView(QWidget):
             taxable_amount = total
 
         paid = self.paid_input.value()
+        if paid > total + 0.001:
+            QMessageBox.warning(
+                self, "Invalid Payment",
+                f"Paid amount (₹{format_inr(paid)}) cannot exceed total invoice amount (₹{format_inr(total)})!"
+            )
+            return
         balance = total - paid
         if balance < 0:
             balance = 0.0
@@ -1032,10 +1062,14 @@ class SalesView(QWidget):
                 sale.items.clear()
 
                 # 6. Check stock level availability for new quantities
+                req_qty_by_prod = {}
                 for item in self.invoice_items:
-                    prod = session.query(Product).get(item["product_id"])
-                    if prod.stock_qty < item["qty"]:
-                        QMessageBox.warning(self, "Stock Level Error", f"Product {prod.name} ran out of stock! Available: {prod.stock_qty}")
+                    req_qty_by_prod[item["product_id"]] = req_qty_by_prod.get(item["product_id"], 0) + item["qty"]
+
+                for p_id, req_q in req_qty_by_prod.items():
+                    prod = session.query(Product).get(p_id)
+                    if prod and prod.stock_qty < req_q:
+                        QMessageBox.warning(self, "Stock Level Error", f"Product '{prod.name}' ran out of stock! Available: {prod.stock_qty}, Requested: {req_q}")
                         session.rollback()
                         session.close()
                         return
@@ -1063,10 +1097,14 @@ class SalesView(QWidget):
                     return
 
                 # Check stock quantities for final validation
+                req_qty_by_prod = {}
                 for item in self.invoice_items:
-                    prod = session.query(Product).get(item["product_id"])
-                    if prod.stock_qty < item["qty"]:
-                        QMessageBox.warning(self, "Stock Level Error", f"Product {prod.name} ran out of stock! Available: {prod.stock_qty}")
+                    req_qty_by_prod[item["product_id"]] = req_qty_by_prod.get(item["product_id"], 0) + item["qty"]
+
+                for p_id, req_q in req_qty_by_prod.items():
+                    prod = session.query(Product).get(p_id)
+                    if prod and prod.stock_qty < req_q:
+                        QMessageBox.warning(self, "Stock Level Error", f"Product '{prod.name}' ran out of stock! Available: {prod.stock_qty}, Requested: {req_q}")
                         session.close()
                         return
 

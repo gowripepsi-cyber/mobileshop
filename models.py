@@ -1,6 +1,6 @@
 import datetime
 import json
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, validates
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Text, Boolean
 
 Base = declarative_base()
@@ -69,6 +69,18 @@ class Product(Base):
     low_stock_limit = Column(Integer, default=5)
     unit = Column(String, nullable=True, default='Pcs')
 
+    @validates('stock_qty')
+    def validate_stock_qty(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Product stock quantity cannot be negative ({value}).")
+        return value
+
+    @validates('purchase_price', 'selling_price', 'low_stock_limit')
+    def validate_product_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Product {key} cannot be negative ({value}).")
+        return value
+
     @property
     def cost_price(self):
         return self.purchase_price or 0.0
@@ -108,6 +120,12 @@ class PurchaseMaster(Base):
     supplier = relationship("Supplier", back_populates="purchases")
     items = relationship("PurchaseItem", back_populates="purchase", cascade="all, delete-orphan")
 
+    @validates('total_amount', 'paid_amount', 'balance_payable', 'taxable_amount', 'total_cgst', 'total_sgst', 'total_igst', 'total_gst')
+    def validate_purchase_master_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Purchase {key} cannot be negative ({value}).")
+        return value
+
 class PurchaseItem(Base):
     __tablename__ = 'purchase_items'
     id = Column(Integer, primary_key=True)
@@ -125,6 +143,18 @@ class PurchaseItem(Base):
     
     purchase = relationship("PurchaseMaster", back_populates="items")
     product = relationship("Product")
+
+    @validates('qty')
+    def validate_purchase_item_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Purchase item quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('rate', 'gst_rate', 'cgst_amount', 'sgst_amount', 'igst_amount', 'tax_amount', 'taxable_value')
+    def validate_purchase_item_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Purchase item {key} cannot be negative ({value}).")
+        return value
 
 class SalesMaster(Base):
     __tablename__ = 'sales_master'
@@ -146,6 +176,12 @@ class SalesMaster(Base):
     customer = relationship("Customer", back_populates="sales")
     items = relationship("SalesItem", back_populates="sales", cascade="all, delete-orphan")
 
+    @validates('total_amount', 'paid_amount', 'balance_receivable', 'taxable_amount', 'total_cgst', 'total_sgst', 'total_igst', 'total_gst')
+    def validate_sales_master_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Sales {key} cannot be negative ({value}).")
+        return value
+
 class SalesItem(Base):
     __tablename__ = 'sales_items'
     id = Column(Integer, primary_key=True)
@@ -164,6 +200,18 @@ class SalesItem(Base):
     
     sales = relationship("SalesMaster", back_populates="items")
     product = relationship("Product")
+
+    @validates('qty')
+    def validate_sales_item_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Sales item quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('rate', 'discount', 'gst_rate', 'cgst_amount', 'sgst_amount', 'igst_amount', 'tax_amount', 'taxable_value')
+    def validate_sales_item_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Sales item {key} cannot be negative ({value}).")
+        return value
 
 class ServiceJob(Base):
     __tablename__ = 'service_jobs'
@@ -187,6 +235,12 @@ class ServiceJob(Base):
     status_history = relationship("ServiceJobStatusHistory", back_populates="job", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="job", cascade="all, delete-orphan")
 
+    @validates('service_charge', 'advance_payment', 'total_amount', 'paid_amount', 'balance')
+    def validate_service_job_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Service job {key} cannot be negative ({value}).")
+        return value
+
 class ServiceJobStatusHistory(Base):
     __tablename__ = 'service_job_status_history'
     id = Column(Integer, primary_key=True)
@@ -208,6 +262,18 @@ class ServicePart(Base):
     job = relationship("ServiceJob", back_populates="parts")
     product = relationship("Product")
 
+    @validates('qty')
+    def validate_service_part_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Service part quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('cost')
+    def validate_service_part_cost(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Service part cost cannot be negative ({value}).")
+        return value
+
 class Payment(Base):
     __tablename__ = 'payments'
     id = Column(Integer, primary_key=True)
@@ -227,6 +293,12 @@ class Payment(Base):
     sales = relationship("SalesMaster")
     job = relationship("ServiceJob", back_populates="payments")
 
+    @validates('amount')
+    def validate_payment_amount(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Payment amount cannot be negative ({value}).")
+        return value
+
 class CashTransaction(Base):
     __tablename__ = 'cash_transactions'
     id = Column(Integer, primary_key=True)
@@ -236,6 +308,12 @@ class CashTransaction(Base):
     source_type = Column(String, nullable=False)  # sale, purchase, service, payment, direct
     source_id = Column(Integer, nullable=True)
     description = Column(Text)
+
+    @validates('amount')
+    def validate_cash_amount(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Cash transaction amount cannot be negative ({value}).")
+        return value
 
 class BankTransaction(Base):
     __tablename__ = 'bank_transactions'
@@ -249,6 +327,12 @@ class BankTransaction(Base):
     description = Column(Text)
     
     bank_account = relationship("BankAccount")
+
+    @validates('amount')
+    def validate_bank_amount(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Bank transaction amount cannot be negative ({value}).")
+        return value
 
 class Setting(Base):
     __tablename__ = 'settings'
@@ -299,6 +383,12 @@ class FundTransfer(Base):
     from_account = relationship("BankAccount", foreign_keys=[from_account_id])
     to_account = relationship("BankAccount", foreign_keys=[to_account_id])
 
+    @validates('amount')
+    def validate_transfer_amount(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Fund transfer amount cannot be negative ({value}).")
+        return value
+
 class DirectTransaction(Base):
     __tablename__ = 'direct_transactions'
     id = Column(Integer, primary_key=True)
@@ -310,6 +400,12 @@ class DirectTransaction(Base):
     description = Column(Text)
     
     bank_account = relationship("BankAccount")
+
+    @validates('amount')
+    def validate_direct_amount(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Direct transaction amount cannot be negative ({value}).")
+        return value
 
 class MoneyTransfer(Base):
     __tablename__ = 'money_transfers'
@@ -342,6 +438,12 @@ class MoneyTransfer(Base):
     payment_bank = relationship("BankAccount", foreign_keys=[payment_bank_id])
     payout_bank = relationship("BankAccount", foreign_keys=[payout_bank_id])
 
+    @validates('amount', 'service_charge', 'total_amount')
+    def validate_money_transfer_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Money transfer {key} cannot be negative ({value}).")
+        return value
+
 
 class SalesReturnMaster(Base):
     __tablename__ = 'sales_return_master'
@@ -357,6 +459,12 @@ class SalesReturnMaster(Base):
     customer = relationship("Customer")
     sales = relationship("SalesMaster")
     items = relationship("SalesReturnItem", back_populates="sales_return", cascade="all, delete-orphan")
+
+    @validates('total_amount', 'refund_amount', 'balance_deducted')
+    def validate_sales_return_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Sales return {key} cannot be negative ({value}).")
+        return value
 
 
 class SalesReturnItem(Base):
@@ -377,6 +485,18 @@ class SalesReturnItem(Base):
     sales_return = relationship("SalesReturnMaster", back_populates="items")
     product = relationship("Product")
 
+    @validates('qty')
+    def validate_sales_return_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Sales return item quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('rate', 'gst_rate', 'cgst_amount', 'sgst_amount', 'igst_amount', 'tax_amount', 'taxable_value')
+    def validate_sales_return_item_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Sales return item {key} cannot be negative ({value}).")
+        return value
+
 
 class PurchaseReturnMaster(Base):
     __tablename__ = 'purchase_return_master'
@@ -392,6 +512,12 @@ class PurchaseReturnMaster(Base):
     supplier = relationship("Supplier")
     purchase = relationship("PurchaseMaster")
     items = relationship("PurchaseReturnItem", back_populates="purchase_return", cascade="all, delete-orphan")
+
+    @validates('total_amount', 'refund_received', 'balance_deducted')
+    def validate_purchase_return_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Purchase return {key} cannot be negative ({value}).")
+        return value
 
 
 class PurchaseReturnItem(Base):
@@ -411,6 +537,18 @@ class PurchaseReturnItem(Base):
     
     purchase_return = relationship("PurchaseReturnMaster", back_populates="items")
     product = relationship("Product")
+
+    @validates('qty')
+    def validate_purchase_return_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Purchase return item quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('rate', 'gst_rate', 'cgst_amount', 'sgst_amount', 'igst_amount', 'tax_amount', 'taxable_value')
+    def validate_purchase_return_item_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Purchase return item {key} cannot be negative ({value}).")
+        return value
 
 
 class ExpenseCategory(Base):
@@ -440,6 +578,12 @@ class Expense(Base):
 
     category = relationship("ExpenseCategory", back_populates="expenses")
     bank_account = relationship("BankAccount")
+
+    @validates('amount')
+    def validate_expense_amount(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Expense amount cannot be negative ({value}).")
+        return value
 
 
 class Staff(Base):
@@ -497,6 +641,12 @@ class StaffSalaryPayment(Base):
     staff = relationship("Staff", back_populates="salary_payments")
     bank_account = relationship("BankAccount")
 
+    @validates('amount', 'deductions', 'net_paid')
+    def validate_salary_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Salary payment {key} cannot be negative ({value}).")
+        return value
+
 class ExistingStockMaster(Base):
     __tablename__ = 'existing_stock_master'
     id = Column(Integer, primary_key=True)
@@ -509,6 +659,12 @@ class ExistingStockMaster(Base):
     created_at = Column(DateTime, default=datetime.datetime.now)
 
     items = relationship("ExistingStockItem", back_populates="master", cascade="all, delete-orphan")
+
+    @validates('total_items', 'total_qty', 'total_value')
+    def validate_existing_stock_master(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Existing stock master {key} cannot be negative ({value}).")
+        return value
 
 
 class ExistingStockItem(Base):
@@ -525,6 +681,17 @@ class ExistingStockItem(Base):
     master = relationship("ExistingStockMaster", back_populates="items")
     product = relationship("Product")
 
+    @validates('qty')
+    def validate_existing_stock_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Existing stock item quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('rate', 'selling_price', 'total_amount')
+    def validate_existing_stock_item_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Existing stock item {key} cannot be negative ({value}).")
+        return value
 
 
 class PurchaseOrderMaster(Base):
@@ -548,6 +715,12 @@ class PurchaseOrderMaster(Base):
     supplier = relationship("Supplier")
     items = relationship("PurchaseOrderItem", back_populates="purchase_order", cascade="all, delete-orphan")
 
+    @validates('total_items', 'total_qty', 'total_amount')
+    def validate_po_master(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Purchase order master {key} cannot be negative ({value}).")
+        return value
+
 
 class PurchaseOrderItem(Base):
     __tablename__ = 'purchase_order_items'
@@ -566,3 +739,15 @@ class PurchaseOrderItem(Base):
 
     purchase_order = relationship("PurchaseOrderMaster", back_populates="items")
     product = relationship("Product")
+
+    @validates('qty')
+    def validate_po_item_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Purchase order item quantity must be greater than zero ({value}).")
+        return value
+
+    @validates('rate', 'total_amount')
+    def validate_po_item_amounts(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Purchase order item {key} cannot be negative ({value}).")
+        return value
