@@ -176,7 +176,11 @@ DEFAULT_TRANSLATIONS = {
     "Danger Zone (Factory Reset)": "ஆபத்து பகுதி (தொழிற்சாலை மீட்டமைப்பு)",
     "Wipe All Data / Factory Reset": "அனைத்து தரவையும் அழிக்க / தொழிற்சாலை மீட்டமைப்பு",
     "Confirm Factory Restore": "தொழிற்சாலை மீட்டமைப்பை உறுதிப்படுத்தவும்",
-    "Factory Restore Completed": "தொழிற்சாலை மீட்டமைப்பு முடிந்தது"
+    "Factory Restore Completed": "தொழிற்சாலை மீட்டமைப்பு முடிந்தது",
+    "Inhouse Stock": "உள் இருப்பு சரக்கு (Inhouse Stock)",
+    "Inhouse Stock Only": "உள் இருப்பு சரக்கு மட்டும்",
+    "Sold Items Only": "விற்பனையானவை மட்டும்",
+    "Stock Status:": "சரக்கு நிலை:"
 }
 
 _memory_translations = None

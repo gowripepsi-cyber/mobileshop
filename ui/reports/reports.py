@@ -164,7 +164,7 @@ class ReportsView(QWidget):
 
         # Stock Status
         self.filter_stock_status = QComboBox()
-        self.filter_stock_status.addItems(["All Items", "Sold Items Only", "Unsold Items Only"])
+        self.filter_stock_status.addItems(["All Items", "Sold Items Only", "Inhouse Stock Only"])
         self.filter_stock_status.currentIndexChanged.connect(self.refresh_data)
 
         # Interest Rate QDoubleSpinBox
@@ -823,7 +823,7 @@ class ReportsView(QWidget):
                             matched_rows.append({
                                 "product_code": p.product_code, "product_name": p.name, "product_id": p.id,
                                 "brand": p.brand, "category": p.category, "purchase_date": lot["date"],
-                                "sale_date": "Unsold Inventory", "days": max(0, days), "qty": lot["remaining"],
+                                "sale_date": "Inhouse Stock", "days": max(0, days), "qty": lot["remaining"],
                                 "purchase_price": lot["price"], "sale_price": 0.0,
                                 "supplier": lot["supplier"], "status": "unsold"
                             })
@@ -856,7 +856,7 @@ class ReportsView(QWidget):
                         continue
                     if stock_status_filter == "Sold Items Only" and row["status"] != "sold":
                         continue
-                    if stock_status_filter == "Unsold Items Only" and row["status"] != "unsold":
+                    if stock_status_filter in ["Inhouse Stock Only", "Unsold Items Only"] and row["status"] != "unsold":
                         continue
 
                     # Date filters
@@ -959,7 +959,10 @@ class ReportsView(QWidget):
                     
                     sdate_item = QTableWidgetItem(sdate_str)
                     if r["status"] == "unsold":
-                        sdate_item.setForeground(QColor("#ef4444"))
+                        sdate_item.setForeground(QColor("#2563eb"))
+                        s_font = sdate_item.font()
+                        s_font.setBold(True)
+                        sdate_item.setFont(s_font)
                     self.profit_table.setItem(i, 3, sdate_item)
                     
                     self.profit_table.setItem(i, 4, QTableWidgetItem(str(r["days"])))
