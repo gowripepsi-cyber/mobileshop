@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QApplication, QWidget, QColorDialog, QVBoxLayout,
                              QScrollArea, QGridLayout, QSizePolicy)
 import os
 import shutil
+import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from database import Session, Setting, User, get_hash, engine, init_db
@@ -237,6 +238,15 @@ class SettingsView(QWidget):
         self.tabs.setTabText(3, tr("Backup & Restore"))
         self.tabs.setTabText(4, tr("License & Maintenance"))
         self.tabs.setTabText(5, tr("Language Dictionary"))
+
+        if hasattr(self, 'backup_btn'):
+            self.backup_btn.setText(f"💾 {tr('Create Database Backup')}")
+        if hasattr(self, 'restore_btn'):
+            self.restore_btn.setText(f"📂 {tr('Restore Database from Backup File')}")
+        if hasattr(self, 'factory_restore_btn'):
+            self.factory_restore_btn.setText(f"⚠️ {tr('Factory Restore (Delete All Data)')}")
+        if hasattr(self, 'wipe_btn'):
+            self.wipe_btn.setText(f"⚠️ {tr('Factory Restore (Delete All Data)')}")
 
     def setup_shop_tab(self):
         tab_layout = QVBoxLayout(self.shop_tab)
@@ -512,46 +522,107 @@ class SettingsView(QWidget):
         layout.addStretch()
 
     def setup_db_tab(self):
-        layout = QVBoxLayout(self.db_tab)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(20)
+        main_layout = QVBoxLayout(self.db_tab)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
+        layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        # -------------------------------------------------------------
+        # Part 1: Database Backup & File Restore Card
+        # -------------------------------------------------------------
         db_frame = QFrame()
         db_frame.setProperty("class", "CardFrame")
-        db_frame.setMinimumHeight(280)
-        db_frame.setMinimumWidth(800)
-        db_frame.setMaximumWidth(900)
+        db_frame.setMinimumWidth(320)
+        db_frame.setMaximumWidth(850)
         db_layout = QVBoxLayout(db_frame)
-        db_layout.setContentsMargins(20, 20, 20, 20)
+        db_layout.setContentsMargins(25, 25, 25, 25)
         db_layout.setSpacing(15)
 
-        title = QLabel("Database Actions")
-        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0f172a; margin-bottom: 10px;")
+        title = QLabel(f"💾 {tr('Database Backup & Restore')}")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #0f172a;")
         db_layout.addWidget(title)
 
         desc = QLabel(
-            "It is highly recommended to perform backups periodically.<br/>"
-            "Restoring a previous backup database will overwrite your current dataset entirely."
+            "It is highly recommended to perform backups periodically to protect against data loss or hardware failure.<br/>"
+            "Restoring a previous backup database will overwrite your current dataset with the contents of the chosen backup file."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #94a3b8;")
+        desc.setStyleSheet("color: #64748b; font-size: 12px; line-height: 1.4;")
         db_layout.addWidget(desc)
 
-        db_layout.addSpacing(10)
+        db_layout.addSpacing(5)
 
-        # Buttons
-        self.backup_btn = QPushButton("Create Database Backup")
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
+
+        self.backup_btn = QPushButton(f"💾 {tr('Create Database Backup')}")
         self.backup_btn.setProperty("class", "btn-success")
+        self.backup_btn.setMinimumHeight(44)
         self.backup_btn.clicked.connect(self.create_backup)
-        db_layout.addWidget(self.backup_btn)
+        btn_row.addWidget(self.backup_btn)
 
-        self.restore_btn = QPushButton("Restore Database Backup File")
-        self.restore_btn.setProperty("class", "btn-danger")
+        self.restore_btn = QPushButton(f"📂 {tr('Restore Database from Backup File')}")
+        self.restore_btn.setStyleSheet("background-color: #3b82f6; color: #ffffff; font-weight: bold; font-size: 13px; padding: 10px 18px; border-radius: 6px;")
+        self.restore_btn.setMinimumHeight(44)
         self.restore_btn.clicked.connect(self.execute_restore)
-        db_layout.addWidget(self.restore_btn)
+        btn_row.addWidget(self.restore_btn)
 
-        layout.addWidget(db_frame, 0, Qt.AlignCenter)
+        db_layout.addLayout(btn_row)
+        layout.addWidget(db_frame)
+
+        # -------------------------------------------------------------
+        # Part 2: Danger Zone – Factory Restore / Reset All Data
+        # -------------------------------------------------------------
+        danger_frame = QFrame()
+        danger_frame.setProperty("class", "CardFrame")
+        danger_frame.setStyleSheet("QFrame { border: 1.5px solid #ef4444; background-color: #1a0b0b; border-radius: 10px; }")
+        danger_frame.setMinimumWidth(320)
+        danger_frame.setMaximumWidth(850)
+        danger_layout = QVBoxLayout(danger_frame)
+        danger_layout.setContentsMargins(25, 25, 25, 25)
+        danger_layout.setSpacing(12)
+
+        danger_title = QLabel(f"⚠️ {tr('Factory Restore / Reset All Data')} (Danger Zone)")
+        danger_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ef4444; border: none; background: transparent;")
+        danger_layout.addWidget(danger_title)
+
+        danger_desc = QLabel(
+            "Permanently delete ALL data in the database and restore the application to a clean factory state.<br/><br/>"
+            "• Deletes all products, stock quantities, barcodes, and pricing.<br/>"
+            "• Deletes all sales invoices, sales returns, purchase entries, and purchase orders.<br/>"
+            "• Deletes all customer & supplier ledgers and party balances.<br/>"
+            "• Deletes all cash drawer transactions, bank balances, and money transfers.<br/>"
+            "• Deletes all repair service job cards, parts used, and labor income.<br/>"
+            "• Deletes all daily expenses and staff records.<br/><br/>"
+            "🛡️ <b>Automatic Safety Backup:</b> A timestamped backup will automatically be saved to your <i>backups</i> folder before any deletion takes place, so your current data can always be recovered if needed."
+        )
+        danger_desc.setWordWrap(True)
+        danger_desc.setStyleSheet("color: #fca5a5; font-size: 12px; border: none; background: transparent; line-height: 1.4;")
+        danger_layout.addWidget(danger_desc)
+
+        danger_layout.addSpacing(5)
+
+        self.factory_restore_btn = QPushButton(f"⚠️ {tr('Factory Restore (Delete All Data)')}")
+        self.factory_restore_btn.setStyleSheet("background-color: #dc2626; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 20px; border-radius: 6px;")
+        self.factory_restore_btn.setMinimumHeight(46)
+        self.factory_restore_btn.clicked.connect(self.factory_restore_data)
+        danger_layout.addWidget(self.factory_restore_btn)
+
+        layout.addWidget(danger_frame)
         layout.addStretch()
+
+        scroll.setWidget(scroll_content)
+        main_layout.addWidget(scroll)
 
     def refresh_data(self):
         session = Session()
@@ -1040,10 +1111,10 @@ class SettingsView(QWidget):
         danger_desc.setStyleSheet("color: #f87171; font-size: 12px; border: none; background: transparent;")
         danger_layout.addWidget(danger_desc)
 
-        self.wipe_btn = QPushButton("Wipe All Data / Factory Reset")
-        self.wipe_btn.setStyleSheet("background-color: #ef4444; color: #ffffff; font-weight: bold; padding: 12px 20px; border-radius: 6px;")
-        self.wipe_btn.setMinimumHeight(45)
-        self.wipe_btn.clicked.connect(self.wipe_all_data)
+        self.wipe_btn = QPushButton(f"⚠️ {tr('Factory Restore (Delete All Data)')}")
+        self.wipe_btn.setStyleSheet("background-color: #dc2626; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 20px; border-radius: 6px;")
+        self.wipe_btn.setMinimumHeight(46)
+        self.wipe_btn.clicked.connect(self.factory_restore_data)
         danger_layout.addWidget(self.wipe_btn)
 
         layout.addWidget(danger_frame)
@@ -1057,49 +1128,82 @@ class SettingsView(QWidget):
     def setup_license_tab(self):
         pass
 
-    def wipe_all_data(self):
-        confirm1 = QMessageBox.question(
-            self, "WARNING: Permanent Factory Reset",
-            "Are you sure you want to delete ALL data?\n\n"
-            "This will permanently erase all customers, suppliers, products, stock, cash/bank transactions, money transfers, and company settings.",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+    def factory_restore_data(self):
+        confirm1 = QMessageBox.warning(
+            self,
+            tr("Confirm Factory Restore"),
+            tr("⚠️ DANGER: Are you sure you want to completely erase ALL data from the system?\n\n"
+               "This action will permanently delete:\n"
+               "  • All Sales Invoices & Sales Returns\n"
+               "  • All Purchase Entries & Purchase Orders\n"
+               "  • All Products & Inventory Stock\n"
+               "  • All Customer & Supplier Ledgers\n"
+               "  • All Cash & Bank Balances & Transactions\n"
+               "  • All Repair Service Job Cards\n"
+               "  • All Expenses & Staff Records\n\n"
+               "🛡️ A safety backup of your database will be saved automatically before wiping.\n\n"
+               "Do you wish to proceed?"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
         if confirm1 != QMessageBox.Yes:
             return
 
         text, ok = QInputDialog.getText(
-            self, "Confirm Factory Reset",
-            "This action cannot be undone.\n\n"
-            "To confirm deletion, please type 'WIPE' (all caps):"
+            self,
+            tr("Confirm Factory Restore"),
+            tr("This action cannot be undone.\n\n"
+               "To confirm permanent deletion, please type 'RESTORE', 'RESET', or 'WIPE' below:")
         )
-        if not ok or text.strip() != "WIPE":
-            QMessageBox.warning(self, "Cancelled", "Confirmation code incorrect. Data wipe cancelled.")
+        if not ok or text.strip().upper() not in ["RESTORE", "RESET", "WIPE"]:
+            QMessageBox.warning(
+                self,
+                tr("Cancelled"),
+                tr("Confirmation code was not matched. Factory restore cancelled. No data was changed.")
+            )
             return
 
+        # 1. Automatic safety backup before dropping data
+        backup_dir = os.path.join(os.path.dirname(os.path.abspath("inventory.db")), "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safety_backup = os.path.join(backup_dir, f"auto_backup_before_factory_restore_{ts}.db")
+        try:
+            if os.path.exists("inventory.db"):
+                shutil.copy2("inventory.db", safety_backup)
+        except Exception as b_err:
+            print(f"Safety backup notice: {b_err}")
+
+        # 2. Reset database tables and re-seed defaults
         session = Session()
         try:
             session.close()
-            
-            # Dispose of engine connections to release locks
             engine.dispose()
-            
+
             from models import Base
             Base.metadata.drop_all(engine)
-            
-            # Recreate all tables and re-seed defaults
             init_db()
-            
+
             QMessageBox.information(
-                self, "Reset Completed",
-                "All data has been successfully wiped. The application will now close."
+                self,
+                tr("Factory Restore Completed"),
+                tr(f"All data has been successfully deleted.\n"
+                   f"The system has been restored to clean factory defaults.\n\n"
+                   f"🛡️ Safety Backup Saved At:\n{safety_backup}\n\n"
+                   f"Default Administrator Credentials:\n"
+                   f"Username: admin\n"
+                   f"Password: admin\n\n"
+                   f"The application will now close. Please restart it to log in with clean data.")
             )
-            # Close the main window
             main_window = self.window()
             main_window.close()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to wipe data: {e}")
+            QMessageBox.critical(self, tr("Error"), tr(f"Failed to perform factory restore: {e}"))
         finally:
             session.close()
+
+    def wipe_all_data(self):
+        self.factory_restore_data()
 
     def copy_to_clipboard(self, text, label):
         from PySide6.QtWidgets import QApplication

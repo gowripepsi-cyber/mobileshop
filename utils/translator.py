@@ -164,7 +164,19 @@ DEFAULT_TRANSLATIONS = {
     "Capital Injection": "மூலதன வரவு",
     "Scrap / Old Parts Sale": "பழைய பொருட்கள் விற்பனை",
     "Commission Income": "கமிஷன் வருமானம்",
-    "Misc Income / Expense": "இதர வரவு / செலவு"
+    "Misc Income / Expense": "இதர வரவு / செலவு",
+    "Factory Restore": "தொழிற்சாலை மீட்டமைப்பு",
+    "Factory Restore / Reset All Data": "தொழிற்சாலை மீட்டமைப்பு / அனைத்து தரவையும் அழிக்க",
+    "Factory Restore (Delete All Data)": "தொழிற்சாலை மீட்டமைப்பு (அனைத்து தரவையும் அழிக்க)",
+    "Create Database Backup": "காப்புப்பிரதி எடுக்க (Create Backup)",
+    "Restore Database Backup File": "கோப்பிலிருந்து மீட்டமைக்க (Restore File)",
+    "Restore Database from Backup File": "காப்பு கோப்பிலிருந்து மீட்டமைக்க",
+    "Database Actions": "தரவுத்தள செயல்பாடுகள்",
+    "Database Backup & Restore": "தரவுத்தள காப்பு & மீட்டமைப்பு",
+    "Danger Zone (Factory Reset)": "ஆபத்து பகுதி (தொழிற்சாலை மீட்டமைப்பு)",
+    "Wipe All Data / Factory Reset": "அனைத்து தரவையும் அழிக்க / தொழிற்சாலை மீட்டமைப்பு",
+    "Confirm Factory Restore": "தொழிற்சாலை மீட்டமைப்பை உறுதிப்படுத்தவும்",
+    "Factory Restore Completed": "தொழிற்சாலை மீட்டமைப்பு முடிந்தது"
 }
 
 _memory_translations = None
