@@ -246,7 +246,8 @@ class PurchaseOrderDialog(QDialog):
         self.add_unit_combo = QComboBox()
         self.add_unit_combo.addItems(["Pcs", "Box", "Nos", "Set", "Kg", "Mtr", "Packet"])
         self.add_unit_combo.setStyleSheet(common_input_style)
-        f_unit = make_field("Unit", self.add_unit_combo, width=75)
+        self.add_unit_combo.view().setMinimumWidth(110)
+        f_unit = make_field("Unit", self.add_unit_combo, width=85)
 
         # 7. Rate
         self.add_rate_spin = QDoubleSpinBox()

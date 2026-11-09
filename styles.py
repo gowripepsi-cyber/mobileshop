@@ -394,12 +394,13 @@ QComboBox QAbstractItemView, QListView {
     padding: 5px;
     outline: 0;
     min-height: 28px;
+    min-width: 110px;
 }
 
 QComboBox QAbstractItemView::item, QListView::item {
     background-color: #ffffff;
     color: #0f172a;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 6px;
     border: 1.5px solid transparent;
     margin: 1px 0px;

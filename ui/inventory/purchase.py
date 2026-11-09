@@ -107,7 +107,7 @@ class PurchaseView(QWidget):
         top_title_row.addWidget(self.goto_stock_btn)
         top_layout.addLayout(top_title_row)
 
-        # Grid for Block 1 (4 Columns x 2 Rows)
+        # Grid for Block 1 (Single Row: 4 Columns)
         top_grid = QGridLayout()
         top_grid.setContentsMargins(0, 0, 0, 0)
         top_grid.setHorizontalSpacing(14)
@@ -172,74 +172,17 @@ class PurchaseView(QWidget):
         gst_cb_wrap_l.addWidget(self.gst_enabled_checkbox)
         gst_top_vl.addWidget(gst_cb_wrap)
 
-        # 5. Payment Mode
-        self.pay_mode_combo = QComboBox()
-        self.pay_mode_combo.addItems(["Cash", "Bank"])
-        self.pay_mode_combo.setStyleSheet(input_style)
-        self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
-        self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
-        f_mode = make_field("Payment Mode", self.pay_mode_combo)
-
-        # 6. Select Bank A/c
-        self.bank_combo = QComboBox()
-        self.bank_combo.setStyleSheet(input_style)
-        self.bank_combo.setEnabled(False)
-        f_bank = make_field("Select Bank A/c", self.bank_combo)
-
-        # 7. Paid Amount (₹)
-        self.paid_input = QDoubleSpinBox()
-        self.paid_input.setRange(0, 9999999)
-        self.paid_input.setValue(0.0)
-        self.paid_input.setDecimals(2)
-        self.paid_input.setStyleSheet(input_style)
-        self.paid_input.valueChanged.connect(self.update_summary)
-        f_paid = make_field("Paid Amount (₹)", self.paid_input)
-
-        # 8. Save / Cancel Buttons in Top Block
-        self.save_btn = QPushButton("Save Purchase Bill")
-        self.save_btn.setProperty("class", "btn-success")
-        self.save_btn.setStyleSheet("min-height: 36px; max-height: 36px; padding: 0px 14px; font-weight: bold; border-radius: 6px;")
-        self.save_btn.setCursor(Qt.PointingHandCursor)
-        self.save_btn.clicked.connect(self.save_purchase)
-
-        self.cancel_edit_btn = QPushButton("Cancel Edit")
-        self.cancel_edit_btn.setProperty("class", "btn-secondary")
-        self.cancel_edit_btn.setStyleSheet("min-height: 36px; max-height: 36px; padding: 0px 12px; font-weight: bold; border-radius: 6px;")
-        self.cancel_edit_btn.setCursor(Qt.PointingHandCursor)
-        self.cancel_edit_btn.setVisible(False)
-        self.cancel_edit_btn.clicked.connect(self.cancel_edit_mode)
-
-        top_btn_container = QWidget()
-        top_btn_vl = QVBoxLayout(top_btn_container)
-        top_btn_vl.setContentsMargins(0, 0, 0, 0)
-        top_btn_vl.setSpacing(3)
-        top_btn_spacer = QLabel(" ")
-        top_btn_spacer.setStyleSheet("font-size: 11.5px;")
-        top_btn_vl.addWidget(top_btn_spacer)
-        top_btn_hl = QHBoxLayout()
-        top_btn_hl.setContentsMargins(0, 0, 0, 0)
-        top_btn_hl.setSpacing(6)
-        top_btn_hl.addWidget(self.save_btn, 1)
-        top_btn_hl.addWidget(self.cancel_edit_btn, 1)
-        top_btn_vl.addLayout(top_btn_hl)
-
         # Row 0: Invoice Number, Date, Supplier, Tax Invoice
         top_grid.addWidget(f_invoice, 0, 0)
         top_grid.addWidget(f_date, 0, 1)
         top_grid.addWidget(f_supp, 0, 2)
         top_grid.addWidget(self.gst_top_container, 0, 3)
 
-        # Row 1: Payment Mode, Bank A/c, Paid Amount, Save Button
-        top_grid.addWidget(f_mode, 1, 0)
-        top_grid.addWidget(f_bank, 1, 1)
-        top_grid.addWidget(f_paid, 1, 2)
-        top_grid.addWidget(top_btn_container, 1, 3)
-
         top_layout.addLayout(top_grid)
         main_layout.addWidget(top_panel)
 
         # =========================================================================
-        # BLOCK 2 (Bottom Block): Items Entry & Table Card
+        # BLOCK 2 (Middle Block): Items Entry & Table Card
         # =========================================================================
         bottom_panel = QFrame()
         bottom_panel.setProperty("class", "CardFrame")
@@ -312,9 +255,10 @@ class PurchaseView(QWidget):
         # 4. Unit
         self.unit_combo = QComboBox()
         self.unit_combo.setStyleSheet(input_style)
+        self.unit_combo.view().setMinimumWidth(110)
         self.unit_combo.currentTextChanged.connect(self.on_unit_change)
         self.load_units()
-        f_punit = make_field("Unit", self.unit_combo, width=80)
+        f_punit = make_field("Unit", self.unit_combo, width=90)
         item_row.addWidget(f_punit)
 
         # 5. Rate (per unit)
@@ -405,9 +349,60 @@ class PurchaseView(QWidget):
         self.table.verticalHeader().setDefaultSectionSize(40)
         bottom_layout.addWidget(self.table, 1)
 
-        # Summary Bar (Totals, Paid, Balance, and Bottom Save Button)
+        # Add Block 2 with vertical stretch 1 so it fills the rest of the tab
+        main_layout.addWidget(bottom_panel, 1)
+
+        # =========================================================================
+        # BLOCK 3 (Bottom Block): Payment Details & Summary Card
+        # =========================================================================
+        payment_panel = QFrame()
+        payment_panel.setProperty("class", "CardFrame")
+        payment_layout = QVBoxLayout(payment_panel)
+        payment_layout.setContentsMargins(16, 12, 16, 12)
+        payment_layout.setSpacing(10)
+
+        # Header Row: Title
+        pay_title_lbl = QLabel("Payment Details")
+        pay_title_lbl.setStyleSheet("font-size: 13.5px; font-weight: bold; color: #0f172a;")
+        payment_layout.addWidget(pay_title_lbl)
+
+        # Horizontal Row for Payment Fields
+        pay_row = QHBoxLayout()
+        pay_row.setContentsMargins(0, 0, 0, 0)
+        pay_row.setSpacing(14)
+
+        # 1. Payment Mode
+        self.pay_mode_combo = QComboBox()
+        self.pay_mode_combo.addItems(["Cash", "Bank"])
+        self.pay_mode_combo.setStyleSheet(input_style)
+        self.pay_mode_combo.currentTextChanged.connect(self.toggle_bank_account)
+        self.pay_mode_combo.currentIndexChanged.connect(lambda: self.toggle_bank_account())
+        f_mode = make_field("Payment Mode", self.pay_mode_combo, width=170)
+        pay_row.addWidget(f_mode)
+
+        # 2. Select Bank A/c
+        self.bank_combo = QComboBox()
+        self.bank_combo.setStyleSheet(input_style)
+        self.bank_combo.setEnabled(False)
+        f_bank = make_field("Select Bank A/c", self.bank_combo, width=260)
+        pay_row.addWidget(f_bank)
+
+        # 3. Paid Amount (₹)
+        self.paid_input = QDoubleSpinBox()
+        self.paid_input.setRange(0, 9999999)
+        self.paid_input.setValue(0.0)
+        self.paid_input.setDecimals(2)
+        self.paid_input.setStyleSheet(input_style)
+        self.paid_input.valueChanged.connect(self.update_summary)
+        f_paid = make_field("Paid Amount (₹)", self.paid_input, width=170)
+        pay_row.addWidget(f_paid)
+
+        pay_row.addStretch()
+        payment_layout.addLayout(pay_row)
+
+        # Summary Bar (Totals, Paid, Balance, and Save Button)
         summary_bar = QHBoxLayout()
-        summary_bar.setContentsMargins(4, 4, 4, 4)
+        summary_bar.setContentsMargins(0, 2, 0, 0)
         summary_bar.setSpacing(16)
 
         self.total_lbl = QLabel("Total Amount: ₹0.00")
@@ -422,23 +417,25 @@ class PurchaseView(QWidget):
 
         self.save_bottom_btn = QPushButton("Save Purchase Bill")
         self.save_bottom_btn.setProperty("class", "btn-success")
-        self.save_bottom_btn.setStyleSheet("min-height: 34px; padding: 0px 16px; font-weight: bold; border-radius: 6px;")
+        self.save_bottom_btn.setStyleSheet("min-height: 36px; padding: 0px 18px; font-weight: bold; border-radius: 6px;")
         self.save_bottom_btn.setCursor(Qt.PointingHandCursor)
         self.save_bottom_btn.clicked.connect(self.save_purchase)
         summary_bar.addWidget(self.save_bottom_btn)
 
         self.cancel_bottom_btn = QPushButton("Cancel Edit")
         self.cancel_bottom_btn.setProperty("class", "btn-secondary")
-        self.cancel_bottom_btn.setStyleSheet("min-height: 34px; padding: 0px 14px; font-weight: bold; border-radius: 6px;")
+        self.cancel_bottom_btn.setStyleSheet("min-height: 36px; padding: 0px 14px; font-weight: bold; border-radius: 6px;")
         self.cancel_bottom_btn.setCursor(Qt.PointingHandCursor)
         self.cancel_bottom_btn.setVisible(False)
         self.cancel_bottom_btn.clicked.connect(self.cancel_edit_mode)
         summary_bar.addWidget(self.cancel_bottom_btn)
 
-        bottom_layout.addLayout(summary_bar)
+        # Save/Cancel references
+        self.save_btn = self.save_bottom_btn
+        self.cancel_edit_btn = self.cancel_bottom_btn
 
-        # Add Block 2 with vertical stretch 1 so it fills the rest of the tab
-        main_layout.addWidget(bottom_panel, 1)
+        payment_layout.addLayout(summary_bar)
+        main_layout.addWidget(payment_panel)
 
     def setup_history_tab(self):
         layout = QVBoxLayout(self.history_tab)

@@ -180,6 +180,7 @@ class ExistingStockView(QWidget):
         # 6. Unit
         self.unit_combo = QComboBox()
         self.unit_combo.setStyleSheet(input_style)
+        self.unit_combo.view().setMinimumWidth(110)
         self.load_units()
 
         # 7. Cost Price
@@ -219,7 +220,7 @@ class ExistingStockView(QWidget):
         f_prod.setMinimumWidth(160)
         f_stock = make_field("In-Stock", self.current_stock_lbl, width=65)
         f_qty = make_field("Qty *", self.qty_input, width=70)
-        f_unit = make_field("Unit", self.unit_combo, width=65)
+        f_unit = make_field("Unit", self.unit_combo, width=85)
         f_rate = make_field("Cost Price (₹)", self.rate_input, width=90)
         f_sell = make_field("Selling Price (₹)", self.selling_price_input, width=90)
 
