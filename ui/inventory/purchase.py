@@ -10,6 +10,7 @@ from database import Session, Setting
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
 from utils.pdf_generator import generate_purchase_pdf
 from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox
+from utils.unit_converter import get_product_unit_info, calculate_base_qty, get_available_product_units, convert_rate_between_units
 
 class PurchaseView(QWidget):
     def __init__(self, parent=None):
@@ -299,18 +300,21 @@ class PurchaseView(QWidget):
         item_row.addWidget(f_pname, 1)
 
         # 3. Quantity
-        self.qty_input = QSpinBox()
-        self.qty_input.setRange(1, 100000)
-        self.qty_input.setValue(1)
+        self.qty_input = QDoubleSpinBox()
+        self.qty_input.setDecimals(2)
+        self.qty_input.setRange(0.01, 1000000.0)
+        self.qty_input.setValue(1.0)
         self.qty_input.setStyleSheet(input_style)
-        f_pqty = make_field("Quantity", self.qty_input, width=75)
+        self.qty_input.valueChanged.connect(self.update_conversion_hint)
+        f_pqty = make_field("Quantity", self.qty_input, width=80)
         item_row.addWidget(f_pqty)
 
         # 4. Unit
         self.unit_combo = QComboBox()
         self.unit_combo.setStyleSheet(input_style)
+        self.unit_combo.currentTextChanged.connect(self.on_unit_change)
         self.load_units()
-        f_punit = make_field("Unit", self.unit_combo, width=75)
+        f_punit = make_field("Unit", self.unit_combo, width=80)
         item_row.addWidget(f_punit)
 
         # 5. Rate (per unit)
@@ -377,6 +381,22 @@ class PurchaseView(QWidget):
         item_row.addWidget(add_btn_w)
 
         bottom_layout.addLayout(item_row)
+
+        # Unit Conversion Information Hint
+        self.conversion_hint_lbl = QLabel("")
+        self.conversion_hint_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #ecfdf5;
+                color: #065f46;
+                border: 1px solid #a7f3d0;
+                border-radius: 4px;
+                padding: 5px 10px;
+                font-size: 11.5px;
+                font-weight: 600;
+            }
+        """)
+        self.conversion_hint_lbl.setVisible(False)
+        bottom_layout.addWidget(self.conversion_hint_lbl)
 
         # Items Table
         self.table = QTableWidget()
@@ -776,9 +796,9 @@ class PurchaseView(QWidget):
         prod_id = self.product_combo.currentData()
         if prod_id and prod_id in self.products_cache:
             prod = self.products_cache[prod_id]
-            self.rate_input.setValue(prod.purchase_price)
+            self.rate_input.setValue(prod.purchase_price or 0.0)
             if hasattr(self, 'selling_price_input'):
-                self.selling_price_input.setValue(prod.selling_price)
+                self.selling_price_input.setValue(prod.selling_price or 0.0)
             if hasattr(self, 'brand_input'):
                 self.brand_input.setText(prod.brand if prod.brand else "")
             if hasattr(self, 'model_input'):
@@ -786,11 +806,21 @@ class PurchaseView(QWidget):
             # Sync product code input for visual feedback
             if prod.product_code:
                 self.product_code_input.setText(prod.product_code)
-            # Sync unit
-            unit_val = getattr(prod, 'unit', 'Pcs') or 'Pcs'
-            u_idx = self.unit_combo.findText(unit_val)
-            if u_idx >= 0:
-                self.unit_combo.setCurrentIndex(u_idx)
+
+            # Available units for this product (Main unit, and sub-unit if configured)
+            session = Session()
+            try:
+                avail_units = get_available_product_units(prod, session)
+                self.unit_combo.blockSignals(True)
+                self.unit_combo.clear()
+                self.unit_combo.addItems(avail_units)
+                self.unit_combo.setCurrentIndex(0)
+                self._last_selected_unit = self.unit_combo.currentText()
+                self.unit_combo.blockSignals(False)
+            finally:
+                session.close()
+
+            self.update_conversion_hint()
         else:
             self.rate_input.setValue(0.0)
             if hasattr(self, 'selling_price_input'):
@@ -800,7 +830,53 @@ class PurchaseView(QWidget):
             if hasattr(self, 'model_input'):
                 self.model_input.clear()
             self.product_code_input.clear()
-            self.unit_combo.setCurrentIndex(0)
+            self.load_units()
+            self._last_selected_unit = self.unit_combo.currentText()
+            self.conversion_hint_lbl.setVisible(False)
+
+    def on_unit_change(self, new_unit):
+        prod_id = self.product_combo.currentData()
+        if prod_id and prod_id in self.products_cache:
+            prod = self.products_cache[prod_id]
+            session = Session()
+            try:
+                old_u = getattr(self, '_last_selected_unit', None)
+                if old_u and old_u != new_unit and self.rate_input.value() > 0:
+                    new_rate = convert_rate_between_units(self.rate_input.value(), old_u, new_unit, prod, session)
+                    self.rate_input.setValue(new_rate)
+                self._last_selected_unit = new_unit
+            finally:
+                session.close()
+        self.update_conversion_hint()
+
+    def update_conversion_hint(self):
+        prod_id = self.product_combo.currentData()
+        if not prod_id or prod_id not in self.products_cache:
+            self.conversion_hint_lbl.setVisible(False)
+            return
+
+        prod = self.products_cache[prod_id]
+        session = Session()
+        try:
+            main_u, sub_u, rate = get_product_unit_info(prod, session)
+            if not sub_u or rate <= 1:
+                self.conversion_hint_lbl.setVisible(False)
+                return
+
+            sel_unit = self.unit_combo.currentText().strip()
+            qty = self.qty_input.value()
+            base_qty = calculate_base_qty(prod, qty, sel_unit, session)
+
+            if sel_unit.lower() == main_u.lower():
+                text = f"🔄 Unit Conversion: {qty:g} {main_u} = {base_qty:g} {sub_u} (Rule: 1 {main_u} = {rate:g} {sub_u}) | Stock increment: +{base_qty:g} {sub_u}"
+            else:
+                main_equiv = qty / rate if rate > 0 else 0
+                text = f"🔄 Unit Conversion: {qty:g} {sub_u} = {main_equiv:g} {main_u} (Rule: 1 {main_u} = {rate:g} {sub_u}) | Stock increment: +{qty:g} {sub_u}"
+
+            self.conversion_hint_lbl.setText(text)
+            self.conversion_hint_lbl.setVisible(True)
+        finally:
+            session.close()
 
     def switch_to_existing_stock(self):
         parent_win = self.window()
@@ -920,10 +996,18 @@ class PurchaseView(QWidget):
         prod_code = p_cache.product_code if p_cache else "-"
         category = p_cache.category if p_cache else "-"
 
+        session = Session()
+        try:
+            prod_db = session.query(Product).get(prod_id)
+            base_qty = calculate_base_qty(prod_db, qty, unit, session)
+        finally:
+            session.close()
+
         # Check if already added (match by product_id AND unit AND gst_rate)
         for item in self.bill_items:
             if item["product_id"] == prod_id and item.get("unit") == unit and item.get("gst_rate", 0.0) == gst_rate:
                 item["qty"] += qty
+                item["base_qty"] = item.get("base_qty", 0.0) + base_qty
                 item["rate"] = rate  # update with latest rate
                 item["taxable_value"] = item["qty"] * rate
                 item["tax_amount"] = item["taxable_value"] * (gst_rate / 100.0)
@@ -943,6 +1027,7 @@ class PurchaseView(QWidget):
             "brand": brand,
             "model": model,
             "qty": qty,
+            "base_qty": base_qty,
             "unit": unit,
             "rate": rate,
             "gst_rate": gst_rate,
@@ -988,7 +1073,7 @@ class PurchaseView(QWidget):
             self.table.setItem(i, 0, QTableWidgetItem(item.get("product_code", "-")))
             self.table.setItem(i, 1, QTableWidgetItem(item.get("name", "-")))
             self.table.setItem(i, 2, QTableWidgetItem(item.get("category", "-")))
-            self.table.setItem(i, 3, QTableWidgetItem(str(item.get("qty", 0))))
+            self.table.setItem(i, 3, QTableWidgetItem(f"{item.get('qty', 0):g}"))
             self.table.setItem(i, 4, QTableWidgetItem(item.get("unit", "Pcs")))
             self.table.setItem(i, 5, QTableWidgetItem(f"{item.get('rate', 0.0):.2f}"))
             
@@ -1126,9 +1211,14 @@ class PurchaseView(QWidget):
                 # Check if modifying stock would cause negative stock
                 net_qty_by_prod = {}
                 for item in purchase.items:
-                    net_qty_by_prod[item.product_id] = net_qty_by_prod.get(item.product_id, 0) - item.qty
+                    old_base = item.base_qty if item.base_qty is not None else item.qty
+                    net_qty_by_prod[item.product_id] = net_qty_by_prod.get(item.product_id, 0) - old_base
                 for item in self.bill_items:
-                    net_qty_by_prod[item["product_id"]] = net_qty_by_prod.get(item["product_id"], 0) + item["qty"]
+                    new_base = item.get("base_qty")
+                    if new_base is None:
+                        prod_tmp = session.query(Product).get(item["product_id"])
+                        new_base = calculate_base_qty(prod_tmp, item["qty"], item.get("unit"), session)
+                    net_qty_by_prod[item["product_id"]] = net_qty_by_prod.get(item["product_id"], 0) + new_base
 
                 for prod_id, net_diff in net_qty_by_prod.items():
                     if net_diff < 0:
@@ -1146,7 +1236,8 @@ class PurchaseView(QWidget):
                 for item in purchase.items:
                     prod = session.query(Product).get(item.product_id)
                     if prod:
-                        prod.stock_qty -= item.qty
+                        old_base = item.base_qty if item.base_qty is not None else item.qty
+                        prod.stock_qty -= old_base
 
                 # 3. Revert Old Supplier Outstanding Balance
                 old_supplier = session.query(Supplier).get(purchase.supplier_id)
@@ -1239,10 +1330,16 @@ class PurchaseView(QWidget):
                     cgst_amt = tax_amt / 2.0
                     sgst_amt = tax_amt / 2.0
 
+                prod = session.query(Product).get(item["product_id"])
+                item_base_qty = item.get("base_qty")
+                if item_base_qty is None:
+                    item_base_qty = calculate_base_qty(prod, item["qty"], item.get("unit"), session)
+
                 p_item = PurchaseItem(
                     purchase_id=purchase.id,
                     product_id=item["product_id"],
                     qty=item["qty"],
+                    base_qty=item_base_qty,
                     rate=item["rate"],
                     unit=item.get("unit", "Pcs"),
                     gst_rate=g_rate,
@@ -1255,9 +1352,8 @@ class PurchaseView(QWidget):
                 session.add(p_item)
 
                 # Update product stock and rate
-                prod = session.query(Product).get(item["product_id"])
                 if prod:
-                    prod.stock_qty += item["qty"]
+                    prod.stock_qty += item_base_qty
                     # Optionally update purchase price to the latest price
                     prod.purchase_price = item["rate"]
                     if item.get("selling_price", 0.0) > 0:
@@ -1566,6 +1662,7 @@ class PurchaseView(QWidget):
             # Load items
             self.bill_items = []
             for item in purchase.items:
+                b_qty = item.base_qty if item.base_qty is not None else item.qty
                 self.bill_items.append({
                     "product_id": item.product_id,
                     "product_code": item.product.product_code if item.product else "-",
@@ -1574,6 +1671,7 @@ class PurchaseView(QWidget):
                     "brand": item.product.brand if item.product else "-",
                     "model": item.product.model if item.product else "-",
                     "qty": item.qty,
+                    "base_qty": b_qty,
                     "unit": getattr(item, 'unit', 'Pcs') or 'Pcs',
                     "rate": item.rate,
                     "gst_rate": getattr(item, 'gst_rate', 0.0) or 0.0,
@@ -1609,7 +1707,8 @@ class PurchaseView(QWidget):
             # Check if reverting any item would cause negative stock
             required_revert = {}
             for item in purchase.items:
-                required_revert[item.product_id] = required_revert.get(item.product_id, 0) + item.qty
+                b_qty = item.base_qty if item.base_qty is not None else item.qty
+                required_revert[item.product_id] = required_revert.get(item.product_id, 0) + b_qty
 
             for prod_id, req_qty in required_revert.items():
                 prod = session.query(Product).get(prod_id)
@@ -1627,7 +1726,8 @@ class PurchaseView(QWidget):
             for item in purchase.items:
                 prod = session.query(Product).get(item.product_id)
                 if prod:
-                    prod.stock_qty -= item.qty
+                    b_qty = item.base_qty if item.base_qty is not None else item.qty
+                    prod.stock_qty -= b_qty
                     
             # Revert supplier outstanding balance
             supplier = session.query(Supplier).get(purchase.supplier_id)

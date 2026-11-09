@@ -164,6 +164,34 @@ def init_db():
     if 'unit' not in prod_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE products ADD COLUMN unit TEXT DEFAULT 'Pcs'"))
+    if 'sub_unit' not in prod_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products ADD COLUMN sub_unit TEXT"))
+    if 'unit_conversion_qty' not in prod_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE products ADD COLUMN unit_conversion_qty REAL DEFAULT 1.0"))
+
+    # Schema migration: check and add sub-unit columns to units table
+    unit_cols = [c['name'] for c in inspector.get_columns('units')]
+    if 'has_sub_unit' not in unit_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE units ADD COLUMN has_sub_unit INTEGER DEFAULT 0"))
+    if 'sub_unit_id' not in unit_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE units ADD COLUMN sub_unit_id INTEGER REFERENCES units(id)"))
+    if 'sub_unit_name' not in unit_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE units ADD COLUMN sub_unit_name TEXT"))
+    if 'conversion_rate' not in unit_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE units ADD COLUMN conversion_rate REAL DEFAULT 1.0"))
+
+    # Schema migration: check and add base_qty to line item tables
+    for tbl in ('purchase_items', 'sales_items', 'sales_return_items', 'purchase_return_items', 'existing_stock_items', 'purchase_order_items'):
+        cols = [c['name'] for c in inspector.get_columns(tbl)]
+        if 'base_qty' not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN base_qty REAL"))
 
     # Schema migration: check and add unit column to items tables
     pur_item_cols = [c['name'] for c in inspector.get_columns('purchase_items')]
@@ -468,13 +496,36 @@ def init_db():
                 ("Kg", "Kilograms"),
                 ("Grams", "Grams"),
                 ("Ltr", "Litres"),
+                ("Meter", "Meters"),
                 ("Mtr", "Meters"),
                 ("Nos", "Numbers"),
                 ("Pack", "Pack"),
-                ("Set", "Set")
+                ("Set", "Set"),
+                ("Coil", "Coil")
             ]
             for u_name, u_desc in default_units:
                 session.add(Unit(name=u_name, description=u_desc))
+            session.commit()
+
+        # Ensure Meter exists
+        meter_unit = session.query(Unit).filter(Unit.name.ilike('meter')).first()
+        if not meter_unit:
+            meter_unit = Unit(name="Meter", description="Meters")
+            session.add(meter_unit)
+            session.commit()
+
+        # Ensure Coil exists and has default sub-unit Meter (1 Coil = 100 Meter) if not configured
+        coil_unit = session.query(Unit).filter(Unit.name.ilike('coil')).first()
+        if not coil_unit:
+            coil_unit = Unit(
+                name="Coil",
+                description="Coil (Wire / Cable)",
+                has_sub_unit=True,
+                sub_unit_id=meter_unit.id,
+                sub_unit_name=meter_unit.name,
+                conversion_rate=100.0
+            )
+            session.add(coil_unit)
             session.commit()
 
 

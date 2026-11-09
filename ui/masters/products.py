@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, 
-                             QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter, QTabWidget, QSpinBox)
+                             QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter, QTabWidget, QSpinBox, QDoubleSpinBox, QGroupBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from database import Session, Setting
 from models import Product, Category, Brand, ProductModel, Unit
 from utils.ui_helpers import enable_quick_add_auto_select
+from utils.unit_converter import format_product_stock, get_product_unit_info
 
 class ModelEditDialog(QDialog):
     def __init__(self, model_obj=None, initial_name="", default_brand=None, parent=None):
@@ -716,8 +717,9 @@ class ProductDialog(QDialog):
         self.product = product
         self.initial_name = initial_name
         self.default_category = default_category
+        self._current_sub_unit = None
         self.setWindowTitle("Edit Product" if product else "Add New Product")
-        self.setFixedSize(480, 345)
+        self.resize(500, 480)
         self.init_ui()
 
     def load_categories(self, select_category=None):
@@ -927,6 +929,54 @@ class ProductDialog(QDialog):
         self.low_limit_spin.setSuffix(" items")
         self.low_limit_spin.setToolTip("Minimum stock threshold before triggering low stock alerts")
 
+        # Sub-unit conversion group
+        self.sub_unit_group = QGroupBox("Unit Conversion & Packaging (Sub-Unit)")
+        self.sub_unit_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #dcdfe6;
+                border-radius: 6px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+                color: #2c3e50;
+            }
+        """)
+        sub_layout = QFormLayout(self.sub_unit_group)
+        sub_layout.setContentsMargins(10, 10, 10, 10)
+        sub_layout.setSpacing(8)
+
+        self.sub_unit_name_lbl = QLabel("-")
+        self.sub_unit_name_lbl.setStyleSheet("font-weight: 600; color: #1e293b;")
+
+        self.conversion_rate_spin = QDoubleSpinBox()
+        self.conversion_rate_spin.setFixedHeight(34)
+        self.conversion_rate_spin.setRange(0.0001, 1000000.0)
+        self.conversion_rate_spin.setDecimals(2)
+        self.conversion_rate_spin.setValue(100.0)
+        self.conversion_rate_spin.valueChanged.connect(self.update_rule_preview)
+
+        self.rule_preview_lbl = QLabel("-")
+        self.rule_preview_lbl.setStyleSheet("""
+            QLabel {
+                background-color: #f0fdf4;
+                color: #166534;
+                border: 1px solid #bbf7d0;
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-weight: 600;
+                font-size: 12px;
+            }
+        """)
+
+        sub_layout.addRow("Configured Sub-Unit:", self.sub_unit_name_lbl)
+        sub_layout.addRow("Conversion Quantity:", self.conversion_rate_spin)
+        sub_layout.addRow("Conversion Rule:", self.rule_preview_lbl)
+
         # Load global default low stock limit setting if adding new product
         session_set = Session()
         try:
@@ -948,6 +998,7 @@ class ProductDialog(QDialog):
         form_layout.addRow("Low Stock Alert Limit *:", self.low_limit_spin)
 
         layout.addLayout(form_layout)
+        layout.addWidget(self.sub_unit_group)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -961,6 +1012,9 @@ class ProductDialog(QDialog):
         btn_layout.addWidget(self.save_btn)
         btn_layout.addWidget(self.cancel_btn)
         layout.addLayout(btn_layout)
+
+        # Hook unit changed signal
+        self.unit_combo.currentTextChanged.connect(self.check_unit_conversion)
 
         # Populate if editing
         if self.product:
@@ -979,6 +1033,42 @@ class ProductDialog(QDialog):
             else:
                 self.unit_combo.setEditText(unit_val)
             self.low_limit_spin.setValue(self.product.low_stock_limit if self.product.low_stock_limit is not None else 5)
+            if self.product.unit_conversion_qty and self.product.unit_conversion_qty > 0:
+                self.conversion_rate_spin.setValue(float(self.product.unit_conversion_qty))
+
+        self.check_unit_conversion()
+
+    def check_unit_conversion(self):
+        unit_name = self.unit_combo.currentText().strip()
+        session = Session()
+        try:
+            u_obj = session.query(Unit).filter(Unit.name.ilike(unit_name)).first() if unit_name else None
+            if u_obj and u_obj.has_sub_unit and u_obj.sub_unit_name:
+                self._current_sub_unit = u_obj.sub_unit_name
+                self.sub_unit_name_lbl.setText(u_obj.sub_unit_name)
+                # If product already has configured conversion qty, keep it, otherwise default to u_obj.conversion_rate
+                if not (self.product and self.product.unit_conversion_qty and self.product.unit == unit_name):
+                    self.conversion_rate_spin.setValue(float(u_obj.conversion_rate or 1.0))
+                self.conversion_rate_spin.setSuffix(f" {u_obj.sub_unit_name} per {unit_name}")
+                self.sub_unit_group.setVisible(True)
+                self.update_rule_preview()
+            else:
+                self._current_sub_unit = None
+                self.sub_unit_group.setVisible(False)
+        except Exception as e:
+            print(f"Error checking unit conversion: {e}")
+            self.sub_unit_group.setVisible(False)
+        finally:
+            session.close()
+
+    def update_rule_preview(self):
+        main_u = self.unit_combo.currentText().strip() or "Main Unit"
+        sub_u = self._current_sub_unit or "Sub Unit"
+        rate = self.conversion_rate_spin.value()
+        rate_str = f"{rate:g}"
+        self.rule_preview_lbl.setText(
+            f"1 {main_u} = {rate_str} {sub_u}\n(Stock is maintained internally in {sub_u})"
+        )
 
     def handle_save(self):
         name = self.name_input.text().strip()
@@ -1006,6 +1096,16 @@ class ProductDialog(QDialog):
         try:
             from database import generate_next_product_code
 
+            # Determine sub-unit and conversion qty
+            sub_unit = None
+            conversion_qty = 1.0
+            u_obj = session.query(Unit).filter(Unit.name.ilike(unit)).first() if unit else None
+            if u_obj and u_obj.has_sub_unit and u_obj.sub_unit_name:
+                sub_unit = u_obj.sub_unit_name
+                conversion_qty = self.conversion_rate_spin.value()
+                if conversion_qty <= 0:
+                    conversion_qty = float(u_obj.conversion_rate or 1.0)
+
             if self.product:
                 # Update
                 prod = session.query(Product).get(self.product.id)
@@ -1014,6 +1114,8 @@ class ProductDialog(QDialog):
                 prod.brand = brand_model
                 prod.model = brand_model
                 prod.unit = unit
+                prod.sub_unit = sub_unit
+                prod.unit_conversion_qty = conversion_qty
                 prod.low_stock_limit = low_limit
                 self.saved_product_id = prod.id
                 self.saved_product_name = prod.name
@@ -1025,9 +1127,11 @@ class ProductDialog(QDialog):
                     brand=brand_model,
                     model=brand_model,
                     unit=unit,
+                    sub_unit=sub_unit,
+                    unit_conversion_qty=conversion_qty,
                     purchase_price=0.0,
                     selling_price=0.0,
-                    stock_qty=0,
+                    stock_qty=0.0,
                     low_stock_limit=low_limit
                 )
                 session.add(new_prod)
@@ -1211,18 +1315,22 @@ class ProductsView(QWidget):
 
                 self.table.setItem(i, 3, QTableWidgetItem(p.brand_model or p.brand or "-"))
 
-                unit_item = QTableWidgetItem(p.unit or "Pcs")
+                unit_str = p.unit or "Pcs"
+                if p.sub_unit and p.unit_conversion_qty and p.unit_conversion_qty > 1:
+                    unit_str = f"{p.unit} ({p.sub_unit})"
+                unit_item = QTableWidgetItem(unit_str)
                 unit_item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(i, 4, unit_item)
 
-                stock_item = QTableWidgetItem(str(p.stock_qty))
+                stock_display = format_product_stock(p, session)
+                stock_item = QTableWidgetItem(stock_display)
                 stock_item.setTextAlignment(Qt.AlignCenter)
                 if p.stock_qty <= 0:
                     stock_item.setForeground(Qt.red)
                     font = stock_item.font()
                     font.setBold(True)
                     stock_item.setFont(font)
-                elif p.stock_qty <= p.low_stock_limit:
+                elif p.stock_qty <= (p.low_stock_limit or 5):
                     stock_item.setForeground(QColor("#f59e0b"))
                     font = stock_item.font()
                     font.setBold(True)

@@ -10,6 +10,7 @@ from database import Session, Setting, generate_next_purchase_return_number
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, PurchaseReturnMaster, PurchaseReturnItem
 from utils.pdf_generator import generate_purchase_return_pdf
 from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, AutoClearSearchableComboBox
+from utils.unit_converter import calculate_base_qty, get_product_unit_info, format_stock_display
 
 class PurchaseReturnEntryWidget(QWidget):
     def __init__(self, parent=None, history_widget=None):
@@ -805,8 +806,12 @@ class PurchaseReturnEntryWidget(QWidget):
             # Check final validation for product stocks
             for item in self.return_items:
                 prod = session.query(Product).get(item["product_id"])
-                if prod.stock_qty < item["qty"]:
-                    QMessageBox.warning(self, "Stock Level Error", f"Product {prod.name} has insufficient stock to return! Available: {prod.stock_qty}")
+                item_base_qty = calculate_base_qty(prod, item["qty"], item.get("unit"), session)
+                if prod.stock_qty < item_base_qty:
+                    main_u, sub_u, conv_rate = get_product_unit_info(prod, session)
+                    avail_disp = format_stock_display(prod.stock_qty, main_u, sub_u, conv_rate)
+                    req_disp = format_stock_display(item_base_qty, main_u, sub_u, conv_rate)
+                    QMessageBox.warning(self, "Stock Level Error", f"Product {prod.name} has insufficient stock to return! Available: {avail_disp}, Requested: {req_disp}")
                     return
 
             # Save Purchase Return Master
@@ -825,17 +830,21 @@ class PurchaseReturnEntryWidget(QWidget):
             # Save Items, update stock
             pdf_items = []
             for item in self.return_items:
+                prod = session.query(Product).get(item["product_id"])
+                item_base_qty = calculate_base_qty(prod, item["qty"], item.get("unit"), session)
+
                 ret_item = PurchaseReturnItem(
                     purchase_return_id=purchase_return.id,
                     product_id=item["product_id"],
                     qty=item["qty"],
-                    rate=item["rate"]
+                    base_qty=item_base_qty,
+                    rate=item["rate"],
+                    unit=item.get("unit", "Pcs")
                 )
                 session.add(ret_item)
 
-                prod = session.query(Product).get(item["product_id"])
                 if prod:
-                    prod.stock_qty -= item["qty"]
+                    prod.stock_qty -= item_base_qty
                     p_code = f"[{prod.product_code}] " if prod.product_code else ""
                     p_name = f"{p_code}{prod.name} ({prod.brand} {prod.model})"
                 else:
@@ -843,7 +852,7 @@ class PurchaseReturnEntryWidget(QWidget):
 
                 pdf_items.append({
                     "name": p_name,
-                    "qty": item["qty"],
+                    "qty": f"{item['qty']:g} {item.get('unit', 'Pcs')}",
                     "rate": item["rate"],
                     "total": item["qty"] * item["rate"]
                 })
@@ -1240,7 +1249,8 @@ class PurchaseReturnHistoryWidget(QWidget):
             for item in ret.items:
                 prod = session.query(Product).get(item.product_id)
                 if prod:
-                    prod.stock_qty += item.qty
+                    b_qty = item.base_qty if item.base_qty is not None else item.qty
+                    prod.stock_qty += b_qty
 
             # Revert supplier outstanding balance deduction
             supplier = session.query(Supplier).get(ret.supplier_id)

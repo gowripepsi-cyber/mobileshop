@@ -9,6 +9,7 @@ from utils.formatters import format_inr
 from database import Session, Setting, generate_next_sales_return_number
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category, SalesReturnMaster, SalesReturnItem
 from utils.ui_helpers import enable_quick_add_auto_select, AutoClearSearchableComboBox
+from utils.unit_converter import calculate_base_qty
 
 class SalesReturnEntryWidget(QWidget):
     def __init__(self, parent=None, history_widget=None):
@@ -808,17 +809,23 @@ class SalesReturnEntryWidget(QWidget):
             # Save Items, update stock
             pdf_items = []
             for item in self.return_items:
+                prod = session.query(Product).get(item["product_id"])
+                item_base_qty = item.get("base_qty")
+                if item_base_qty is None:
+                    item_base_qty = calculate_base_qty(prod, item["qty"], item.get("unit"), session)
+
                 ret_item = SalesReturnItem(
                     sales_return_id=sales_return.id,
                     product_id=item["product_id"],
                     qty=item["qty"],
-                    rate=item["rate"]
+                    base_qty=item_base_qty,
+                    rate=item["rate"],
+                    unit=item.get("unit", "Pcs")
                 )
                 session.add(ret_item)
 
-                prod = session.query(Product).get(item["product_id"])
                 if prod:
-                    prod.stock_qty += item["qty"]
+                    prod.stock_qty += item_base_qty
                     bm = getattr(prod, 'brand_model', None) or getattr(prod, 'brand', '') or ''
                     p_name = f"{prod.name} ({bm})" if bm else prod.name
                 else:
@@ -826,7 +833,7 @@ class SalesReturnEntryWidget(QWidget):
 
                 pdf_items.append({
                     "name": p_name,
-                    "qty": item["qty"],
+                    "qty": f"{item['qty']:g} {item.get('unit', 'Pcs')}",
                     "rate": item["rate"],
                     "total": item["qty"] * item["rate"]
                 })
@@ -1222,7 +1229,8 @@ class SalesReturnHistoryWidget(QWidget):
             # Check if reverting any item would cause negative stock
             required_revert = {}
             for item in ret.items:
-                required_revert[item.product_id] = required_revert.get(item.product_id, 0) + item.qty
+                b_qty = item.base_qty if item.base_qty is not None else item.qty
+                required_revert[item.product_id] = required_revert.get(item.product_id, 0) + b_qty
 
             for prod_id, req_qty in required_revert.items():
                 prod = session.query(Product).get(prod_id)
@@ -1240,7 +1248,8 @@ class SalesReturnHistoryWidget(QWidget):
             for item in ret.items:
                 prod = session.query(Product).get(item.product_id)
                 if prod:
-                    prod.stock_qty -= item.qty # deduct stock since return is cancelled
+                    b_qty = item.base_qty if item.base_qty is not None else item.qty
+                    prod.stock_qty -= b_qty # deduct stock since return is cancelled
 
             # Revert customer outstanding balance deduction
             customer = session.query(Customer).get(ret.customer_id)

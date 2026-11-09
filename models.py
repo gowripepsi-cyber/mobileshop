@@ -65,9 +65,11 @@ class Product(Base):
     imei = Column(String, unique=True, nullable=True)
     purchase_price = Column(Float, default=0.0)
     selling_price = Column(Float, default=0.0)
-    stock_qty = Column(Integer, default=0)
+    stock_qty = Column(Float, default=0.0)
     low_stock_limit = Column(Integer, default=5)
     unit = Column(String, nullable=True, default='Pcs')
+    sub_unit = Column(String, nullable=True)
+    unit_conversion_qty = Column(Float, nullable=True)
 
     @validates('stock_qty')
     def validate_stock_qty(self, key, value):
@@ -131,7 +133,8 @@ class PurchaseItem(Base):
     id = Column(Integer, primary_key=True)
     purchase_id = Column(Integer, ForeignKey('purchase_master.id'), nullable=False)
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    qty = Column(Integer, default=1)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
     rate = Column(Float, default=0.0)
     unit = Column(String, nullable=True, default='Pcs')
     gst_rate = Column(Float, default=0.0)
@@ -187,7 +190,8 @@ class SalesItem(Base):
     id = Column(Integer, primary_key=True)
     sales_id = Column(Integer, ForeignKey('sales_master.id'), nullable=False)
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    qty = Column(Integer, default=1)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
     rate = Column(Float, default=0.0)
     discount = Column(Float, default=0.0)
     unit = Column(String, nullable=True, default='Pcs')
@@ -356,6 +360,25 @@ class Unit(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
     description = Column(String, nullable=True)
+    has_sub_unit = Column(Boolean, default=False)
+    sub_unit_id = Column(Integer, ForeignKey('units.id'), nullable=True)
+    sub_unit_name = Column(String, nullable=True)
+    conversion_rate = Column(Float, default=1.0)
+
+    sub_unit = relationship("Unit", remote_side=[id], foreign_keys=[sub_unit_id])
+
+    @property
+    def conversion_rule_display(self):
+        if self.has_sub_unit and self.sub_unit_name and self.conversion_rate and self.conversion_rate > 0:
+            rate_str = f"{self.conversion_rate:g}"
+            return f"1 {self.name} = {rate_str} {self.sub_unit_name}"
+        return "-"
+
+    @validates('conversion_rate')
+    def validate_conversion_rate(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Unit conversion quantity must be greater than zero ({value}).")
+        return value
 
 class ProductModel(Base):
     __tablename__ = 'models'
@@ -472,7 +495,8 @@ class SalesReturnItem(Base):
     id = Column(Integer, primary_key=True)
     sales_return_id = Column(Integer, ForeignKey('sales_return_master.id'), nullable=False)
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    qty = Column(Integer, default=1)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
     rate = Column(Float, default=0.0)
     unit = Column(String, nullable=True, default='Pcs')
     gst_rate = Column(Float, default=0.0)
@@ -525,7 +549,8 @@ class PurchaseReturnItem(Base):
     id = Column(Integer, primary_key=True)
     purchase_return_id = Column(Integer, ForeignKey('purchase_return_master.id'), nullable=False)
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    qty = Column(Integer, default=1)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
     rate = Column(Float, default=0.0)
     unit = Column(String, nullable=True, default='Pcs')
     gst_rate = Column(Float, default=0.0)
@@ -654,7 +679,7 @@ class ExistingStockMaster(Base):
     date = Column(Date, default=datetime.date.today)
     notes = Column(Text, nullable=True)
     total_items = Column(Integer, default=0)
-    total_qty = Column(Integer, default=0)
+    total_qty = Column(Float, default=0.0)
     total_value = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.datetime.now)
 
@@ -672,7 +697,8 @@ class ExistingStockItem(Base):
     id = Column(Integer, primary_key=True)
     master_id = Column(Integer, ForeignKey('existing_stock_master.id'), nullable=False)
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    qty = Column(Integer, default=1)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
     rate = Column(Float, default=0.0)
     selling_price = Column(Float, default=0.0)
     unit = Column(String, nullable=True, default='Pcs')
@@ -706,7 +732,7 @@ class PurchaseOrderMaster(Base):
     supplier_address = Column(Text, nullable=True)
     supplier_gst = Column(String, nullable=True)
     total_items = Column(Integer, default=0)
-    total_qty = Column(Integer, default=0)
+    total_qty = Column(Float, default=0.0)
     total_amount = Column(Float, default=0.0)
     status = Column(String, default="Pending")  # Pending, Ordered, Approved, Completed, Cancelled
     notes = Column(Text, nullable=True)
@@ -731,9 +757,10 @@ class PurchaseOrderItem(Base):
     item_name = Column(String, nullable=False)
     brand_model = Column(String, nullable=True)
     unit = Column(String, nullable=True, default='Pcs')
-    current_stock = Column(Integer, default=0)
+    current_stock = Column(Float, default=0.0)
     low_limit = Column(Integer, default=0)
-    qty = Column(Integer, default=1)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
     rate = Column(Float, default=0.0)
     total_amount = Column(Float, default=0.0)
 

@@ -7,6 +7,7 @@ from sqlalchemy import func
 from utils.formatters import format_inr
 from database import Session
 from models import Product, Customer, Supplier, BankAccount, SalesMaster, ServiceJob, CashTransaction, PurchaseMaster, Payment
+from utils.unit_converter import format_product_stock
 
 class ClickableCard(QFrame):
     def __init__(self, title, border_color, parent_view, parent=None):
@@ -306,8 +307,8 @@ class DashboardView(QWidget):
             for i, p in enumerate(low_stock_products):
                 self.low_stock_table.setItem(i, 0, QTableWidgetItem(p.name))
                 self.low_stock_table.setItem(i, 1, QTableWidgetItem(p.brand_model or p.brand or "-"))
-                qty_item = QTableWidgetItem(str(p.stock_qty))
-                if p.stock_qty == 0:
+                qty_item = QTableWidgetItem(format_product_stock(p, session))
+                if p.stock_qty <= 0:
                     qty_item.setForeground(Qt.red)
                 else:
                     qty_item.setForeground(Qt.yellow)
@@ -420,10 +421,11 @@ class DashboardView(QWidget):
             ).limit(10).all()
             for prod in products:
                 bm = f" ({prod.brand} {prod.model})".strip() if (prod.brand or prod.model) else ""
+                stock_info = format_product_stock(prod, session)
                 results.append({
                     "type": "Product",
                     "ref": f"{prod.name}{bm}",
-                    "details": f"Code: {prod.product_code} | Stock: {prod.stock_qty} {prod.unit or 'Pcs'} | Price: ₹{format_inr(prod.selling_price)}",
+                    "details": f"Code: {prod.product_code} | Stock: {stock_info} | Price: ₹{format_inr(prod.selling_price)}",
                     "id": prod.id,
                     "obj_ref": prod.product_code
                 })
@@ -758,7 +760,7 @@ class DashboardView(QWidget):
             info_layout.addRow("Selling Price (₹):", QLabel(f"₹{format_inr(prod.selling_price)}"))
             info_layout.addRow("Cost Price (₹):", QLabel(f"₹{format_inr(prod.cost_price)}"))
 
-            stock_lbl = QLabel(f"{prod.stock_qty} {prod.unit or 'Pcs'}")
+            stock_lbl = QLabel(format_product_stock(prod, session))
             if prod.stock_qty <= prod.low_stock_limit:
                 stock_lbl.setStyleSheet("font-weight: bold; color: #dc2626;")
             else:

@@ -11,6 +11,7 @@ from utils.formatters import format_inr
 from database import Session
 from sqlalchemy.orm import joinedload
 from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, PurchaseItem, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
+from utils.unit_converter import format_product_stock
 
 class ReportsView(QWidget):
     def __init__(self, parent=None):
@@ -2576,7 +2577,7 @@ class ProductDrillDownDialog(QDialog):
             avg_days = tot_days / tot_qty if tot_qty > 0 else 0.0
             current_stock = product.stock_qty
 
-            self.kpi_stock.setText(str(current_stock))
+            self.kpi_stock.setText(format_product_stock(product, session))
             self.kpi_avg_days.setText(f"{avg_days:.1f} Days")
             self.kpi_profit.setText(f"₹{format_inr(tot_gross_profit)}")
             self.kpi_interest.setText(f"₹{format_inr(tot_interest_cost)}")

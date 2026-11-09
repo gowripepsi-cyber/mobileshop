@@ -11,6 +11,7 @@ from utils.formatters import format_inr
 from database import Session
 from models import Product, Category, Unit, ExistingStockMaster, ExistingStockItem
 from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, AutoClearSearchableComboBox
+from utils.unit_converter import calculate_base_qty, format_product_stock, get_available_product_units
 
 
 class ExistingStockView(QWidget):
@@ -492,11 +493,17 @@ class ExistingStockView(QWidget):
                 self.product_code_input.setText(prod.product_code)
             self.rate_input.setValue(prod.purchase_price or 0.0)
             self.selling_price_input.setValue(prod.selling_price or 0.0)
-            if prod.unit:
-                idx = self.unit_combo.findText(prod.unit)
-                if idx >= 0:
-                    self.unit_combo.setCurrentIndex(idx)
-            self.current_stock_lbl.setText(f"{prod.stock_qty} {prod.unit or 'Pcs'}")
+            session = Session()
+            try:
+                avail_units = get_available_product_units(prod, session)
+                self.unit_combo.blockSignals(True)
+                self.unit_combo.clear()
+                self.unit_combo.addItems(avail_units)
+                self.unit_combo.setCurrentIndex(0)
+                self.unit_combo.blockSignals(False)
+                self.current_stock_lbl.setText(format_product_stock(prod, session))
+            finally:
+                session.close()
         else:
             self.current_stock_lbl.setText("-")
 
@@ -697,10 +704,13 @@ class ExistingStockView(QWidget):
 
             # Process items & increment stock
             for item in self.stock_items:
+                prod = session.query(Product).get(item["product_id"])
+                item_base_qty = calculate_base_qty(prod, item["qty"], item.get("unit"), session)
                 stock_item = ExistingStockItem(
                     master_id=master.id,
                     product_id=item["product_id"],
                     qty=item["qty"],
+                    base_qty=item_base_qty,
                     rate=item["rate"],
                     selling_price=item["selling_price"],
                     unit=item["unit"],
@@ -709,9 +719,8 @@ class ExistingStockView(QWidget):
                 session.add(stock_item)
 
                 # Increment stock on Product
-                prod = session.query(Product).get(item["product_id"])
                 if prod:
-                    prod.stock_qty += item["qty"]
+                    prod.stock_qty += item_base_qty
                     if item["rate"] > 0:
                         prod.purchase_price = item["rate"]
                     if item["selling_price"] > 0:
@@ -887,7 +896,8 @@ class ExistingStockView(QWidget):
             # Check if reverting any item would cause negative stock
             required_revert = {}
             for itm in master.items:
-                required_revert[itm.product_id] = required_revert.get(itm.product_id, 0) + itm.qty
+                b_qty = itm.base_qty if itm.base_qty is not None else itm.qty
+                required_revert[itm.product_id] = required_revert.get(itm.product_id, 0) + b_qty
 
             for prod_id, req_qty in required_revert.items():
                 prod = session.query(Product).get(prod_id)
@@ -905,7 +915,8 @@ class ExistingStockView(QWidget):
             for itm in master.items:
                 prod = session.query(Product).get(itm.product_id)
                 if prod:
-                    prod.stock_qty -= itm.qty
+                    b_qty = itm.base_qty if itm.base_qty is not None else itm.qty
+                    prod.stock_qty -= b_qty
 
             session.delete(master)
             session.commit()
