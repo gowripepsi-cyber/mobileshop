@@ -656,8 +656,19 @@ def generate_service_pdf(service_data, file_path):
         Paragraph(f"GSTIN: {service_data['shop_gst']}", style_sub)
     ]
     
+    is_onsite = (service_data.get('job_type') == 'Onsite Installation / Service')
+    inv_title_text = "SERVICE & INSTALLATION INVOICE" if is_onsite else "SERVICE INVOICE"
+    style_title_use = style_title
+    if is_onsite:
+        style_title_use = ParagraphStyle(
+            'InvoiceTitleServiceOnsite',
+            parent=style_title,
+            fontSize=16,
+            leading=20
+        )
+
     right_info = [
-        Paragraph("SERVICE INVOICE", style_title),
+        Paragraph(inv_title_text, style_title_use),
         Spacer(1, 10),
         Paragraph(f"Job Number: <b>{service_data['job_number']}</b>", style_bold),
         Paragraph(f"Date: {service_data['date']}", style_sub)
@@ -683,6 +694,8 @@ def generate_service_pdf(service_data, file_path):
         [Paragraph(f"Name: {service_data['customer_name']}", style_sub)],
         [Paragraph(f"Mobile: {service_data['customer_mobile']}", style_sub)]
     ]
+    if service_data.get('customer_address'):
+        details_data.append([Paragraph(f"Installation / Site Address: {service_data['customer_address']}", style_sub)])
     details_table = Table(details_data, colWidths=[540])
     details_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
@@ -777,30 +790,38 @@ def generate_service_pdf(service_data, file_path):
     complaint_str = service_data.get('complaint') or '-'
     status_str = service_data.get('status') or '-'
 
+    banner_title = "<b>MACHINE & INSTALLATION SPECIFICATIONS</b>" if is_onsite else "<b>DEVICE & REPAIR SPECIFICATIONS</b>"
+    left_subhead = "<b>MACHINE / ON-SITE DETAILS</b>" if is_onsite else "<b>DEVICE DETAILS</b>"
+    right_subhead = "<b>ENGINEER & WORK STATUS</b>" if is_onsite else "<b>TECHNICIAN & REPAIR STATUS</b>"
+    model_label = "Machine / Unit:" if is_onsite else "Device Model / Detail:"
+    tech_label = "Assigned Engineer:" if is_onsite else "Assigned Technician:"
+    id_label = "Serial / Machine ID:" if is_onsite else "Device ID / IMEI / Serial:"
+    complaint_title = "<b>WORK SPECIFICATIONS / DETAILS:</b>" if is_onsite else "<b>COMPLAINT & REPAIR ISSUE DETAILS:</b>"
+
     info_block_data = [
         # Top banner title
         [
-            Paragraph("<b>DEVICE & REPAIR SPECIFICATIONS</b>", style_sec_title),
+            Paragraph(banner_title, style_sec_title),
             ""
         ],
         # Section Subheaders
         [
-            Paragraph("<b>DEVICE DETAILS</b>", style_info_head),
-            Paragraph("<b>TECHNICIAN & REPAIR STATUS</b>", style_info_head)
+            Paragraph(left_subhead, style_info_head),
+            Paragraph(right_subhead, style_info_head)
         ],
         # Row 1
         [
-            Paragraph(f"<font color='#64748b'>Device Model / Detail:</font> <b>{dev_model_str}</b>", style_info_val),
-            Paragraph(f"<font color='#64748b'>Assigned Technician:</font> <b>{tech_str}</b>", style_info_val)
+            Paragraph(f"<font color='#64748b'>{model_label}</font> <b>{dev_model_str}</b>", style_info_val),
+            Paragraph(f"<font color='#64748b'>{tech_label}</font> <b>{tech_str}</b>", style_info_val)
         ],
         # Row 2
         [
-            Paragraph(f"<font color='#64748b'>Device ID / IMEI / Serial:</font> <b>{dev_id_str}</b>", style_info_val),
+            Paragraph(f"<font color='#64748b'>{id_label}</font> <b>{dev_id_str}</b>", style_info_val),
             Paragraph(f"<font color='#64748b'>Job Status:</font> <b>{status_str}</b>", style_info_val)
         ],
         # Row 3: Complaint details spanning full width
         [
-            Paragraph(f"<b>COMPLAINT & REPAIR ISSUE DETAILS:</b><br/><font color='#334155'>{complaint_str}</font>", style_complaint_text),
+            Paragraph(f"{complaint_title}<br/><font color='#334155'>{complaint_str}</font>", style_complaint_text),
             ""
         ]
     ]

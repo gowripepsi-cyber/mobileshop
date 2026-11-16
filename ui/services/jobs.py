@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, 
                              QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, 
                              QFrame, QFormLayout, QDialog, QTextEdit, QDoubleSpinBox, QSpacerItem, QSizePolicy,
-                             QApplication, QScrollArea, QSpinBox, QDialogButtonBox, QGridLayout)
+                             QApplication, QScrollArea, QSpinBox, QDialogButtonBox, QGridLayout, QCheckBox)
 from PySide6.QtCore import Qt, QObject, QEvent, QTimer, QRegularExpression
 from PySide6.QtGui import QColor, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import QCompleter
@@ -40,7 +40,7 @@ class JobCardDialog(QDialog):
     def __init__(self, job=None, parent=None):
         super().__init__(parent)
         self.job = job
-        self.setWindowTitle("Edit Repair Job" if job else "New Repair Job Card")
+        self.setWindowTitle("Edit Service / Installation Job" if job else "New Service / Installation Card")
         
         # Check settings for IMEI visibility
         from database import Setting
@@ -55,17 +55,15 @@ class JobCardDialog(QDialog):
         finally:
             session.close()
 
-        if self.job:
-            h = 560 if self.show_imei else 530
-        else:
-            h = 515 if self.show_imei else 485
-        self.setFixedSize(480, h)
+        self.resize(560, 710)
+        self.setMinimumSize(520, 600)
             
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
+        form_layout.setSpacing(9)
 
         self.job_num_input = QLineEdit()
         self.job_num_input.setPlaceholderText("6-digit ID (e.g. 000001)")
@@ -73,6 +71,12 @@ class JobCardDialog(QDialog):
         regex = QRegularExpression(r"^[0-9]{0,6}$")
         self.job_num_input.setValidator(QRegularExpressionValidator(regex, self))
         
+        # 1. Job Nature / Work Type (In-Shop vs Onsite Installation)
+        self.job_type_combo = QComboBox()
+        self.job_type_combo.addItem("🛠️ In-Shop Service / Repair", "In-Shop Repair")
+        self.job_type_combo.addItem("🏠 Onsite / Installation (Customer Place)", "Onsite Installation / Service")
+        self.job_type_combo.currentIndexChanged.connect(self.on_job_type_changed)
+
         self.cust_name_combo = QComboBox()
         self.cust_name_combo.setEditable(True)
         self.cust_name_combo.setInsertPolicy(QComboBox.NoInsert)
@@ -107,24 +111,77 @@ class JobCardDialog(QDialog):
         self.cust_mobile_input.setPlaceholderText("Search customer mobile or type new")
         self.cust_mobile_input.textChanged.connect(self.lookup_customer_by_mobile)
 
+        # Onsite Installation Address
+        self.customer_address_input = QTextEdit()
+        self.customer_address_input.setPlaceholderText("Enter installation location / customer address...")
+        self.customer_address_input.setFixedHeight(50)
+        self.customer_address_label = QLabel("Installation Address *:")
+
+        # Device / Machine / Unit Details
+        self.device_model_label = QLabel("Machine / Device / Unit *:")
         self.device_model_input = QLineEdit()
-        self.device_model_input.setPlaceholderText("Enter device detail (e.g. Model, Specs)")
+        self.device_model_input.setPlaceholderText("e.g. RO Water Purifier, Machine, Device Model")
+
+        self.imei_label = QLabel("Serial / Machine ID:")
         self.imei_input = QLineEdit()
-        self.imei_input.setPlaceholderText("Enter device ID / Serial / IMEI (optional)")
+        self.imei_input.setPlaceholderText("Enter device ID / Serial / Machine ID (optional)")
         
         self.complaint_input = QTextEdit()
-        self.complaint_input.setFixedHeight(80)
+        self.complaint_input.setFixedHeight(75)
+        self.complaint_input.setPlaceholderText("Work specifications, installation details, or reported complaint...")
         
-        # Mechanic / Service Attender (Optional dropdown & search from Staff table)
+        # Mechanic / Service Engineer Selection
         self.technician_combo = QComboBox()
         self.technician_combo.setEditable(True)
         self.technician_combo.setInsertPolicy(QComboBox.NoInsert)
         if self.technician_combo.lineEdit():
-            self.technician_combo.lineEdit().setPlaceholderText("Select or type mechanic / attender (optional)")
+            self.technician_combo.lineEdit().setPlaceholderText("Select or type mechanic / engineer (optional)")
             self.technician_combo.lineEdit().setClearButtonEnabled(True)
+        self.technician_combo.currentIndexChanged.connect(self.on_technician_selected)
 
         # Backward compatibility alias
         self.technician_input = self.technician_combo.lineEdit()
+
+        # Mechanic Employment & Contractor Payout Setup
+        self.tech_type_widget = QWidget()
+        tech_type_layout = QVBoxLayout(self.tech_type_widget)
+        tech_type_layout.setContentsMargins(0, 0, 0, 0)
+        tech_type_layout.setSpacing(6)
+
+        self.technician_type_combo = QComboBox()
+        self.technician_type_combo.addItem("🏢 In-House Staff (Monthly Paid - Shop Revenue)", "Monthly Staff")
+        self.technician_type_combo.addItem("👷 Contract Labour / External Mechanic (Per-Job Fee)", "Contract Labour")
+        self.technician_type_combo.currentIndexChanged.connect(self.on_technician_type_changed)
+        tech_type_layout.addWidget(self.technician_type_combo)
+
+        # Container for contractor payout controls
+        self.contractor_fee_container = QWidget()
+        c_fee_layout = QFormLayout(self.contractor_fee_container)
+        c_fee_layout.setContentsMargins(0, 4, 0, 4)
+        c_fee_layout.setSpacing(6)
+
+        self.contractor_fee_input = QDoubleSpinBox()
+        self.contractor_fee_input.setRange(0.0, 999999.0)
+        self.contractor_fee_input.setDecimals(2)
+        self.contractor_fee_input.setPrefix("₹ ")
+        self.contractor_fee_input.setStyleSheet("font-size: 13px; font-weight: bold; color: #dc2626;")
+        c_fee_layout.addRow("Contractor Labor Fee (₹):", self.contractor_fee_input)
+
+        self.contractor_paid_check = QCheckBox("Mark fee as already paid (immediate cash expense)")
+        self.contractor_paid_check.setStyleSheet("font-size: 11.5px; font-weight: 500;")
+        c_fee_layout.addRow(self.contractor_paid_check)
+
+        self.contractor_info_lbl = QLabel("ℹ️ Shop pays this fee to the contract mechanic. Recorded as a Shop Expense voucher upon payout.")
+        self.contractor_info_lbl.setStyleSheet("color: #b45309; font-size: 11px; font-weight: 500;")
+        self.contractor_info_lbl.setWordWrap(True)
+        c_fee_layout.addRow(self.contractor_info_lbl)
+
+        tech_type_layout.addWidget(self.contractor_fee_container)
+
+        self.inhouse_info_lbl = QLabel("ℹ️ Monthly staff: The customer installation/service charge is 100% shop revenue (mechanic is on monthly shop payroll).")
+        self.inhouse_info_lbl.setStyleSheet("color: #15803d; font-size: 11px; font-weight: 500;")
+        self.inhouse_info_lbl.setWordWrap(True)
+        tech_type_layout.addWidget(self.inhouse_info_lbl)
 
         # Advance Payment (Rs.)
         self.advance_payment_input = QLineEdit()
@@ -142,12 +199,16 @@ class JobCardDialog(QDialog):
             self.status_combo = None
 
         form_layout.addRow("Job Number *:", self.job_num_input)
+        form_layout.addRow("Work Nature / Type *:", self.job_type_combo)
         form_layout.addRow("Customer Name *:", cust_layout)
         form_layout.addRow("Customer Mobile *:", self.cust_mobile_input)
-        form_layout.addRow("Device Detail *:", self.device_model_input)
-        form_layout.addRow("Device ID:", self.imei_input)
-        form_layout.addRow("Complaint details:", self.complaint_input)
-        form_layout.addRow("Mechanic / Attender:", self.technician_combo)
+        form_layout.addRow(self.customer_address_label, self.customer_address_input)
+        form_layout.addRow(self.device_model_label, self.device_model_input)
+        if self.show_imei:
+            form_layout.addRow(self.imei_label, self.imei_input)
+        form_layout.addRow("Work / Complaint details:", self.complaint_input)
+        form_layout.addRow("Mechanic / Engineer:", self.technician_combo)
+        form_layout.addRow("Engineer Type:", self.tech_type_widget)
         form_layout.addRow("Advance Payment (Rs.):", self.advance_payment_input)
         if self.status_combo:
             form_layout.addRow("Job Status:", self.status_combo)
@@ -175,13 +236,32 @@ class JobCardDialog(QDialog):
             self.cust_mobile_input.setText(self.job.mobile)
             self.cust_name_combo.setCurrentText(self.job.customer_name)
             self.device_model_input.setText(self.job.device_model)
-            self.imei_input.setText(self.job.imei)
+            self.imei_input.setText(self.job.imei or "")
             self.complaint_input.setPlainText(self.job.complaint or "")
+            self.customer_address_input.setPlainText(getattr(self.job, 'customer_address', '') or "")
+
+            if getattr(self.job, 'job_type', '') == 'Onsite Installation / Service':
+                self.job_type_combo.setCurrentIndex(1)
+            else:
+                self.job_type_combo.setCurrentIndex(0)
+
+            if getattr(self.job, 'technician_type', '') == 'Contract Labour':
+                self.technician_type_combo.setCurrentIndex(1)
+            else:
+                self.technician_type_combo.setCurrentIndex(0)
+
+            self.contractor_fee_input.setValue(float(getattr(self.job, 'contractor_cost', 0.0) or 0.0))
+            self.contractor_paid_check.setChecked(bool(getattr(self.job, 'contractor_paid', False)))
+
             adv_val = getattr(self.job, 'advance_payment', 0.0) or 0.0
             self.advance_payment_input.setText(f"{adv_val:.2f}")
             if self.status_combo:
                 self.status_combo.setCurrentText(self.job.status or "Received")
         else:
+            # New card: default to in-shop, monthly staff
+            self.job_type_combo.setCurrentIndex(0)
+            self.technician_type_combo.setCurrentIndex(0)
+
             # Suggest next 6-digit serial number (pure numbers, no alphabets)
             session = Session()
             try:
@@ -197,6 +277,37 @@ class JobCardDialog(QDialog):
             finally:
                 session.close()
 
+        self.on_job_type_changed(self.job_type_combo.currentIndex())
+        self.on_technician_type_changed(self.technician_type_combo.currentIndex())
+
+    def on_job_type_changed(self, index=0):
+        is_onsite = (self.job_type_combo.currentData() == 'Onsite Installation / Service')
+        self.customer_address_input.setVisible(is_onsite)
+        self.customer_address_label.setVisible(is_onsite)
+        if is_onsite:
+            self.device_model_label.setText("Machine / Unit Detail *:")
+            self.device_model_input.setPlaceholderText("e.g. RO Water Purifier, Machine Model, Equipment")
+        else:
+            self.device_model_label.setText("Device Detail *:")
+            self.device_model_input.setPlaceholderText("Enter device detail (e.g. Model, Specs)")
+
+    def on_technician_type_changed(self, index=0):
+        is_contract = (self.technician_type_combo.currentData() == 'Contract Labour')
+        self.contractor_fee_container.setVisible(is_contract)
+        self.inhouse_info_lbl.setVisible(not is_contract)
+        if not is_contract:
+            self.contractor_fee_input.setValue(0.0)
+            self.contractor_paid_check.setChecked(False)
+
+    def on_technician_selected(self, index=0):
+        data = self.technician_combo.currentData()
+        if data and isinstance(data, dict):
+            s_type = data.get("salary_type", "")
+            if "contract" in s_type.lower():
+                self.technician_type_combo.setCurrentIndex(1)  # Contract Labour
+            elif data.get("name"):
+                self.technician_type_combo.setCurrentIndex(0)  # Monthly Staff
+
     def load_customers(self, select_customer_name=None):
         session = Session()
         try:
@@ -204,7 +315,7 @@ class JobCardDialog(QDialog):
             self.cust_name_combo.clear()
             customers = session.query(Customer).order_by(Customer.name.asc()).all()
             for c in customers:
-                self.cust_name_combo.addItem(c.name, {"mobile": c.mobile})
+                self.cust_name_combo.addItem(c.name, {"mobile": c.mobile, "address": c.address or ""})
             
             # Setup completer for fast autocomplete
             completer = QCompleter(self.cust_name_combo.model(), self.cust_name_combo)
@@ -251,8 +362,13 @@ class JobCardDialog(QDialog):
 
     def on_customer_selected(self, index):
         data = self.cust_name_combo.currentData()
-        if data and isinstance(data, dict) and data.get("mobile"):
-            self.cust_mobile_input.setText(data["mobile"])
+        if data and isinstance(data, dict):
+            if data.get("mobile"):
+                self.cust_mobile_input.setText(data["mobile"])
+            if data.get("address") and hasattr(self, 'customer_address_input'):
+                curr = self.customer_address_input.toPlainText().strip()
+                if not curr or curr == "Logged via Service Center":
+                    self.customer_address_input.setPlainText(data["address"])
         if hasattr(self, 'cust_click_filter') and index >= 0:
             self.cust_click_filter._user_typed = True
 
@@ -267,13 +383,17 @@ class JobCardDialog(QDialog):
             try:
                 saved_cust = session.query(Customer).filter_by(name=dlg.saved_customer_name).first()
                 saved_mobile = saved_cust.mobile if saved_cust else ""
+                saved_address = saved_cust.address if saved_cust else ""
             except Exception:
                 saved_mobile = ""
+                saved_address = ""
             finally:
                 session.close()
             self.load_customers(select_customer_name=dlg.saved_customer_name)
             if saved_mobile:
                 self.cust_mobile_input.setText(saved_mobile)
+            if saved_address and hasattr(self, 'customer_address_input'):
+                self.customer_address_input.setPlainText(saved_address)
 
     def lookup_customer_by_mobile(self, text):
         if len(text.strip()) >= 10:
@@ -281,6 +401,10 @@ class JobCardDialog(QDialog):
             cust = session.query(Customer).filter_by(mobile=text.strip()).first()
             if cust:
                 self.cust_name_combo.setCurrentText(cust.name)
+                if hasattr(self, 'customer_address_input'):
+                    curr = self.customer_address_input.toPlainText().strip()
+                    if not curr or curr == "Logged via Service Center":
+                        self.customer_address_input.setPlainText(cust.address or "")
                 if hasattr(self, 'cust_click_filter'):
                     self.cust_click_filter._user_typed = True
             session.close()
@@ -290,18 +414,26 @@ class JobCardDialog(QDialog):
         try:
             self.technician_combo.blockSignals(True)
             self.technician_combo.clear()
-            self.technician_combo.addItem("-- Select Mechanic / Service Attender (Optional) --", "")
+            self.technician_combo.addItem("-- Select Mechanic / Service Engineer (Optional) --", {"name": "", "salary_type": "Monthly"})
 
-            # Prioritize Technicians, but list all Active staff alphabetically
+            # Prioritize Technicians, Service Engineers, Mechanics, but list all Active staff
             active_staff = session.query(Staff).filter_by(status='Active').order_by(
                 Staff.designation.ilike('%technician%').desc(),
+                Staff.designation.ilike('%engineer%').desc(),
+                Staff.designation.ilike('%mechanic%').desc(),
                 Staff.name.asc()
             ).all()
 
             names_for_comp = []
             for s in active_staff:
-                label = f"{s.name} ({s.designation})" if s.designation else s.name
-                self.technician_combo.addItem(label, s.name)
+                s_type = s.salary_type or "Monthly"
+                type_tag = "Contract" if "contract" in s_type.lower() else "Monthly"
+                label = f"{s.name} ({s.designation or 'Staff'} - {type_tag})"
+                self.technician_combo.addItem(label, {
+                    "name": s.name,
+                    "salary_type": s_type,
+                    "designation": s.designation or "Staff"
+                })
                 names_for_comp.append(label)
                 if s.name not in names_for_comp:
                     names_for_comp.append(s.name)
@@ -315,7 +447,9 @@ class JobCardDialog(QDialog):
             if selected_tech:
                 matched = -1
                 for i in range(self.technician_combo.count()):
-                    if self.technician_combo.itemData(i) == selected_tech or self.technician_combo.itemText(i) == selected_tech:
+                    item_data = self.technician_combo.itemData(i)
+                    name_val = item_data.get("name") if isinstance(item_data, dict) else item_data
+                    if name_val == selected_tech or self.technician_combo.itemText(i) == selected_tech:
                         matched = i
                         break
                 if matched >= 0:
@@ -334,30 +468,29 @@ class JobCardDialog(QDialog):
         text = self.technician_combo.currentText().strip()
         idx = self.technician_combo.currentIndex()
 
-        if not text or text == "-- Select Mechanic / Service Attender (Optional) --":
+        if not text or text.startswith("-- Select Mechanic"):
             return ""
 
-        # If currentText matches the selected combo item's text, return its associated data (staff name)
         if idx >= 0 and self.technician_combo.itemText(idx).strip() == text:
             data = self.technician_combo.itemData(idx)
-            if data and isinstance(data, str) and data.strip():
+            if data and isinstance(data, dict) and data.get("name"):
+                return data["name"].strip()
+            elif data and isinstance(data, str) and data.strip():
                 return data.strip()
             return text
 
-        # If text matches any other item in the combo, return its data
         for i in range(self.technician_combo.count()):
             item_txt = self.technician_combo.itemText(i).strip()
             item_data = self.technician_combo.itemData(i)
-            if item_txt.lower() == text.lower() or (item_data and item_data.strip().lower() == text.lower()):
-                if item_data and isinstance(item_data, str) and item_data.strip():
-                    return item_data.strip()
+            name_val = item_data.get("name") if isinstance(item_data, dict) else item_data
+            if item_txt.lower() == text.lower() or (name_val and str(name_val).strip().lower() == text.lower()):
+                if name_val and str(name_val).strip():
+                    return str(name_val).strip()
 
-        # If user typed "Name (Role)", extract just the name
         if "(" in text and text.endswith(")"):
             return text.rsplit("(", 1)[0].strip()
 
         return text
-
 
     def handle_save(self):
         job_num = self.job_num_input.text().strip()
@@ -371,9 +504,21 @@ class JobCardDialog(QDialog):
         tech = self.get_selected_technician()
         status = self.status_combo.currentText() if self.status_combo else (self.job.status if self.job else "Received")
 
+        # New Onsite Installation & Contract Labour fields
+        job_type = self.job_type_combo.currentData() or "In-Shop Repair"
+        cust_address = self.customer_address_input.toPlainText().strip() if self.customer_address_input.isVisible() else ""
+        tech_type = self.technician_type_combo.currentData() or "Monthly Staff"
+        contractor_cost = self.contractor_fee_input.value() if tech_type == "Contract Labour" else 0.0
+        contractor_paid = self.contractor_paid_check.isChecked() if tech_type == "Contract Labour" else False
+
         is_invalid = not job_num or not mobile or not name or not model
         if is_invalid:
-            QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)\n(Customer Name, Mobile, and Device Detail are required)")
+            QMessageBox.warning(self, "Validation Error", "Please fill in all mandatory fields (*)\n(Customer Name, Mobile, and Machine/Device Detail are required)")
+            return
+
+        if job_type == 'Onsite Installation / Service' and not cust_address:
+            QMessageBox.warning(self, "Validation Error", "Please enter the customer premises / installation address for onsite work.")
+            self.customer_address_input.setFocus()
             return
 
         # Ensure Job ID is purely numeric (no alphabets or special characters)
@@ -413,12 +558,55 @@ class JobCardDialog(QDialog):
         session = Session()
         try:
             from sqlalchemy import func
+            from models import ExpenseCategory, Expense
+            from database import generate_next_expense_voucher
+
             # 1. Handle Customer Account Creation / Association
             cust = session.query(Customer).filter_by(mobile=mobile).first()
             if not cust:
-                new_cust = Customer(name=name, mobile=mobile, address="Logged via Service Center")
+                new_cust = Customer(name=name, mobile=mobile, address=cust_address or "Logged via Service Center")
                 session.add(new_cust)
                 session.flush()
+            elif cust_address and (not cust.address or cust.address == "Logged via Service Center"):
+                cust.address = cust_address
+
+            # 2. Handle Immediate Contractor Payout Expense if requested
+            immediate_expense_id = None
+            if contractor_paid and contractor_cost > 0:
+                cat = session.query(ExpenseCategory).filter(ExpenseCategory.name.ilike('%Contract Labour%')).first()
+                if not cat:
+                    cat = ExpenseCategory(
+                        name="Contract Labour & Technician Charges",
+                        description="Payouts and labor charges for contract engineers and external mechanics"
+                    )
+                    session.add(cat)
+                    session.flush()
+
+                v_num = generate_next_expense_voucher(session)
+                today_date = datetime.date.today()
+                tech_name = tech or "Contract Mechanic"
+                exp = Expense(
+                    voucher_number=v_num,
+                    date=today_date,
+                    category_id=cat.id,
+                    amount=contractor_cost,
+                    payment_mode='Cash',
+                    payee=tech_name,
+                    reference_no=f"Job #{job_num}",
+                    description=f"Immediate contract labor fee payout for Job #{job_num} ({model}) to {tech_name}"
+                )
+                session.add(exp)
+                session.flush()
+
+                session.add(CashTransaction(
+                    date=today_date,
+                    transaction_type='out',
+                    amount=contractor_cost,
+                    source_type='expense',
+                    source_id=exp.id,
+                    description=f"Expense [{cat.name}] - {tech_name} (Voucher: {v_num}, Job #{job_num})"
+                ))
+                immediate_expense_id = exp.id
 
             if self.job:
                 # Update
@@ -431,6 +619,14 @@ class JobCardDialog(QDialog):
                 db_job.complaint = complaint
                 db_job.technician = tech
                 db_job.status = status
+                db_job.job_type = job_type
+                db_job.customer_address = cust_address
+                db_job.technician_type = tech_type
+                db_job.contractor_cost = contractor_cost
+                if contractor_paid and not db_job.contractor_paid:
+                    db_job.contractor_paid = True
+                    if immediate_expense_id:
+                        db_job.contractor_expense_id = immediate_expense_id
 
                 if abs(adv_val - old_adv) > 0.001:
                     db_job.advance_payment = adv_val
@@ -471,7 +667,7 @@ class JobCardDialog(QDialog):
                             amount=adv_val,
                             source_type='service',
                             source_id=db_job.id,
-                            description=f"Advance payment for repair job card {db_job.job_number}"
+                            description=f"Advance payment for service job card {db_job.job_number}"
                         )
                         session.add(cash_tx)
 
@@ -495,7 +691,13 @@ class JobCardDialog(QDialog):
                     advance_payment=adv_val,
                     paid_amount=adv_val,
                     total_amount=0.0,
-                    balance=0.0
+                    balance=0.0,
+                    job_type=job_type,
+                    customer_address=cust_address,
+                    technician_type=tech_type,
+                    contractor_cost=contractor_cost,
+                    contractor_paid=contractor_paid,
+                    contractor_expense_id=immediate_expense_id
                 )
                 session.add(new_job)
                 session.flush()
@@ -519,7 +721,7 @@ class JobCardDialog(QDialog):
                         amount=adv_val,
                         source_type='service',
                         source_id=new_job.id,
-                        description=f"Advance payment for repair job card {new_job.job_number}"
+                        description=f"Advance payment for service job card {new_job.job_number}"
                     )
                     session.add(cash_tx)
 
@@ -541,6 +743,14 @@ class BillingDialog(QDialog):
         self.job_status = job.status
         self.job_paid_amount = float(job.paid_amount or 0.0)
         self.job_created_date = job.created_at.strftime("%Y-%m-%d") if getattr(job, 'created_at', None) else ""
+        self.job_type = getattr(job, 'job_type', None) or 'In-Shop Repair'
+        self.customer_address = getattr(job, 'customer_address', None) or ''
+        self.technician_type = getattr(job, 'technician_type', None) or 'Monthly Staff'
+        self.contractor_cost = float(getattr(job, 'contractor_cost', 0.0) or 0.0)
+        self.contractor_paid = bool(getattr(job, 'contractor_paid', False))
+        self.contractor_payment_mode = getattr(job, 'contractor_payment_mode', None) or 'Cash'
+        self.contractor_bank_id = getattr(job, 'contractor_bank_id', None)
+        self.contractor_expense_id = getattr(job, 'contractor_expense_id', None)
         self.parts_list = []  # list of dicts: {"name": str, "cost": float}
         self.total_paid_so_far = 0.0
         self.setWindowTitle(f"Billing for Job: {self.job_number}")
@@ -563,8 +773,9 @@ class BillingDialog(QDialog):
         header_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0f172a;")
         header_bar.addWidget(header_title)
         
-        header_sub = QLabel(f"| &nbsp;&nbsp;Job Card: <b>{self.job.job_number}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Status: <b>{self.job.status}</b>")
-        header_sub.setStyleSheet("font-size: 13px; color: #94a3b8;")
+        type_tag = "🏠 Onsite Installation" if self.job_type == "Onsite Installation / Service" else "🛠️ In-Shop Service"
+        header_sub = QLabel(f"| &nbsp;&nbsp;Job Card: <b>{self.job.job_number}</b> &nbsp;&nbsp;|&nbsp;&nbsp; {type_tag} &nbsp;&nbsp;|&nbsp;&nbsp; Status: <b>{self.job.status}</b>")
+        header_sub.setStyleSheet("font-size: 13px; color: #64748b;")
         header_bar.addWidget(header_sub)
         
         header_bar.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
@@ -592,32 +803,41 @@ class BillingDialog(QDialog):
         left_layout.setSpacing(12)
 
         left_title = QLabel("Job Details & Spare Parts Entry")
-        left_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #6366f1; border-bottom: 1px solid #28284e; padding-bottom: 6px;")
+        left_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #6366f1; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;")
         left_layout.addWidget(left_title)
 
         # Job Details grid/layout
         details_layout = QHBoxLayout()
         details_layout.setSpacing(15)
         
+        addr_line = f"<br/><b>Location:</b> {self.customer_address}" if self.customer_address else ""
         cust_info = QLabel(
             f"<b>Customer:</b> {self.job.customer_name}<br/>"
-            f"<b>Mobile:</b> {self.job.mobile}"
+            f"<b>Mobile:</b> {self.job.mobile}{addr_line}"
         )
-        cust_info.setStyleSheet("color: #e2e8f0; font-size: 12px; line-height: 1.3;")
+        cust_info.setStyleSheet("color: #1e293b; font-size: 12px; line-height: 1.35;")
         cust_info.setWordWrap(True)
         
+        is_onsite = (self.job_type == "Onsite Installation / Service")
+        type_badge = "🏠 Onsite Installation" if is_onsite else "🛠️ In-Shop Service"
+        type_color = "#0284c7" if is_onsite else "#6366f1"
         device_info = QLabel(
-            f"<b>Device Detail:</b> {self.job.device_model}<br/>"
-            f"<b>Device ID:</b> {self.job.imei or '-'}"
+            f"<b>Work Nature:</b> <span style='color: {type_color}; font-weight: bold;'>{type_badge}</span><br/>"
+            f"<b>Machine / Unit:</b> {self.job.device_model}<br/>"
+            f"<b>Serial / ID:</b> {self.job.imei or '-'}"
         )
-        device_info.setStyleSheet("color: #e2e8f0; font-size: 12px; line-height: 1.3;")
+        device_info.setStyleSheet("color: #1e293b; font-size: 12px; line-height: 1.35;")
         device_info.setWordWrap(True)
         
+        is_contract = (self.technician_type == "Contract Labour")
+        tech_badge = "👷 Contract Labour" if is_contract else "🏢 Monthly Staff"
+        tech_badge_color = "#d97706" if is_contract else "#16a34a"
         tech_info = QLabel(
-            f"<b>Mechanic / Attender:</b> {self.job.technician or '-'}<br/>"
-            f"<b>Complaint:</b> {self.job.complaint or '-'}"
+            f"<b>Assigned Tech:</b> {self.job.technician or '-'}<br/>"
+            f"<b>Staff Type:</b> <span style='color: {tech_badge_color}; font-weight: bold;'>{tech_badge}</span><br/>"
+            f"<b>Work / Complaint:</b> {self.job.complaint or '-'}"
         )
-        tech_info.setStyleSheet("color: #e2e8f0; font-size: 12px; line-height: 1.3;")
+        tech_info.setStyleSheet("color: #1e293b; font-size: 12px; line-height: 1.35;")
         tech_info.setWordWrap(True)
 
         details_layout.addWidget(cust_info, 1)
@@ -636,6 +856,23 @@ class BillingDialog(QDialog):
         self.service_charge_input.valueChanged.connect(self.recalculate_totals)
         form_layout.addRow("Service Labor Charge (₹) *:", self.service_charge_input)
         left_layout.addLayout(form_layout)
+
+        # Contractor Payout Card
+        self.contractor_payout_card = QFrame()
+        self.contractor_payout_card.setObjectName("contractor_payout_card")
+        self.contractor_payout_card.setStyleSheet("""
+            QFrame#contractor_payout_card {
+                background-color: #f8fafc;
+                border: 1.5px solid #e2e8f0;
+                border-radius: 10px;
+            }
+        """)
+        self.contractor_payout_layout = QVBoxLayout(self.contractor_payout_card)
+        self.contractor_payout_layout.setContentsMargins(12, 10, 12, 10)
+        self.contractor_payout_layout.setSpacing(8)
+        left_layout.addWidget(self.contractor_payout_card)
+
+        self.setup_contractor_payout_ui()
 
         # Spare Parts Entry Section
         parts_header = QLabel("Spare Parts Used")
@@ -773,8 +1010,13 @@ class BillingDialog(QDialog):
         self.total_lbl = QLabel("₹0.00")
         self.total_lbl.setStyleSheet("font-size: 22px; font-weight: bold; color: #8fd53b;")
         
+        # Shop Net Margin / Earnings breakdown
+        self.shop_profit_lbl = QLabel("")
+        self.shop_profit_lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #166534; padding-top: 3px;")
+
         total_card_layout.addWidget(total_title)
         total_card_layout.addWidget(self.total_lbl)
+        total_card_layout.addWidget(self.shop_profit_lbl)
         right_content_layout.addWidget(total_card)
 
         # Balances Row (Advance Received + Already Paid + Remaining Balance)
@@ -1169,6 +1411,176 @@ class BillingDialog(QDialog):
         finally:
             session.close()
 
+    def setup_contractor_payout_ui(self):
+        # Clear existing layout items if any
+        while self.contractor_payout_layout.count():
+            child = self.contractor_payout_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                while child.layout().count():
+                    sub = child.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+
+        # Card Header: Mode Badge + Toggle Button
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        
+        if self.technician_type == "Contract Labour":
+            card_title = QLabel("👷 <b>Contract Labour / External Mechanic Payout</b>")
+            card_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #b45309;")
+            top_row.addWidget(card_title)
+            top_row.addStretch()
+            
+            self.btn_toggle_tech_type = QPushButton("Switch to Monthly Staff")
+            self.btn_toggle_tech_type.setProperty("class", "btn-secondary")
+            self.btn_toggle_tech_type.setStyleSheet("font-size: 10px; padding: 3px 8px;")
+            self.btn_toggle_tech_type.setCursor(Qt.PointingHandCursor)
+            self.btn_toggle_tech_type.clicked.connect(self.toggle_tech_type)
+            top_row.addWidget(self.btn_toggle_tech_type)
+            self.contractor_payout_layout.addLayout(top_row)
+
+            # Contract Labour Controls
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(15)
+            grid.setVerticalSpacing(8)
+
+            lbl_fee = QLabel("Contractor Fee (₹):")
+            lbl_fee.setStyleSheet("font-weight: bold; font-size: 12px; color: #1e293b;")
+            grid.addWidget(lbl_fee, 0, 0)
+
+            self.billing_contractor_fee = QDoubleSpinBox()
+            self.billing_contractor_fee.setRange(0, 999999)
+            self.billing_contractor_fee.setValue(self.contractor_cost)
+            self.billing_contractor_fee.setPrefix("₹ ")
+            self.billing_contractor_fee.setStyleSheet("font-size: 12px; font-weight: bold; padding: 4px;")
+            self.billing_contractor_fee.valueChanged.connect(self.on_contractor_fee_changed)
+            grid.addWidget(self.billing_contractor_fee, 0, 1)
+
+            # Margin Preview Label
+            self.margin_preview_lbl = QLabel("")
+            self.margin_preview_lbl.setStyleSheet("font-size: 12px; font-weight: bold;")
+            grid.addWidget(self.margin_preview_lbl, 0, 2)
+            self.contractor_payout_layout.addLayout(grid)
+
+            # Payout Status or Payment Form
+            if self.contractor_paid:
+                paid_box = QFrame()
+                paid_box.setStyleSheet("background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px;")
+                p_layout = QHBoxLayout(paid_box)
+                p_layout.setContentsMargins(8, 5, 8, 5)
+                paid_lbl = QLabel(f"✅ <b>Contractor Fee Paid:</b> ₹{format_inr(self.contractor_cost)} via {self.contractor_payment_mode or 'Cash'} (Expense voucher logged in shop accounts)")
+                paid_lbl.setStyleSheet("color: #065f46; font-size: 11px;")
+                p_layout.addWidget(paid_lbl)
+                self.contractor_payout_layout.addWidget(paid_box)
+            else:
+                pay_box = QFrame()
+                pay_box.setStyleSheet("background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px;")
+                pb_layout = QVBoxLayout(pay_box)
+                pb_layout.setContentsMargins(8, 6, 8, 6)
+                pb_layout.setSpacing(6)
+
+                self.billing_contractor_pay_now_check = QCheckBox("Pay Contractor Labor Fee Now (Record Shop Expense Voucher)")
+                self.billing_contractor_pay_now_check.setStyleSheet("font-weight: bold; color: #92400e; font-size: 11px;")
+                self.billing_contractor_pay_now_check.toggled.connect(self.toggle_contractor_payment_fields)
+                pb_layout.addWidget(self.billing_contractor_pay_now_check)
+
+                self.contractor_pay_options_widget = QWidget()
+                cpo_layout = QHBoxLayout(self.contractor_pay_options_widget)
+                cpo_layout.setContentsMargins(0, 0, 0, 0)
+                cpo_layout.setSpacing(10)
+
+                cpo_layout.addWidget(QLabel("Payment Mode:"))
+                self.billing_contractor_pay_mode = QComboBox()
+                self.billing_contractor_pay_mode.addItems(["Cash", "Bank"])
+                self.billing_contractor_pay_mode.currentTextChanged.connect(self.on_contractor_pay_mode_changed)
+                cpo_layout.addWidget(self.billing_contractor_pay_mode)
+
+                cpo_layout.addWidget(QLabel("Bank:"))
+                self.billing_contractor_bank_combo = QComboBox()
+                self.billing_contractor_bank_combo.setEnabled(False)
+                session = Session()
+                try:
+                    for b in session.query(BankAccount).all():
+                        self.billing_contractor_bank_combo.addItem(f"{b.bank_name} ({b.account_name})", b.id)
+                finally:
+                    session.close()
+                cpo_layout.addWidget(self.billing_contractor_bank_combo)
+                cpo_layout.addStretch()
+
+                self.contractor_pay_options_widget.setVisible(False)
+                pb_layout.addWidget(self.contractor_pay_options_widget)
+
+                note = QLabel("ℹ️ <i>When saved, this payout will be booked as an Expense voucher under 'Contract Labour & Technician Charges', deducting from cash drawer or bank.</i>")
+                note.setStyleSheet("font-size: 10px; color: #78350f;")
+                note.setWordWrap(True)
+                pb_layout.addWidget(note)
+
+                self.contractor_payout_layout.addWidget(pay_box)
+
+        else:
+            # Monthly Staff
+            card_title = QLabel("🏢 <b>In-House Staff (Monthly Paid - Shop Revenue)</b>")
+            card_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #166534;")
+            top_row.addWidget(card_title)
+            top_row.addStretch()
+
+            self.btn_toggle_tech_type = QPushButton("Switch to Contract Labour")
+            self.btn_toggle_tech_type.setProperty("class", "btn-secondary")
+            self.btn_toggle_tech_type.setStyleSheet("font-size: 10px; padding: 3px 8px;")
+            self.btn_toggle_tech_type.setCursor(Qt.PointingHandCursor)
+            self.btn_toggle_tech_type.clicked.connect(self.toggle_tech_type)
+            top_row.addWidget(self.btn_toggle_tech_type)
+            self.contractor_payout_layout.addLayout(top_row)
+
+            info_box = QFrame()
+            info_box.setStyleSheet("background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px;")
+            ib_layout = QVBoxLayout(info_box)
+            ib_layout.setContentsMargins(8, 6, 8, 6)
+            self.monthly_staff_revenue_lbl = QLabel("")
+            self.monthly_staff_revenue_lbl.setStyleSheet("color: #14532d; font-size: 11px;")
+            self.monthly_staff_revenue_lbl.setWordWrap(True)
+            ib_layout.addWidget(self.monthly_staff_revenue_lbl)
+            self.contractor_payout_layout.addWidget(info_box)
+
+        self.update_margin_preview()
+
+    def toggle_tech_type(self):
+        if self.technician_type == "Contract Labour":
+            self.technician_type = "Monthly Staff"
+        else:
+            self.technician_type = "Contract Labour"
+        self.setup_contractor_payout_ui()
+        self.recalculate_totals()
+
+    def toggle_contractor_payment_fields(self, checked):
+        if hasattr(self, 'contractor_pay_options_widget'):
+            self.contractor_pay_options_widget.setVisible(checked)
+
+    def on_contractor_pay_mode_changed(self, mode):
+        if hasattr(self, 'billing_contractor_bank_combo'):
+            self.billing_contractor_bank_combo.setEnabled(mode == "Bank")
+
+    def on_contractor_fee_changed(self, val):
+        self.contractor_cost = val
+        self.update_margin_preview()
+        self.recalculate_totals()
+
+    def update_margin_preview(self):
+        service_charge = self.service_charge_input.value() if hasattr(self, 'service_charge_input') else 0.0
+        if self.technician_type == "Contract Labour":
+            fee = self.contractor_cost
+            margin = service_charge - fee
+            if hasattr(self, 'margin_preview_lbl'):
+                margin_color = "#16a34a" if margin >= 0 else "#dc2626"
+                self.margin_preview_lbl.setText(f"Shop Margin: <span style='color: {margin_color}; font-size: 13px; font-weight: bold;'>₹{format_inr(margin)}</span>")
+        else:
+            if hasattr(self, 'monthly_staff_revenue_lbl'):
+                self.monthly_staff_revenue_lbl.setText(
+                    f"Technician is a monthly paid staff member. 100% of customer service charge (<b>₹{format_inr(service_charge)}</b>) is retained as shop <b>Revenue</b>. No per-job contractor fee is paid."
+                )
+
     def fill_full_balance(self):
         parts_total = sum(p["cost"] * p["qty"] for p in self.parts_list)
         service_charge = self.service_charge_input.value()
@@ -1184,6 +1596,17 @@ class BillingDialog(QDialog):
         service_charge = self.service_charge_input.value()
         net_total = parts_total + service_charge
         self.total_lbl.setText(f"₹{format_inr(net_total)}")
+
+        # Shop Profit / Earnings breakdown
+        if hasattr(self, 'shop_profit_lbl'):
+            if self.technician_type == "Contract Labour":
+                c_fee = self.contractor_cost
+                net_shop_rev = net_total - c_fee
+                self.shop_profit_lbl.setText(f"Shop Net (After ₹{format_inr(c_fee)} Contractor Fee): ₹{format_inr(net_shop_rev)}")
+            else:
+                self.shop_profit_lbl.setText(f"Shop Net Revenue: ₹{format_inr(net_total)}")
+
+        self.update_margin_preview()
 
         already_paid = getattr(self, 'total_paid_so_far', 0.0)
         self.already_paid_lbl.setText(f"₹{format_inr(already_paid)}")
@@ -1318,10 +1741,87 @@ class BillingDialog(QDialog):
         session = Session()
         try:
             from sqlalchemy import func
+            from models import ExpenseCategory, Expense
+            from database import generate_next_expense_voucher
+
             # 1. Update job details
             job = session.query(ServiceJob).get(self.job.id)
             cust = session.query(Customer).filter_by(mobile=job.mobile).first()
             cust_id = cust.id if cust else 1
+
+            # Update job technician type
+            job.technician_type = self.technician_type
+
+            # 1a. Handle Contractor Payout if Contract Labour
+            if self.technician_type == "Contract Labour":
+                c_fee = self.contractor_cost
+                job.contractor_cost = c_fee
+                should_pay_contractor = False
+                if not job.contractor_paid:
+                    if hasattr(self, 'billing_contractor_pay_now_check') and self.billing_contractor_pay_now_check.isChecked():
+                        should_pay_contractor = True
+
+                if should_pay_contractor and c_fee > 0:
+                    c_mode = self.billing_contractor_pay_mode.currentText()
+                    c_bank_id = self.billing_contractor_bank_combo.currentData() if c_mode == "Bank" else None
+
+                    cat = session.query(ExpenseCategory).filter(ExpenseCategory.name.ilike('%Contract Labour%')).first()
+                    if not cat:
+                        cat = ExpenseCategory(
+                            name="Contract Labour & Technician Charges",
+                            description="Payouts and labor charges for contract engineers and external mechanics"
+                        )
+                        session.add(cat)
+                        session.flush()
+
+                    v_num = generate_next_expense_voucher(session)
+                    today_date = datetime.date.today()
+                    tech_name = job.technician or "Contract Mechanic"
+                    exp = Expense(
+                        voucher_number=v_num,
+                        date=today_date,
+                        category_id=cat.id,
+                        amount=c_fee,
+                        payment_mode=c_mode,
+                        bank_id=c_bank_id,
+                        payee=tech_name,
+                        reference_no=f"Job #{job.job_number}",
+                        description=f"Contract labor fee payout for Job #{job.job_number} ({job.device_model}) to {tech_name}"
+                    )
+                    session.add(exp)
+                    session.flush()
+
+                    txn_desc = f"Expense [{cat.name}] - {tech_name} (Voucher: {v_num}, Job #{job.job_number})"
+                    if c_mode == "Bank":
+                        session.add(BankTransaction(
+                            date=today_date,
+                            transaction_type='withdrawal',
+                            account_id=c_bank_id,
+                            amount=c_fee,
+                            source_type='expense',
+                            source_id=exp.id,
+                            description=txn_desc
+                        ))
+                        b_acc = session.query(BankAccount).get(c_bank_id)
+                        if b_acc:
+                            b_acc.balance -= c_fee
+                    else:
+                        session.add(CashTransaction(
+                            date=today_date,
+                            transaction_type='out',
+                            amount=c_fee,
+                            source_type='expense',
+                            source_id=exp.id,
+                            description=txn_desc
+                        ))
+
+                    job.contractor_paid = True
+                    job.contractor_payment_mode = c_mode
+                    job.contractor_bank_id = c_bank_id
+                    job.contractor_expense_id = exp.id
+            else:
+                # In-House Monthly Staff: No per-job contractor expense
+                job.contractor_cost = 0.0
 
             # 2. Record new payment if entered
             if paying_now > 0:
@@ -1333,12 +1833,12 @@ class BillingDialog(QDialog):
                     payment_mode=pay_mode,
                     bank_id=bank_id,
                     job_id=job.id,
-                    remarks=remarks or f"Payment for repair job card {job.job_number}"
+                    remarks=remarks or f"Payment for service job card {job.job_number}"
                 )
                 session.add(p)
                 session.flush()
 
-                desc = f"Payment for repair job card {job.job_number}"
+                desc = f"Payment for service job card {job.job_number}"
                 if remarks:
                     desc += f" ({remarks})"
 
@@ -1426,8 +1926,14 @@ class BillingDialog(QDialog):
             final_paid = float(all_payments_sum)
 
             session.commit()
-            session.close()
-            msg = f"Repair invoice details saved.\nTotal: ₹{format_inr(final_total)}\nTotal Paid: ₹{format_inr(final_paid)}\nBalance Remaining: ₹{format_inr(final_bal)}"
+
+            payout_info = ""
+            if self.technician_type == "Contract Labour" and job.contractor_paid:
+                payout_info = f"\nContractor Payout: ₹{format_inr(job.contractor_cost)} ({job.contractor_payment_mode})\nShop Labor Margin: ₹{format_inr(service_charge - job.contractor_cost)}"
+            elif self.technician_type == "Monthly Staff":
+                payout_info = f"\nStaff: In-House Monthly Staff (100% Shop Revenue)"
+
+            msg = f"Service invoice details saved.\nTotal: ₹{format_inr(final_total)}\nTotal Paid: ₹{format_inr(final_paid)}\nBalance Remaining: ₹{format_inr(final_bal)}{payout_info}"
             QMessageBox.information(self, "Success", msg)
             self.accept()
         except Exception as e:
@@ -1468,6 +1974,18 @@ class ServicesView(QWidget):
         ])
         self.status_filter.currentIndexChanged.connect(self.refresh_data)
         top_bar.addWidget(self.status_filter, 1)
+
+        # Work Nature & Staff Type Filter
+        self.type_filter = QComboBox()
+        self.type_filter.addItems([
+            "All Work & Staff",
+            "🏠 Onsite Installations",
+            "🛠️ In-Shop Services",
+            "👷 Contract Labour",
+            "🏢 Monthly Staff"
+        ])
+        self.type_filter.currentIndexChanged.connect(self.refresh_data)
+        top_bar.addWidget(self.type_filter, 1.2)
 
         # Sort Filter Option (Date, Days, Status, Total, Balance)
         self.sort_filter = QComboBox()
@@ -1586,6 +2104,7 @@ class ServicesView(QWidget):
 
         search_txt = self.search_input.text().strip()
         selected_status = self.status_filter.currentText() if hasattr(self, 'status_filter') else "All Statuses"
+        selected_type = self.type_filter.currentText() if hasattr(self, 'type_filter') else "All Work & Staff"
         sort_choice = self.sort_filter.currentText() if hasattr(self, 'sort_filter') else "Sort: Date (Newest First)"
 
         session = Session()
@@ -1604,6 +2123,15 @@ class ServicesView(QWidget):
                 query = query.filter(ServiceJob.balance > 0)
             elif selected_status != "All Statuses":
                 query = query.filter(ServiceJob.status == selected_status)
+
+            if "Onsite Installations" in selected_type:
+                query = query.filter(ServiceJob.job_type == 'Onsite Installation / Service')
+            elif "In-Shop Services" in selected_type:
+                query = query.filter((ServiceJob.job_type == 'In-Shop Repair') | (ServiceJob.job_type == None))
+            elif "Contract Labour" in selected_type:
+                query = query.filter(ServiceJob.technician_type == 'Contract Labour')
+            elif "Monthly Staff" in selected_type:
+                query = query.filter((ServiceJob.technician_type == 'Monthly Staff') | (ServiceJob.technician_type == None))
             
             # Status custom order: Received (1) -> Under Repair (2) -> Ready (3) -> Delivered (4)
             status_order = case(
@@ -1647,9 +2175,13 @@ class ServicesView(QWidget):
 
             for offset_idx, j in enumerate(jobs):
                 i = start_row + offset_idx
-                # Col 0: Job # (Centered 6-digit numeric ID)
-                job_item = QTableWidgetItem(j.job_number)
+                # Col 0: Job # (Centered 6-digit numeric ID, with 🏠 if onsite)
+                is_onsite = (j.job_type == 'Onsite Installation / Service')
+                job_display = f"🏠 {j.job_number}" if is_onsite else j.job_number
+                job_item = QTableWidgetItem(job_display)
                 job_item.setTextAlignment(Qt.AlignCenter)
+                if is_onsite:
+                    job_item.setToolTip("🏠 Onsite Installation / Service at Customer Place")
                 self.table.setItem(i, 0, job_item)
 
                 # Col 1: Created Date
@@ -1697,7 +2229,14 @@ class ServicesView(QWidget):
                 # Col 4: Mobile
                 self.table.setItem(i, 4, QTableWidgetItem(j.mobile or ""))
                 # Col 5: Device Detail
-                self.table.setItem(i, 5, QTableWidgetItem(j.device_model or ""))
+                dev_item = QTableWidgetItem(j.device_model or "")
+                tip_lines = [f"Machine/Device: {j.device_model or '-'}"]
+                if j.customer_address:
+                    tip_lines.append(f"Site Location: {j.customer_address}")
+                if j.technician:
+                    tip_lines.append(f"Engineer: {j.technician} ({j.technician_type or 'Monthly Staff'})")
+                dev_item.setToolTip("\n".join(tip_lines))
+                self.table.setItem(i, 5, dev_item)
                 
                 # Col 6: Status
                 status_item = QTableWidgetItem(j.status or "")
@@ -1715,6 +2254,13 @@ class ServicesView(QWidget):
                 # Col 7: Labor
                 labor_item = QTableWidgetItem(f"₹{format_inr(j.service_charge)}")
                 labor_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if j.technician_type == 'Contract Labour':
+                    status_str = "Paid" if j.contractor_paid else "Pending"
+                    c_fee = j.contractor_cost or 0.0
+                    margin = (j.service_charge or 0.0) - c_fee
+                    labor_item.setToolTip(f"Customer Charge: ₹{format_inr(j.service_charge)}\nContractor Fee: ₹{format_inr(c_fee)} ({status_str})\nShop Margin: ₹{format_inr(margin)}")
+                else:
+                    labor_item.setToolTip(f"Customer Charge: ₹{format_inr(j.service_charge)}\nStaff: Monthly Staff (100% Shop Revenue)")
                 self.table.setItem(i, 7, labor_item)
 
                 # Col 8: Total
@@ -1946,6 +2492,12 @@ class ServicesView(QWidget):
             cust_mob_lbl.setStyleSheet("font-size: 12px; color: #334155;")
             cust_section.addWidget(cust_mob_lbl)
 
+            if getattr(job, 'customer_address', None):
+                cust_addr_lbl = QLabel(f"Installation / Site Address: {job.customer_address}")
+                cust_addr_lbl.setStyleSheet("font-size: 12px; color: #334155;")
+                cust_addr_lbl.setWordWrap(True)
+                cust_section.addWidget(cust_addr_lbl)
+
             paper_layout.addLayout(cust_section)
 
             # Divider line below Customer Details
@@ -2029,7 +2581,12 @@ class ServicesView(QWidget):
             info_block_layout.setContentsMargins(18, 14, 18, 14)
             info_block_layout.setSpacing(10)
 
-            block_title = QLabel("DEVICE & REPAIR SPECIFICATIONS")
+            is_onsite = (getattr(job, 'job_type', None) == "Onsite Installation / Service")
+            block_title_txt = "MACHINE & INSTALLATION SPECIFICATIONS" if is_onsite else "DEVICE & REPAIR SPECIFICATIONS"
+            sec1_head_txt = "MACHINE / ON-SITE DETAILS" if is_onsite else "DEVICE DETAILS"
+            sec2_head_txt = "ENGINEER & WORK STATUS" if is_onsite else "TECHNICIAN & REPAIR STATUS"
+
+            block_title = QLabel(block_title_txt)
             block_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #1e1b4b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;")
             info_block_layout.addWidget(block_title)
 
@@ -2037,31 +2594,62 @@ class ServicesView(QWidget):
             details_grid.setHorizontalSpacing(40)
             details_grid.setVerticalSpacing(8)
 
-            # Col 0: Device Details
-            sec1_head = QLabel("DEVICE DETAILS")
+            # Col 0: Device / Machine Details
+            sec1_head = QLabel(sec1_head_txt)
             sec1_head.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; text-transform: uppercase;")
             details_grid.addWidget(sec1_head, 0, 0)
 
-            lbl_m = QLabel(f"<span style='color: #64748b;'>Device Model / Detail:</span> <b>{job.device_model or '-'}</b>")
-            lbl_m.setStyleSheet("font-size: 12px; color: #1e293b;")
-            details_grid.addWidget(lbl_m, 1, 0)
+            work_type_txt = "🏠 Onsite Installation / Service" if is_onsite else "🛠️ In-Shop Service"
+            lbl_type = QLabel(f"<span style='color: #64748b;'>Work Nature:</span> <b>{work_type_txt}</b>")
+            lbl_type.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_type, 1, 0)
 
-            lbl_i = QLabel(f"<span style='color: #64748b;'>Device ID / IMEI / Serial:</span> <b>{job.imei or '-'}</b>")
+            lbl_m = QLabel(f"<span style='color: #64748b;'>Model / Description:</span> <b>{job.device_model or '-'}</b>")
+            lbl_m.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_m, 2, 0)
+
+            lbl_i = QLabel(f"<span style='color: #64748b;'>Serial / Machine ID:</span> <b>{job.imei or '-'}</b>")
             lbl_i.setStyleSheet("font-size: 12px; color: #1e293b;")
-            details_grid.addWidget(lbl_i, 2, 0)
+            details_grid.addWidget(lbl_i, 3, 0)
 
             # Col 1: Technician Details & Status
-            sec2_head = QLabel("TECHNICIAN & REPAIR STATUS")
+            sec2_head = QLabel(sec2_head_txt)
             sec2_head.setStyleSheet("font-size: 11px; font-weight: bold; color: #4338ca; text-transform: uppercase;")
             details_grid.addWidget(sec2_head, 0, 1)
 
-            lbl_t = QLabel(f"<span style='color: #64748b;'>Assigned Technician:</span> <b>{job.technician or '-'}</b>")
+            lbl_t = QLabel(f"<span style='color: #64748b;'>Assigned Engineer:</span> <b>{job.technician or '-'}</b>")
             lbl_t.setStyleSheet("font-size: 12px; color: #1e293b;")
             details_grid.addWidget(lbl_t, 1, 1)
 
-            lbl_s = QLabel(f"<span style='color: #64748b;'>Job Status:</span> <b>{job.status or '-'}</b>")
-            lbl_s.setStyleSheet("font-size: 12px; color: #1e293b;")
-            details_grid.addWidget(lbl_s, 2, 1)
+            is_contract = (getattr(job, 'technician_type', None) == "Contract Labour")
+            tech_type_desc = "👷 Contract Labour" if is_contract else "🏢 Monthly Staff"
+            lbl_ttype = QLabel(f"<span style='color: #64748b;'>Staff Type:</span> <b>{tech_type_desc}</b>")
+            lbl_ttype.setStyleSheet("font-size: 12px; color: #1e293b;")
+            details_grid.addWidget(lbl_ttype, 2, 1)
+
+            if is_contract:
+                p_status = f"✅ Paid via {job.contractor_payment_mode or 'Cash'}" if getattr(job, 'contractor_paid', False) else "⏳ Pending Payout"
+                lbl_cpayout = QLabel(f"<span style='color: #64748b;'>Contractor Fee:</span> <b>₹{format_inr(job.contractor_cost or 0.0)}</b> ({p_status})")
+                lbl_cpayout.setStyleSheet("font-size: 12px; color: #1e293b;")
+                details_grid.addWidget(lbl_cpayout, 3, 1)
+
+                margin_val = (job.service_charge or 0.0) - (job.contractor_cost or 0.0)
+                m_color = "#16a34a" if margin_val >= 0 else "#dc2626"
+                lbl_cmargin = QLabel(f"<span style='color: #64748b;'>Shop Profit on Labor:</span> <b style='color: {m_color};'>₹{format_inr(margin_val)}</b>")
+                lbl_cmargin.setStyleSheet("font-size: 12px; color: #1e293b;")
+                details_grid.addWidget(lbl_cmargin, 4, 1)
+
+                lbl_s = QLabel(f"<span style='color: #64748b;'>Current Status:</span> <b>{job.status or '-'}</b>")
+                lbl_s.setStyleSheet("font-size: 12px; color: #1e293b;")
+                details_grid.addWidget(lbl_s, 5, 1)
+            else:
+                lbl_rev = QLabel("<span style='color: #64748b;'>Labor Accounting:</span> <b style='color: #16a34a;'>100% Shop Revenue</b>")
+                lbl_rev.setStyleSheet("font-size: 12px; color: #1e293b;")
+                details_grid.addWidget(lbl_rev, 3, 1)
+
+                lbl_s = QLabel(f"<span style='color: #64748b;'>Current Status:</span> <b>{job.status or '-'}</b>")
+                lbl_s.setStyleSheet("font-size: 12px; color: #1e293b;")
+                details_grid.addWidget(lbl_s, 4, 1)
 
             info_block_layout.addLayout(details_grid)
 
@@ -2303,6 +2891,8 @@ class ServicesView(QWidget):
                 "shop_address": s_address,
                 "shop_gst": s_gst,
                 "job_number": job.job_number,
+                "job_type": getattr(job, 'job_type', None) or 'In-Shop Repair',
+                "customer_address": getattr(job, 'customer_address', None) or '',
                 "date": job.created_at.strftime("%Y-%m-%d %H:%M"),
                 "customer_name": job.customer_name,
                 "customer_mobile": job.mobile,
@@ -2378,6 +2968,21 @@ class ServicesView(QWidget):
                 if bank:
                     bank.balance -= tx.amount
                 session.delete(tx)
+
+            # Revert contractor expense if present
+            if getattr(job, 'contractor_expense_id', None):
+                from models import Expense
+                exp = session.query(Expense).get(job.contractor_expense_id)
+                if exp:
+                    session.query(CashTransaction).filter_by(source_type='expense', source_id=exp.id).delete()
+                    b_txs = session.query(BankTransaction).filter_by(source_type='expense', source_id=exp.id).all()
+                    for b_tx in b_txs:
+                        if b_tx.account_id:
+                            bank = session.query(BankAccount).get(b_tx.account_id)
+                            if bank:
+                                bank.balance += b_tx.amount
+                        session.delete(b_tx)
+                    session.delete(exp)
                 
             # Delete Job Card (cascading deletes parts)
             session.delete(job)

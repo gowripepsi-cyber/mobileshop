@@ -150,6 +150,12 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE categories ADD COLUMN description TEXT"))
 
+    # Schema migration: check and add description column to brands table
+    brand_columns = [c['name'] for c in inspector.get_columns('brands')]
+    if 'description' not in brand_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE brands ADD COLUMN description TEXT"))
+
     # Schema migration: check and add category column to products table
     prod_columns = [c['name'] for c in inspector.get_columns('products')]
     if 'category' not in prod_columns:
@@ -294,11 +300,27 @@ def init_db():
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
 
-    # Schema migration: check and add advance_payment to service_jobs
+    # Schema migration: check and add advance_payment, onsite installation, and contractor payout columns to service_jobs
     serv_cols = [c['name'] for c in inspector.get_columns('service_jobs')]
-    if 'advance_payment' not in serv_cols:
-        with engine.begin() as conn:
+    with engine.begin() as conn:
+        if 'advance_payment' not in serv_cols:
             conn.execute(text("ALTER TABLE service_jobs ADD COLUMN advance_payment REAL DEFAULT 0.0"))
+        if 'job_type' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN job_type TEXT DEFAULT 'In-Shop Repair'"))
+        if 'customer_address' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN customer_address TEXT"))
+        if 'technician_type' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN technician_type TEXT DEFAULT 'Monthly Staff'"))
+        if 'contractor_cost' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN contractor_cost REAL DEFAULT 0.0"))
+        if 'contractor_paid' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN contractor_paid INTEGER DEFAULT 0"))
+        if 'contractor_payment_mode' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN contractor_payment_mode TEXT DEFAULT 'Cash'"))
+        if 'contractor_bank_id' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN contractor_bank_id INTEGER REFERENCES bank_accounts(id)"))
+        if 'contractor_expense_id' not in serv_cols:
+            conn.execute(text("ALTER TABLE service_jobs ADD COLUMN contractor_expense_id INTEGER REFERENCES expenses(id)"))
 
     # Schema migration: check and add missing GST columns to suppliers
     if 'gst' not in supp_columns:
@@ -535,6 +557,7 @@ def init_db():
             default_exp_cats = [
                 ("Shop Rent", "Monthly shop premises rent"),
                 ("Electricity Bill", "Monthly EB / power utility bills"),
+                ("Contract Labour & Technician Charges", "Payouts and labor charges for contract engineers and external mechanics"),
                 ("Tea & Refreshments", "Staff and customer tea, snacks, and water"),
                 ("Internet & Telephone", "Shop broadband internet and mobile recharge"),
                 ("Staff Welfare", "Staff lunch, health, and welfare expenses"),
@@ -547,6 +570,15 @@ def init_db():
             for c_name, c_desc in default_exp_cats:
                 session.add(ExpenseCategory(name=c_name, description=c_desc))
             session.commit()
+        else:
+            # Ensure Contract Labour & Technician Charges category exists
+            contract_cat = session.query(ExpenseCategory).filter(ExpenseCategory.name.ilike('%Contract Labour%')).first()
+            if not contract_cat:
+                session.add(ExpenseCategory(
+                    name="Contract Labour & Technician Charges",
+                    description="Payouts and labor charges for contract engineers and external mechanics"
+                ))
+                session.commit()
 
         session.commit()
     except Exception as e:

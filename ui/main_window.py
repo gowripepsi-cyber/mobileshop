@@ -327,19 +327,21 @@ class MainWindow(QMainWindow):
             ("Ctrl+Alt+1", 0),
             ("Ctrl+Shift+K", 1),
             ("Ctrl+Alt+2", 1),
-            ("Ctrl+Shift+C", 2),
+            ("Ctrl+Shift+R", 2),
             ("Ctrl+Alt+3", 2),
-            ("Ctrl+Shift+S", 3),
+            ("Ctrl+Shift+C", 3),
             ("Ctrl+Alt+4", 3),
-            ("Ctrl+Shift+U", 4),
+            ("Ctrl+Shift+S", 4),
             ("Ctrl+Alt+5", 4),
+            ("Ctrl+Shift+U", 5),
+            ("Ctrl+Alt+6", 5),
         ]
         for key, tab_idx in master_shortcuts:
             sc = QShortcut(QKeySequence(key), self)
             sc.activated.connect(partial(self.open_master_tab, tab_idx))
 
         # Shortcut for Bank Accounts Master in Bank & Cash view
-        for key in ["Ctrl+Shift+B", "Ctrl+Alt+6"]:
+        for key in ["Ctrl+Shift+B", "Ctrl+Alt+7"]:
             sc = QShortcut(QKeySequence(key), self)
             sc.activated.connect(self.open_bank_master_tab)
 

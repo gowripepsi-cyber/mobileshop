@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt
 
 from ui.masters.products import ProductsView
 from ui.masters.categories import CategoriesView
+from ui.masters.brands import BrandsView
 from ui.masters.customers import CustomersView
 from ui.masters.suppliers import SuppliersView
 from ui.masters.units import UnitsView
@@ -24,6 +25,7 @@ class MastersView(QWidget):
         # Instantiate Master Sub-Views
         self.products_view = ProductsView(self)
         self.categories_view = CategoriesView(self)
+        self.brands_view = BrandsView(self)
         self.customers_view = CustomersView(self)
         self.suppliers_view = SuppliersView(self)
         self.units_view = UnitsView(self)
@@ -31,15 +33,17 @@ class MastersView(QWidget):
         # Add tabs
         self.tabs.addTab(self.products_view, "📦 Products (Ctrl+Shift+P)")
         self.tabs.addTab(self.categories_view, "📁 Item Categories (Ctrl+Shift+K)")
+        self.tabs.addTab(self.brands_view, "🏷️ Brands (Ctrl+Shift+R)")
         self.tabs.addTab(self.customers_view, "👤 Customer (Ctrl+Shift+C)")
         self.tabs.addTab(self.suppliers_view, "🚛 Supplier (Ctrl+Shift+S)")
         self.tabs.addTab(self.units_view, "📏 Units (Ctrl+Shift+U)")
 
         self.tabs.setTabToolTip(0, "Products (Ctrl+Shift+P / Ctrl+Alt+1)")
         self.tabs.setTabToolTip(1, "Item Categories (Ctrl+Shift+K / Ctrl+Alt+2)")
-        self.tabs.setTabToolTip(2, "Customer (Ctrl+Shift+C / Ctrl+Alt+3)")
-        self.tabs.setTabToolTip(3, "Supplier (Ctrl+Shift+S / Ctrl+Alt+4)")
-        self.tabs.setTabToolTip(4, "Units (Ctrl+Shift+U / Ctrl+Alt+5)")
+        self.tabs.setTabToolTip(2, "Brands (Ctrl+Shift+R / Ctrl+Alt+3)")
+        self.tabs.setTabToolTip(3, "Customer (Ctrl+Shift+C / Ctrl+Alt+4)")
+        self.tabs.setTabToolTip(4, "Supplier (Ctrl+Shift+S / Ctrl+Alt+5)")
+        self.tabs.setTabToolTip(5, "Units (Ctrl+Shift+U / Ctrl+Alt+6)")
 
         # Connect tab change signal
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -52,6 +56,8 @@ class MastersView(QWidget):
             self.products_view.add_product()
         elif current_widget == self.categories_view:
             self.categories_view.add_category()
+        elif current_widget == self.brands_view:
+            self.brands_view.add_brand()
         elif current_widget == self.customers_view:
             self.customers_view.add_customer()
         elif current_widget == self.suppliers_view:
@@ -78,14 +84,16 @@ class MastersView(QWidget):
         from utils.translator import tr
         self.tabs.setTabText(0, f"📦 {tr('Products')} (Ctrl+Shift+P)")
         self.tabs.setTabText(1, f"📁 {tr('Item Categories')} (Ctrl+Shift+K)")
-        self.tabs.setTabText(2, f"👤 {tr('Customer')} (Ctrl+Shift+C)")
-        self.tabs.setTabText(3, f"🚛 {tr('Supplier')} (Ctrl+Shift+S)")
-        self.tabs.setTabText(4, f"📏 {tr('Units')} (Ctrl+Shift+U)")
+        self.tabs.setTabText(2, f"🏷️ {tr('Brands')} (Ctrl+Shift+R)")
+        self.tabs.setTabText(3, f"👤 {tr('Customer')} (Ctrl+Shift+C)")
+        self.tabs.setTabText(4, f"🚛 {tr('Supplier')} (Ctrl+Shift+S)")
+        self.tabs.setTabText(5, f"📏 {tr('Units')} (Ctrl+Shift+U)")
         self.tabs.setTabToolTip(0, f"{tr('Products')} (Ctrl+Shift+P / Ctrl+Alt+1)")
         self.tabs.setTabToolTip(1, f"{tr('Item Categories')} (Ctrl+Shift+K / Ctrl+Alt+2)")
-        self.tabs.setTabToolTip(2, f"{tr('Customer')} (Ctrl+Shift+C / Ctrl+Alt+3)")
-        self.tabs.setTabToolTip(3, f"{tr('Supplier')} (Ctrl+Shift+S / Ctrl+Alt+4)")
-        self.tabs.setTabToolTip(4, f"{tr('Units')} (Ctrl+Shift+U / Ctrl+Alt+5)")
+        self.tabs.setTabToolTip(2, f"{tr('Brands')} (Ctrl+Shift+R / Ctrl+Alt+3)")
+        self.tabs.setTabToolTip(3, f"{tr('Customer')} (Ctrl+Shift+C / Ctrl+Alt+4)")
+        self.tabs.setTabToolTip(4, f"{tr('Supplier')} (Ctrl+Shift+S / Ctrl+Alt+5)")
+        self.tabs.setTabToolTip(5, f"{tr('Units')} (Ctrl+Shift+U / Ctrl+Alt+6)")
         # Forward to children if they implement retranslate_ui
         for i in range(self.tabs.count()):
             w = self.tabs.widget(i)

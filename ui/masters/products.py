@@ -842,6 +842,12 @@ class ProductDialog(QDialog):
             else:
                 self.unit_combo.setCurrentIndex(0)
 
+    def quick_add_brand(self):
+        from ui.masters.brands import BrandDialog
+        dlg = BrandDialog(parent=self)
+        if dlg.exec() == QDialog.Accepted and getattr(dlg, 'saved_brand_name', None):
+            self.load_brands(select_brand=dlg.saved_brand_name)
+
     def quick_add_unit(self):
         from ui.masters.units import UnitDialog
         dlg = UnitDialog(parent=self)
@@ -891,12 +897,27 @@ class ProductDialog(QDialog):
         init_cat = self.product.category if self.product else self.default_category
         self.load_categories(select_category=init_cat)
 
+        # Brand combo with quick add button
+        brand_layout = QHBoxLayout()
+        brand_layout.setContentsMargins(0, 0, 0, 0)
+        brand_layout.setSpacing(6)
+
         self.brand_combo = QComboBox()
         self.brand_combo.setEditable(True)
         self.brand_combo.setInsertPolicy(QComboBox.NoInsert)
         self.brand_combo.setPlaceholderText("Enter or select brand / model")
         enable_quick_add_auto_select(self.brand_combo)
         self.load_brands()
+
+        self.add_brand_btn = QPushButton("+")
+        self.add_brand_btn.setToolTip("Add new brand to master records")
+        self.add_brand_btn.setProperty("class", "btn-quick-add")
+        self.add_brand_btn.setFixedSize(36, 36)
+        self.add_brand_btn.setCursor(Qt.PointingHandCursor)
+        self.add_brand_btn.clicked.connect(self.quick_add_brand)
+
+        brand_layout.addWidget(self.brand_combo, 1)
+        brand_layout.addWidget(self.add_brand_btn)
 
         self.brand_input = self.brand_combo.lineEdit()
 
@@ -993,7 +1014,7 @@ class ProductDialog(QDialog):
 
         form_layout.addRow("Product Name *:", self.name_input)
         form_layout.addRow("Category *:", cat_layout)
-        form_layout.addRow("Brand / Model *:", self.brand_combo)
+        form_layout.addRow("Brand / Model *:", brand_layout)
         form_layout.addRow("Unit *:", unit_layout)
         form_layout.addRow("Low Stock Alert Limit *:", self.low_limit_spin)
 
@@ -1218,6 +1239,13 @@ class ProductsView(QWidget):
         self.categories_btn.clicked.connect(self.open_categories)
         top_bar.addWidget(self.categories_btn, 1)
 
+        self.brands_btn = QPushButton("🏷️ Brands")
+        self.brands_btn.setToolTip("Manage Brands (Ctrl+Shift+R)")
+        self.brands_btn.setProperty("class", "btn-secondary")
+        self.brands_btn.setFixedHeight(38)
+        self.brands_btn.clicked.connect(self.open_brands)
+        top_bar.addWidget(self.brands_btn, 1)
+
         self.units_btn = QPushButton("📏 Units")
         self.units_btn.setToolTip("Manage Units (Ctrl+Shift+U)")
         self.units_btn.setProperty("class", "btn-secondary")
@@ -1257,12 +1285,22 @@ class ProductsView(QWidget):
             dlg.exec()
             self.refresh_data()
 
+    def open_brands(self):
+        parent_widget = self.parent()
+        if hasattr(parent_widget, 'brands_view'):
+            parent_widget.tabs.setCurrentWidget(parent_widget.brands_view)
+        elif hasattr(self.window(), 'open_master_tab'):
+            self.window().open_master_tab(2)
+        else:
+            from ui.masters.brands import BrandsView
+            self.refresh_data()
+
     def open_units(self):
         parent_widget = self.parent()
         if hasattr(parent_widget, 'units_view'):
             parent_widget.tabs.setCurrentWidget(parent_widget.units_view)
         elif hasattr(self.window(), 'open_master_tab'):
-            self.window().open_master_tab(4)
+            self.window().open_master_tab(5)
         else:
             from ui.masters.units import UnitDialog
             dlg = UnitDialog(parent=self)

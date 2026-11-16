@@ -234,12 +234,26 @@ class ServiceJob(Base):
     paid_amount = Column(Float, default=0.0)
     balance = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.datetime.now)
+
+    # Onsite Installation & Field Service Attributes
+    job_type = Column(String, default='In-Shop Repair')  # 'In-Shop Repair', 'Onsite Installation / Service'
+    customer_address = Column(Text, nullable=True)       # Installation / onsite location
+
+    # Technician Employment & Contractor Payout Attributes
+    technician_type = Column(String, default='Monthly Staff')  # 'Monthly Staff', 'Contract Labour'
+    contractor_cost = Column(Float, default=0.0)               # Labor payout to contract engineer / mechanic
+    contractor_paid = Column(Boolean, default=False)           # Payout status
+    contractor_payment_mode = Column(String, default='Cash')   # 'Cash', 'Bank'
+    contractor_bank_id = Column(Integer, ForeignKey('bank_accounts.id'), nullable=True)
+    contractor_expense_id = Column(Integer, ForeignKey('expenses.id'), nullable=True)
     
     parts = relationship("ServicePart", back_populates="job", cascade="all, delete-orphan")
     status_history = relationship("ServiceJobStatusHistory", back_populates="job", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="job", cascade="all, delete-orphan")
+    contractor_expense = relationship("Expense", foreign_keys=[contractor_expense_id])
+    contractor_bank = relationship("BankAccount", foreign_keys=[contractor_bank_id])
 
-    @validates('service_charge', 'advance_payment', 'total_amount', 'paid_amount', 'balance')
+    @validates('service_charge', 'advance_payment', 'total_amount', 'paid_amount', 'balance', 'contractor_cost')
     def validate_service_job_amounts(self, key, value):
         if value is not None and value < 0:
             raise ValueError(f"Service job {key} cannot be negative ({value}).")
@@ -354,6 +368,7 @@ class Brand(Base):
     __tablename__ = 'brands'
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
+    description = Column(String, nullable=True)
 
 class Unit(Base):
     __tablename__ = 'units'

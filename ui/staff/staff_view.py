@@ -68,14 +68,14 @@ class StaffDialog(QDialog):
         self.designation_combo = QComboBox()
         self.designation_combo.setEditable(True)
         self.designation_combo.addItems([
-            "Technician", "Salesperson", "Cashier", "Store Manager", "Helper", "Accountant"
+            "Technician", "Service Engineer", "Mechanic", "Salesperson", "Cashier", "Store Manager", "Helper", "Accountant"
         ])
         form_layout.addRow("Designation *:", self.designation_combo)
 
         # Salary Type
         self.salary_type_combo = QComboBox()
-        self.salary_type_combo.addItems(["Monthly", "Daily", "Weekly"])
-        form_layout.addRow("Salary Type *:", self.salary_type_combo)
+        self.salary_type_combo.addItems(["Monthly", "Daily", "Weekly", "Contract / Per Job"])
+        form_layout.addRow("Salary / Employment Type *:", self.salary_type_combo)
 
         # Base Salary
         self.salary_input = QDoubleSpinBox()

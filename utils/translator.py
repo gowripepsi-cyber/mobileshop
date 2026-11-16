@@ -58,6 +58,12 @@ DEFAULT_TRANSLATIONS = {
     "Daily Expenses": "தினசரி செலவுகள்",
     "Staff Management": "ஊழியர்கள் மேலாண்மை",
     "Expenses": "செலவுகள்",
+    "Brands": "பிராண்டுகள்",
+    "Brand": "பிராண்டு",
+    "Add Brand": "பிராண்டு சேர்க்க",
+    "Edit Brand": "பிராண்டு திருத்து",
+    "Brand Name": "பிராண்டு பெயர்",
+    "Products Using Brand": "பயன்படுத்தும் தயாரிப்புகள்",
 
     # Headers & Titles
     "Inventory & Accounting": "சரக்கு & கணக்கு மேலாண்மை",
