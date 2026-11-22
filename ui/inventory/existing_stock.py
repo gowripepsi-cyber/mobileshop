@@ -463,18 +463,23 @@ class ExistingStockView(QWidget):
             self.products_cache = {p.id: p for p in prods}
             self.filter_products_by_category()
 
-            # Update auto-completer (wide popup so full text is visible without clipping)
+            # Update auto-completer (wide popup with stock and price)
             codes = []
             for p in prods:
                 if p.product_code:
                     bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
                     if bm and bm.lower() not in p.name.lower():
-                        codes.append(f"{p.product_code} | {p.name} ({bm})")
+                        name_str = f"{p.name} ({bm})"
                     else:
-                        codes.append(f"{p.product_code} | {p.name}")
+                        name_str = f"{p.name}"
 
-            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=520)
-            completer.activated.connect(self.handle_product_code_entry)
+                    stock_str = f"{float(p.stock_qty or 0.0):g} {p.unit or 'Pcs'}"
+                    cost_str = format_inr(p.purchase_price or 0.0, symbol=True)
+                    sale_str = format_inr(p.selling_price or 0.0, symbol=True)
+                    codes.append(f"{p.product_code} | {name_str} | Stock: {stock_str} | Cost: {cost_str} | Sale Price: {sale_str}")
+
+            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=620)
+            completer.activated[str].connect(self.handle_product_code_entry)
         except Exception as e:
             print(f"Error caching products: {e}")
         finally:
@@ -497,7 +502,12 @@ class ExistingStockView(QWidget):
         self.product_combo.set_products(filtered)
 
     def handle_product_code_entry(self, selected_text=None):
-        code = (selected_text or self.product_code_input.text()).strip()
+        if hasattr(selected_text, 'data'):
+            code = str(selected_text.data() or "").strip()
+        elif isinstance(selected_text, str):
+            code = selected_text.strip()
+        else:
+            code = self.product_code_input.text().strip()
         if not code:
             return
         if " | " in code:
@@ -512,6 +522,9 @@ class ExistingStockView(QWidget):
                 break
 
         if found:
+            code_val = found.product_code or code
+            self.product_code_input.setText(code_val)
+            QTimer.singleShot(0, lambda: self.product_code_input.setText(code_val))
             # Set category
             if found.category:
                 idx = self.category_combo.findText(found.category)

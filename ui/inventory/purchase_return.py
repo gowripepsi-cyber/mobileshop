@@ -493,7 +493,12 @@ class PurchaseReturnEntryWidget(QWidget):
                 self.product_code_input.clear()
 
     def handle_product_code_entry(self, selected_text=None):
-        text = (selected_text or self.product_code_input.text()).strip()
+        if hasattr(selected_text, 'data'):
+            text = str(selected_text.data() or "").strip()
+        elif isinstance(selected_text, str):
+            text = selected_text.strip()
+        else:
+            text = self.product_code_input.text().strip()
         if not text:
             return
         code = text
@@ -504,11 +509,13 @@ class PurchaseReturnEntryWidget(QWidget):
             
         found_product = None
         for p in self.products_cache.values():
-            if p.product_code == code:
+            if p.product_code and p.product_code.strip() == code:
                 found_product = p
                 break
         if found_product:
-            self.product_code_input.setText(found_product.product_code)
+            code_val = found_product.product_code or ""
+            self.product_code_input.setText(code_val)
+            QTimer.singleShot(0, lambda: self.product_code_input.setText(code_val))
             cat_idx = self.category_combo.findText(found_product.category)
             if cat_idx >= 0:
                 self.category_combo.blockSignals(True)
@@ -533,18 +540,22 @@ class PurchaseReturnEntryWidget(QWidget):
             for p in products:
                 self.products_cache[p.id] = p
 
-            # Update auto-completer (wide popup so full text is visible without clipping)
+            # Update auto-completer (wide popup with stock and purchase price)
             codes = []
             for p in products:
                 if p.product_code:
                     bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
                     if bm and bm.lower() not in p.name.lower():
-                        codes.append(f"{p.product_code} | {p.name} ({bm})")
+                        name_str = f"{p.name} ({bm})"
                     else:
-                        codes.append(f"{p.product_code} | {p.name}")
+                        name_str = f"{p.name}"
 
-            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=520)
-            completer.activated.connect(self.handle_product_code_entry)
+                    stock_str = f"{float(p.stock_qty or 0.0):g} {p.unit or 'Pcs'}"
+                    cost_str = format_inr(p.purchase_price or 0.0, symbol=True)
+                    codes.append(f"{p.product_code} | {name_str} | Stock: {stock_str} | Purchase Price: {cost_str}")
+
+            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=580)
+            completer.activated[str].connect(self.handle_product_code_entry)
 
             self.supplier_combo.blockSignals(True)
             self.category_combo.blockSignals(True)

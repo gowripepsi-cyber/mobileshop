@@ -1006,7 +1006,7 @@ class WideCompleterPopupFilter(QObject):
         return super().eventFilter(obj, event)
 
 
-def setup_wide_completer(line_edit: QLineEdit, codes: list, parent=None, min_width=520):
+def setup_wide_completer(line_edit: QLineEdit, codes: list, parent=None, min_width=580):
     """
     Configures a QCompleter on line_edit whose popup expands to comfortably fit full text
     (e.g., '1001 | Boat headphones [Boat]'), without being truncated or squashed

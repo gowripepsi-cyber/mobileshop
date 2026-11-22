@@ -160,6 +160,7 @@ class PurchaseView(QWidget):
         self.godown_combo = QComboBox()
         self.godown_combo.setStyleSheet(input_style)
         self.godown_combo.setFixedHeight(36)
+        self.godown_combo.currentIndexChanged.connect(self.on_godown_changed)
 
         self.add_godown_btn = QPushButton("+")
         self.add_godown_btn.setToolTip("Add new godown")
@@ -599,6 +600,39 @@ class PurchaseView(QWidget):
 
             self.godown_combo.setCurrentIndex(selected_idx)
             self.godown_combo.blockSignals(False)
+            self.on_godown_changed()
+        finally:
+            session.close()
+
+    def on_godown_changed(self):
+        self.update_product_code_completer()
+
+    def update_product_code_completer(self):
+        if not hasattr(self, 'products_cache') or not self.products_cache:
+            return
+        session = Session()
+        try:
+            from database import get_location_stock
+            sel_godown_id = self.godown_combo.currentData() if hasattr(self, 'godown_combo') else None
+            codes = []
+            for p in self.products_cache.values():
+                if p.product_code:
+                    bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
+                    if bm and bm.lower() not in p.name.lower():
+                        name_str = f"{p.name} ({bm})"
+                    else:
+                        name_str = f"{p.name}"
+
+                    loc_stock = get_location_stock(session, sel_godown_id, p.id)
+                    stock_str = f"{float(loc_stock or 0.0):g} {p.unit or 'Pcs'}"
+                    cost_str = format_inr(p.purchase_price or 0.0, symbol=True)
+                    sale_str = format_inr(p.selling_price or 0.0, symbol=True)
+                    codes.append(f"{p.product_code} | {name_str} | Stock: {stock_str} | Cost: {cost_str} | Sale Price: {sale_str}")
+
+            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=620)
+            completer.activated[str].connect(self.handle_product_code_entry)
+        except Exception as e:
+            print(f"Error updating purchase product completer: {e}")
         finally:
             session.close()
 
@@ -660,18 +694,8 @@ class PurchaseView(QWidget):
             for p in products:
                 self.products_cache[p.id] = p
 
-            # Update auto-completer (wide popup so full text is visible without clipping)
-            codes = []
-            for p in products:
-                if p.product_code:
-                    bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
-                    if bm and bm.lower() not in p.name.lower():
-                        codes.append(f"{p.product_code} | {p.name} ({bm})")
-                    else:
-                        codes.append(f"{p.product_code} | {p.name}")
-
-            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=520)
-            completer.activated.connect(self.handle_product_code_entry)
+            # Update auto-completer (wide popup with stock and price)
+            self.update_product_code_completer()
 
             # 2. Block combo box signals during update
             self.supplier_combo.blockSignals(True)
@@ -926,7 +950,12 @@ class PurchaseView(QWidget):
             parent_win.switch_view(12)
 
     def handle_product_code_entry(self, selected_text=None):
-        text = (selected_text or self.product_code_input.text()).strip()
+        if hasattr(selected_text, 'data'):
+            text = str(selected_text.data() or "").strip()
+        elif isinstance(selected_text, str):
+            text = selected_text.strip()
+        else:
+            text = self.product_code_input.text().strip()
         if not text:
             return
         code = text
@@ -937,11 +966,13 @@ class PurchaseView(QWidget):
             
         found_product = None
         for p in self.products_cache.values():
-            if p.product_code == code:
+            if p.product_code and p.product_code.strip() == code:
                 found_product = p
                 break
         if found_product:
-            self.product_code_input.setText(found_product.product_code)
+            code_val = found_product.product_code or ""
+            self.product_code_input.setText(code_val)
+            QTimer.singleShot(0, lambda: self.product_code_input.setText(code_val))
             self.product_combo.select_product_id(found_product.id)
             self.qty_input.setFocus()
             self.qty_input.selectAll()
