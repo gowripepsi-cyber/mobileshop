@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor
 from utils.formatters import format_inr
 from database import Session
 from sqlalchemy.orm import joinedload
-from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, PurchaseItem, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem
+from models import Product, Customer, Supplier, BankAccount, SalesMaster, SalesItem, PurchaseMaster, PurchaseItem, ServiceJob, ServicePart, CashTransaction, BankTransaction, Payment, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Godown, GodownStock
 from utils.unit_converter import format_product_stock
 
 class ReportsView(QWidget):
@@ -1041,6 +1041,21 @@ class ReportsView(QWidget):
                         "Total Value (₹)": p.stock_qty * p.purchase_price
                     } for p in prods]
                     pd.DataFrame(data).to_excel(writer, sheet_name="Current Stock", index=False)
+
+                    # Godown Stock breakdown
+                    godown_stocks = session.query(GodownStock).join(Godown).join(Product).all()
+                    g_data = [{
+                        "Godown Code": gs.godown.code,
+                        "Godown Name": gs.godown.name,
+                        "Product Code": gs.product.product_code or "N/A",
+                        "Product Name": gs.product.name,
+                        "Category": gs.product.category or "N/A",
+                        "Unit": gs.product.unit or "Pcs",
+                        "Stock in Godown": gs.stock_qty,
+                        "Total Shop Stock": gs.product.stock_qty
+                    } for gs in godown_stocks if gs.stock_qty > 0]
+                    if g_data:
+                        pd.DataFrame(g_data).to_excel(writer, sheet_name="Godown Stock Register", index=False)
 
                 # 2. Sales
                 if self.chk_sales.isChecked():

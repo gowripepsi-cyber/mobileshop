@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate, QTimer
 from utils.formatters import format_inr
-from database import Session, Setting, generate_next_sales_return_number
+from database import Session, Setting, generate_next_sales_return_number, adjust_godown_stock, get_default_godown
 from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category, SalesReturnMaster, SalesReturnItem
 from utils.ui_helpers import enable_quick_add_auto_select, AutoClearSearchableComboBox
 from utils.unit_converter import calculate_base_qty
@@ -793,12 +793,20 @@ class SalesReturnEntryWidget(QWidget):
                     QMessageBox.warning(self, "Insufficient Funds", f"Insufficient bank balance to refund. Current: ₹{bank.balance:.2f}")
                     return
 
+            # Determine return godown
+            ret_godown_id = None
+            if sales_master_id:
+                orig_sm = session.query(SalesMaster).get(sales_master_id)
+                if orig_sm and orig_sm.godown_id:
+                    ret_godown_id = orig_sm.godown_id
+
             # Save Sales Return Master
             sales_return = SalesReturnMaster(
                 return_number=return_no,
                 date=ret_date,
                 sales_id=sales_master_id,
                 customer_id=cust_id,
+                godown_id=ret_godown_id,
                 total_amount=total,
                 refund_amount=refund,
                 balance_deducted=adj
@@ -826,6 +834,8 @@ class SalesReturnEntryWidget(QWidget):
 
                 if prod:
                     prod.stock_qty += item_base_qty
+                    if ret_godown_id:
+                        adjust_godown_stock(session, ret_godown_id, prod.id, +item_base_qty)
                     bm = getattr(prod, 'brand_model', None) or getattr(prod, 'brand', '') or ''
                     p_name = f"{prod.name} ({bm})" if bm else prod.name
                 else:
@@ -1250,6 +1260,8 @@ class SalesReturnHistoryWidget(QWidget):
                 if prod:
                     b_qty = item.base_qty if item.base_qty is not None else item.qty
                     prod.stock_qty -= b_qty # deduct stock since return is cancelled
+                    if ret.godown_id:
+                        adjust_godown_stock(session, ret.godown_id, item.product_id, -b_qty)
 
             # Revert customer outstanding balance deduction
             customer = session.query(Customer).get(ret.customer_id)

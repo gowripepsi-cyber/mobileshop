@@ -23,8 +23,9 @@ env/
 # Statements
 statements/
 
-# Scratch Invoices
+# Scratch Invoices & Scripts
 scratch_invoices/
+scratch/
 
 # Reports/Excel
 *.xlsx

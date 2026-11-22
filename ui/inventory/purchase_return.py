@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt, QDate, QTimer
 from utils.formatters import format_inr
-from database import Session, Setting, generate_next_purchase_return_number
+from database import Session, Setting, generate_next_purchase_return_number, adjust_godown_stock, get_default_godown
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, PurchaseReturnMaster, PurchaseReturnItem
 from utils.pdf_generator import generate_purchase_return_pdf
 from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, AutoClearSearchableComboBox
@@ -814,12 +814,20 @@ class PurchaseReturnEntryWidget(QWidget):
                     QMessageBox.warning(self, "Stock Level Error", f"Product {prod.name} has insufficient stock to return! Available: {avail_disp}, Requested: {req_disp}")
                     return
 
+            # Determine return godown
+            ret_godown_id = None
+            if purchase_master_id:
+                orig_pm = session.query(PurchaseMaster).get(purchase_master_id)
+                if orig_pm and orig_pm.godown_id:
+                    ret_godown_id = orig_pm.godown_id
+
             # Save Purchase Return Master
             purchase_return = PurchaseReturnMaster(
                 return_number=return_no,
                 date=ret_date,
                 purchase_id=purchase_master_id,
                 supplier_id=supp_id,
+                godown_id=ret_godown_id,
                 total_amount=total,
                 refund_received=refund,
                 balance_deducted=adj
@@ -845,6 +853,8 @@ class PurchaseReturnEntryWidget(QWidget):
 
                 if prod:
                     prod.stock_qty -= item_base_qty
+                    if ret_godown_id:
+                        adjust_godown_stock(session, ret_godown_id, prod.id, -item_base_qty)
                     p_code = f"[{prod.product_code}] " if prod.product_code else ""
                     p_name = f"{p_code}{prod.name} ({prod.brand} {prod.model})"
                 else:
@@ -1251,6 +1261,8 @@ class PurchaseReturnHistoryWidget(QWidget):
                 if prod:
                     b_qty = item.base_qty if item.base_qty is not None else item.qty
                     prod.stock_qty += b_qty
+                    if ret.godown_id:
+                        adjust_godown_stock(session, ret.godown_id, item.product_id, +b_qty)
 
             # Revert supplier outstanding balance deduction
             supplier = session.query(Supplier).get(ret.supplier_id)

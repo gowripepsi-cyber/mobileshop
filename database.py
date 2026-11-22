@@ -2,7 +2,7 @@ import hashlib
 import re
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit, ExpenseCategory, Expense, Staff, StaffAttendance, StaffSalaryPayment, ExistingStockMaster, ExistingStockItem, PurchaseOrderMaster, PurchaseOrderItem
+from models import Base, User, BankAccount, CashTransaction, BankTransaction, Setting, Category, FundTransfer, DirectTransaction, MoneyTransfer, SalesReturnMaster, SalesReturnItem, PurchaseReturnMaster, PurchaseReturnItem, Product, Brand, ProductModel, Unit, ExpenseCategory, Expense, Staff, StaffAttendance, StaffSalaryPayment, ExistingStockMaster, ExistingStockItem, PurchaseOrderMaster, PurchaseOrderItem, Godown, GodownStock, GodownTransfer, GodownTransferItem
 
 DATABASE_URL = "sqlite:///inventory.db"
 
@@ -128,6 +128,85 @@ def generate_next_purchase_return_number(session) -> str:
                 except ValueError:
                     pass
     return f"PR-{max_num + 1}"
+
+
+def generate_next_godown_code(session) -> str:
+    godowns = session.query(Godown.code).all()
+    max_num = 0
+    for (g_code,) in godowns:
+        if g_code and g_code.startswith("GDN-"):
+            try:
+                num = int(g_code.split("-")[1])
+                max_num = max(max_num, num)
+            except Exception:
+                pass
+    return f"GDN-{(max_num + 1):03d}"
+
+
+def generate_next_transfer_number(session) -> str:
+    transfers = session.query(GodownTransfer.transfer_number).all()
+    max_num = 1000
+    for (t_num,) in transfers:
+        if t_num and t_num.startswith("TRF-"):
+            try:
+                num = int(t_num.split("-")[1])
+                max_num = max(max_num, num)
+            except Exception:
+                pass
+    return f"TRF-{(max_num + 1)}"
+
+
+def get_default_godown(session):
+    """Returns default godown if configured, or None (meaning Main Shop is default)."""
+    return session.query(Godown).filter_by(is_default=True, is_active=True).first()
+
+
+def get_godown_stock(session, godown_id: int, product_id: int) -> float:
+    if not godown_id or not product_id:
+        return 0.0
+    gs = session.query(GodownStock).filter_by(godown_id=godown_id, product_id=product_id).first()
+    return gs.stock_qty if gs else 0.0
+
+
+def get_shop_stock(session, product_id: int) -> float:
+    """
+    Returns available physical stock in Main Shop.
+    Shop Stock = Total Product Stock - sum(Stock in all secondary godowns).
+    """
+    if not product_id:
+        return 0.0
+    from models import Product
+    from sqlalchemy import func
+    prod = session.query(Product).get(product_id)
+    if not prod:
+        return 0.0
+    total_godown_stock = session.query(func.coalesce(func.sum(GodownStock.stock_qty), 0.0))\
+        .filter(GodownStock.product_id == product_id).scalar() or 0.0
+    return max(0.0, float(prod.stock_qty or 0.0) - float(total_godown_stock))
+
+
+def get_location_stock(session, godown_id, product_id: int) -> float:
+    """
+    Returns available stock at a location.
+    If godown_id is None: returns stock physically in the Main Shop.
+    If godown_id is an integer: returns stock physically in that Godown.
+    """
+    if not godown_id:
+        return get_shop_stock(session, product_id)
+    return get_godown_stock(session, godown_id, product_id)
+
+
+def adjust_godown_stock(session, godown_id: int, product_id: int, delta_qty: float):
+    if not godown_id or not product_id:
+        return None
+    gs = session.query(GodownStock).filter_by(godown_id=godown_id, product_id=product_id).first()
+    if not gs:
+        gs = GodownStock(godown_id=godown_id, product_id=product_id, stock_qty=0.0)
+        session.add(gs)
+        session.flush()
+    gs.stock_qty = max(0.0, (gs.stock_qty or 0.0) + delta_qty)
+    session.flush()
+    return gs
 
 
 def init_db():
@@ -363,6 +442,13 @@ def init_db():
                 conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN tax_amount REAL DEFAULT 0.0"))
                 conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN taxable_value REAL DEFAULT 0.0"))
 
+    # Schema migration: check and add godown_id to master tables
+    for tbl in ('purchase_master', 'sales_master', 'existing_stock_master', 'purchase_return_master', 'sales_return_master'):
+        cols = [c['name'] for c in inspector.get_columns(tbl)]
+        if 'godown_id' not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN godown_id INTEGER REFERENCES godowns(id)"))
+
     session = Session()
     try:
         # Update existing users with role 'Admin' to 'Administrator'
@@ -580,6 +666,9 @@ def init_db():
                 ))
                 session.commit()
 
+        # 11. Godowns are optional secondary storage locations.
+        # Main Shop is the default receiving and dispatch location (godown_id=None).
+        # Existing and new stock defaults to Main Shop unless an optional godown is selected.
         session.commit()
     except Exception as e:
         session.rollback()

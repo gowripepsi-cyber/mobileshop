@@ -290,6 +290,7 @@ class MainWindow(QMainWindow):
         self.suppliers_view = self.masters_view.suppliers_view
         self.bank_accounts_view = None  # Will be bound after BankCashView instantiation
         self.units_view = self.masters_view.units_view
+        self.godowns_view = self.masters_view.godowns_view
         self.purchase_view = PurchaseView(self)
         self.sales_view = SalesView(self)
         self.services_view = ServicesView(self)
@@ -335,6 +336,8 @@ class MainWindow(QMainWindow):
             ("Ctrl+Alt+5", 4),
             ("Ctrl+Shift+U", 5),
             ("Ctrl+Alt+6", 5),
+            ("Ctrl+Shift+G", 6),
+            ("Ctrl+Alt+8", 6),
         ]
         for key, tab_idx in master_shortcuts:
             sc = QShortcut(QKeySequence(key), self)

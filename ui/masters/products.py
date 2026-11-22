@@ -2,8 +2,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
                              QPushButton, QLineEdit, QLabel, QDialog, QFormLayout, QMessageBox, QHeaderView, QComboBox, QCompleter, QTabWidget, QSpinBox, QDoubleSpinBox, QGroupBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from database import Session, Setting
-from models import Product, Category, Brand, ProductModel, Unit
+from database import Session, Setting, get_default_godown
+from models import Product, Category, Brand, ProductModel, Unit, GodownStock
 from utils.ui_helpers import enable_quick_add_auto_select
 from utils.unit_converter import format_product_stock, get_product_unit_info
 

@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 from utils.formatters import format_inr
-from database import Session
-from models import Product, Category, Unit, ExistingStockMaster, ExistingStockItem
+from database import Session, adjust_godown_stock, get_default_godown
+from models import Product, Category, Unit, ExistingStockMaster, ExistingStockItem, Godown
 from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, AutoClearSearchableComboBox
 from utils.unit_converter import calculate_base_qty, format_product_stock, get_available_product_units
 
@@ -292,6 +292,14 @@ class ExistingStockView(QWidget):
         action_row = QHBoxLayout()
         action_row.setSpacing(12)
 
+        lbl_gdn = QLabel("Godown (Optional):")
+        lbl_gdn.setStyleSheet("font-weight: 600; color: #1e293b;")
+        action_row.addWidget(lbl_gdn)
+        self.godown_combo = QComboBox()
+        self.godown_combo.setFixedHeight(36)
+        self.godown_combo.setMinimumWidth(180)
+        action_row.addWidget(self.godown_combo)
+
         action_row.addWidget(QLabel("Notes:"))
         self.notes_input = QLineEdit()
         self.notes_input.setPlaceholderText("Notes / Batch Ref (optional, e.g. Shop opening stock)")
@@ -389,8 +397,28 @@ class ExistingStockView(QWidget):
     def refresh_data(self):
         self.load_categories()
         self.load_units()
+        self.load_godowns()
         self.refresh_products_cache()
         self.load_history()
+
+    def load_godowns(self):
+        if not hasattr(self, 'godown_combo'):
+            return
+        self.godown_combo.blockSignals(True)
+        self.godown_combo.clear()
+        self.godown_combo.addItem("🏬 Main Shop (Default)", None)
+        session = Session()
+        try:
+            godowns = session.query(Godown).filter_by(is_active=True).order_by(Godown.name).all()
+            for g in godowns:
+                disp = f"🏢 {g.name} ({g.code})"
+                self.godown_combo.addItem(disp, g.id)
+            self.godown_combo.setCurrentIndex(0)
+        except Exception as e:
+            print(f"Error loading godowns: {e}")
+        finally:
+            session.close()
+        self.godown_combo.blockSignals(False)
 
     def load_categories(self):
         self.category_combo.blockSignals(True)
@@ -692,9 +720,12 @@ class ExistingStockView(QWidget):
             else:
                 entry_no = "STK-1001"
 
+            target_godown_id = self.godown_combo.currentData() if hasattr(self, 'godown_combo') else None
+
             master = ExistingStockMaster(
                 entry_number=entry_no,
                 date=datetime.date.today(),
+                godown_id=target_godown_id,
                 notes=notes,
                 total_items=total_items,
                 total_qty=total_qty,
@@ -719,9 +750,11 @@ class ExistingStockView(QWidget):
                 )
                 session.add(stock_item)
 
-                # Increment stock on Product
+                # Increment stock on Product and Godown
                 if prod:
                     prod.stock_qty += item_base_qty
+                    if target_godown_id:
+                        adjust_godown_stock(session, target_godown_id, prod.id, +item_base_qty)
                     if item["rate"] > 0:
                         prod.purchase_price = item["rate"]
                     if item["selling_price"] > 0:
@@ -918,6 +951,8 @@ class ExistingStockView(QWidget):
                 if prod:
                     b_qty = itm.base_qty if itm.base_qty is not None else itm.qty
                     prod.stock_qty -= b_qty
+                    if master.godown_id:
+                        adjust_godown_stock(session, master.godown_id, itm.product_id, -b_qty)
 
             session.delete(master)
             session.commit()

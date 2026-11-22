@@ -1,7 +1,7 @@
 import datetime
 import json
 from sqlalchemy.orm import declarative_base, relationship, validates
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Text, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Text, Boolean, UniqueConstraint
 
 Base = declarative_base()
 
@@ -93,6 +93,86 @@ class Product(Base):
             return f"{self.brand} {self.model}".strip()
         return (self.brand or self.model or "").strip()
 
+    godown_stocks = relationship("GodownStock", back_populates="product", cascade="all, delete-orphan")
+
+class Godown(Base):
+    __tablename__ = 'godowns'
+    id = Column(Integer, primary_key=True)
+    code = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    location = Column(Text, nullable=True)
+    contact_person = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    stocks = relationship("GodownStock", back_populates="godown", cascade="all, delete-orphan")
+
+class GodownStock(Base):
+    __tablename__ = 'godown_stocks'
+    id = Column(Integer, primary_key=True)
+    godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    stock_qty = Column(Float, default=0.0)
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint('godown_id', 'product_id', name='uq_godown_product'),
+    )
+
+    godown = relationship("Godown", back_populates="stocks")
+    product = relationship("Product", back_populates="godown_stocks")
+
+    @validates('stock_qty')
+    def validate_godown_stock_qty(self, key, value):
+        if value is not None and value < 0:
+            raise ValueError(f"Godown stock quantity cannot be negative ({value}).")
+        return value
+
+class GodownTransfer(Base):
+    __tablename__ = 'godown_transfers'
+    id = Column(Integer, primary_key=True)
+    transfer_number = Column(String, unique=True, nullable=False)
+    date = Column(Date, default=datetime.date.today)
+    from_godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
+    to_godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
+    total_items = Column(Integer, default=0)
+    total_qty = Column(Float, default=0.0)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+
+    from_godown = relationship("Godown", foreign_keys=[from_godown_id])
+    to_godown = relationship("Godown", foreign_keys=[to_godown_id])
+    items = relationship("GodownTransferItem", back_populates="transfer", cascade="all, delete-orphan")
+
+    @property
+    def from_name(self):
+        return f"{self.from_godown.name} ({self.from_godown.code})" if self.from_godown else "Main Shop"
+
+    @property
+    def to_name(self):
+        return f"{self.to_godown.name} ({self.to_godown.code})" if self.to_godown else "Main Shop"
+
+class GodownTransferItem(Base):
+    __tablename__ = 'godown_transfer_items'
+    id = Column(Integer, primary_key=True)
+    transfer_id = Column(Integer, ForeignKey('godown_transfers.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    qty = Column(Float, default=1.0)
+    base_qty = Column(Float, nullable=True)
+    unit = Column(String, nullable=True, default='Pcs')
+
+    transfer = relationship("GodownTransfer", back_populates="items")
+    product = relationship("Product")
+
+    @validates('qty')
+    def validate_transfer_item_qty(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f"Transfer quantity must be greater than zero ({value}).")
+        return value
+
 class BankAccount(Base):
     __tablename__ = 'bank_accounts'
     id = Column(Integer, primary_key=True)
@@ -108,6 +188,7 @@ class PurchaseMaster(Base):
     invoice_number = Column(String, unique=True, nullable=False)
     date = Column(Date, default=datetime.date.today)
     supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=False)
+    godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
     total_amount = Column(Float, default=0.0)
     paid_amount = Column(Float, default=0.0)
     balance_payable = Column(Float, default=0.0)
@@ -120,6 +201,7 @@ class PurchaseMaster(Base):
     total_gst = Column(Float, default=0.0)
     
     supplier = relationship("Supplier", back_populates="purchases")
+    godown = relationship("Godown")
     items = relationship("PurchaseItem", back_populates="purchase", cascade="all, delete-orphan")
 
     @validates('total_amount', 'paid_amount', 'balance_payable', 'taxable_amount', 'total_cgst', 'total_sgst', 'total_igst', 'total_gst')
@@ -165,6 +247,7 @@ class SalesMaster(Base):
     invoice_number = Column(String, unique=True, nullable=False)
     date = Column(Date, default=datetime.date.today)
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
+    godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
     total_amount = Column(Float, default=0.0)
     paid_amount = Column(Float, default=0.0)
     balance_receivable = Column(Float, default=0.0)
@@ -177,6 +260,7 @@ class SalesMaster(Base):
     total_gst = Column(Float, default=0.0)
     
     customer = relationship("Customer", back_populates="sales")
+    godown = relationship("Godown")
     items = relationship("SalesItem", back_populates="sales", cascade="all, delete-orphan")
 
     @validates('total_amount', 'paid_amount', 'balance_receivable', 'taxable_amount', 'total_cgst', 'total_sgst', 'total_igst', 'total_gst')
@@ -490,12 +574,14 @@ class SalesReturnMaster(Base):
     date = Column(Date, default=datetime.date.today)
     sales_id = Column(Integer, ForeignKey('sales_master.id'), nullable=True)
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
+    godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
     total_amount = Column(Float, default=0.0)
     refund_amount = Column(Float, default=0.0)
     balance_deducted = Column(Float, default=0.0)
     
     customer = relationship("Customer")
     sales = relationship("SalesMaster")
+    godown = relationship("Godown")
     items = relationship("SalesReturnItem", back_populates="sales_return", cascade="all, delete-orphan")
 
     @validates('total_amount', 'refund_amount', 'balance_deducted')
@@ -544,12 +630,14 @@ class PurchaseReturnMaster(Base):
     date = Column(Date, default=datetime.date.today)
     purchase_id = Column(Integer, ForeignKey('purchase_master.id'), nullable=True)
     supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=False)
+    godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
     total_amount = Column(Float, default=0.0)
     refund_received = Column(Float, default=0.0)
     balance_deducted = Column(Float, default=0.0)
     
     supplier = relationship("Supplier")
     purchase = relationship("PurchaseMaster")
+    godown = relationship("Godown")
     items = relationship("PurchaseReturnItem", back_populates="purchase_return", cascade="all, delete-orphan")
 
     @validates('total_amount', 'refund_received', 'balance_deducted')
@@ -692,12 +780,14 @@ class ExistingStockMaster(Base):
     id = Column(Integer, primary_key=True)
     entry_number = Column(String, unique=True, nullable=False)
     date = Column(Date, default=datetime.date.today)
+    godown_id = Column(Integer, ForeignKey('godowns.id'), nullable=True)
     notes = Column(Text, nullable=True)
     total_items = Column(Integer, default=0)
     total_qty = Column(Float, default=0.0)
     total_value = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.datetime.now)
 
+    godown = relationship("Godown")
     items = relationship("ExistingStockItem", back_populates="master", cascade="all, delete-orphan")
 
     @validates('total_items', 'total_qty', 'total_value')

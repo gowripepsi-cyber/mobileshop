@@ -6,8 +6,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                              QTabWidget, QDialog, QDialogButtonBox, QCompleter, QCheckBox)
 from PySide6.QtCore import Qt, QDate, QTimer
 from utils.formatters import format_inr
-from database import Session, Setting
-from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category
+from database import Session, Setting, adjust_godown_stock, get_default_godown
+from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, Godown
 from utils.pdf_generator import generate_purchase_pdf
 from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox
 from utils.unit_converter import get_product_unit_info, calculate_base_qty, get_available_product_units, convert_rate_between_units
@@ -20,6 +20,7 @@ class PurchaseView(QWidget):
         self.products_cache = {}
         self.gst_globally_enabled = False
         self.init_ui()
+        self.refresh_data()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -107,7 +108,7 @@ class PurchaseView(QWidget):
         top_title_row.addWidget(self.goto_stock_btn)
         top_layout.addLayout(top_title_row)
 
-        # Grid for Block 1 (Single Row: 4 Columns)
+        # Grid for Block 1 (Single Row: 5 Columns)
         top_grid = QGridLayout()
         top_grid.setContentsMargins(0, 0, 0, 0)
         top_grid.setHorizontalSpacing(14)
@@ -116,7 +117,8 @@ class PurchaseView(QWidget):
         top_grid.setColumnStretch(0, 1)
         top_grid.setColumnStretch(1, 1)
         top_grid.setColumnStretch(2, 2)
-        top_grid.setColumnStretch(3, 1)
+        top_grid.setColumnStretch(3, 2)
+        top_grid.setColumnStretch(4, 1)
 
         # 1. Invoice Number (Supplier Invoice / Bill No.)
         self.invoice_input = QLineEdit()
@@ -154,7 +156,28 @@ class PurchaseView(QWidget):
         supp_layout.addWidget(self.add_supplier_btn)
         f_supp = make_field("Supplier *", supp_widget)
 
-        # 4. Tax Invoice (GST)
+        # 4. Target Godown (combo + add button)
+        self.godown_combo = QComboBox()
+        self.godown_combo.setStyleSheet(input_style)
+        self.godown_combo.setFixedHeight(36)
+
+        self.add_godown_btn = QPushButton("+")
+        self.add_godown_btn.setToolTip("Add new godown")
+        self.add_godown_btn.setProperty("class", "btn-quick-add")
+        self.add_godown_btn.setStyleSheet("min-height: 36px; max-height: 36px; margin: 0px; padding: 0px; font-size: 18px; font-weight: bold; border-radius: 6px;")
+        self.add_godown_btn.setFixedWidth(34)
+        self.add_godown_btn.setCursor(Qt.PointingHandCursor)
+        self.add_godown_btn.clicked.connect(self.handle_add_godown_click)
+
+        godown_widget = QWidget()
+        godown_layout = QHBoxLayout(godown_widget)
+        godown_layout.setContentsMargins(0, 0, 0, 0)
+        godown_layout.setSpacing(4)
+        godown_layout.addWidget(self.godown_combo, 1)
+        godown_layout.addWidget(self.add_godown_btn)
+        f_godown = make_field("Godown (Optional)", godown_widget)
+
+        # 5. Tax Invoice (GST)
         self.gst_enabled_checkbox = QCheckBox("Tax Invoice (GST)")
         self.gst_enabled_checkbox.setStyleSheet("font-size: 12px; font-weight: 500;")
         self.gst_enabled_checkbox.stateChanged.connect(self.on_gst_checkbox_changed)
@@ -172,11 +195,12 @@ class PurchaseView(QWidget):
         gst_cb_wrap_l.addWidget(self.gst_enabled_checkbox)
         gst_top_vl.addWidget(gst_cb_wrap)
 
-        # Row 0: Invoice Number, Date, Supplier, Tax Invoice
+        # Row 0: Invoice Number, Date, Supplier, Target Godown, Tax Invoice
         top_grid.addWidget(f_invoice, 0, 0)
         top_grid.addWidget(f_date, 0, 1)
         top_grid.addWidget(f_supp, 0, 2)
-        top_grid.addWidget(self.gst_top_container, 0, 3)
+        top_grid.addWidget(f_godown, 0, 3)
+        top_grid.addWidget(self.gst_top_container, 0, 4)
 
         top_layout.addLayout(top_grid)
         main_layout.addWidget(top_panel)
@@ -553,6 +577,31 @@ class PurchaseView(QWidget):
         if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_supplier_id'):
             self.load_suppliers(select_supplier_id=dlg.saved_supplier_id)
 
+    def handle_add_godown_click(self):
+        from ui.masters.godowns import GodownDialog
+        dlg = GodownDialog(parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_godown_id'):
+            self.load_godowns(select_godown_id=dlg.saved_godown_id)
+
+    def load_godowns(self, select_godown_id=None):
+        session = Session()
+        try:
+            godowns = session.query(Godown).filter_by(is_active=True).order_by(Godown.name).all()
+            self.godown_combo.blockSignals(True)
+            self.godown_combo.clear()
+            self.godown_combo.addItem("🏬 Main Shop (Default)", None)
+            selected_idx = 0
+            for i, g in enumerate(godowns, start=1):
+                disp = f"🏢 {g.name} ({g.code})"
+                self.godown_combo.addItem(disp, g.id)
+                if select_godown_id and g.id == select_godown_id:
+                    selected_idx = i
+
+            self.godown_combo.setCurrentIndex(selected_idx)
+            self.godown_combo.blockSignals(False)
+        finally:
+            session.close()
+
     def check_product_match(self):
         text = self.product_combo.currentText().strip()
         if not text or text == "Select Product" or text.startswith("--"):
@@ -657,6 +706,7 @@ class PurchaseView(QWidget):
 
             self.filter_products_by_category()
             self.load_units()
+            self.load_godowns()
             self.toggle_bank_account()
 
             # Load History
@@ -1197,6 +1247,8 @@ class PurchaseView(QWidget):
                     session.flush()
                 supp_id = default_supp.id
 
+            target_godown_id = self.godown_combo.currentData()
+
             if self.editing_purchase_id:
                 # 1. Fetch existing purchase
                 purchase = session.query(PurchaseMaster).get(self.editing_purchase_id)
@@ -1235,6 +1287,8 @@ class PurchaseView(QWidget):
                     if prod:
                         old_base = item.base_qty if item.base_qty is not None else item.qty
                         prod.stock_qty -= old_base
+                        if purchase.godown_id:
+                            adjust_godown_stock(session, purchase.godown_id, item.product_id, -old_base)
 
                 # 3. Revert Old Supplier Outstanding Balance
                 old_supplier = session.query(Supplier).get(purchase.supplier_id)
@@ -1268,6 +1322,7 @@ class PurchaseView(QWidget):
                 # 6. Update PurchaseMaster Details
                 purchase.date = bill_date
                 purchase.supplier_id = supp_id
+                purchase.godown_id = target_godown_id
                 purchase.total_amount = total
                 purchase.paid_amount = paid
                 purchase.balance_payable = balance
@@ -1300,6 +1355,7 @@ class PurchaseView(QWidget):
                     invoice_number=invoice_no,
                     date=bill_date,
                     supplier_id=supp_id,
+                    godown_id=target_godown_id,
                     total_amount=total,
                     paid_amount=paid,
                     balance_payable=balance,
@@ -1351,6 +1407,8 @@ class PurchaseView(QWidget):
                 # Update product stock and rate
                 if prod:
                     prod.stock_qty += item_base_qty
+                    if target_godown_id:
+                        adjust_godown_stock(session, target_godown_id, prod.id, +item_base_qty)
                     # Optionally update purchase price to the latest price
                     prod.purchase_price = item["rate"]
                     if item.get("selling_price", 0.0) > 0:
@@ -1457,6 +1515,8 @@ class PurchaseView(QWidget):
             supp_mobile = purchase.supplier.mobile if purchase.supplier else "N/A"
             info_layout.addRow("Supplier Name:", QLabel(supp_name))
             info_layout.addRow("Supplier Contact:", QLabel(supp_mobile))
+            godown_name = f"{purchase.godown.name} ({purchase.godown.code})" if purchase.godown else "Main Shop (Default)"
+            info_layout.addRow("Storage Location:", QLabel(godown_name))
             dlg_layout.addWidget(info_frame)
             
             # Items table
@@ -1635,6 +1695,14 @@ class PurchaseView(QWidget):
             idx = self.supplier_combo.findData(purchase.supplier_id)
             if idx >= 0:
                 self.supplier_combo.setCurrentIndex(idx)
+
+            # Set godown
+            if purchase.godown_id:
+                g_idx = self.godown_combo.findData(purchase.godown_id)
+                if g_idx >= 0:
+                    self.godown_combo.setCurrentIndex(g_idx)
+            else:
+                self.godown_combo.setCurrentIndex(0)
                 
             # Set payment mode
             cash_tx = session.query(CashTransaction).filter_by(source_type='purchase', source_id=purchase.id).first()
@@ -1725,6 +1793,8 @@ class PurchaseView(QWidget):
                 if prod:
                     b_qty = item.base_qty if item.base_qty is not None else item.qty
                     prod.stock_qty -= b_qty
+                    if purchase.godown_id:
+                        adjust_godown_stock(session, purchase.godown_id, item.product_id, -b_qty)
                     
             # Revert supplier outstanding balance
             supplier = session.query(Supplier).get(purchase.supplier_id)

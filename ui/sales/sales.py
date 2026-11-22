@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 from PySide6.QtCore import Qt, QDate, Signal, QEvent, QTimer, QSortFilterProxyModel
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 from utils.formatters import format_inr
-from database import Session, Setting
-from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category
+from database import Session, Setting, get_godown_stock, adjust_godown_stock, get_default_godown, get_shop_stock, get_location_stock
+from models import Customer, Product, BankAccount, SalesMaster, SalesItem, CashTransaction, BankTransaction, Category, Godown
 from utils.pdf_generator import generate_sales_pdf
 from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox
 from utils.unit_converter import get_product_unit_info, calculate_base_qty, get_available_product_units, convert_rate_between_units, format_stock_display
@@ -23,6 +23,7 @@ class SalesView(QWidget):
         self.products_cache = {}      # Cache of products to prevent early signal errors during reload
         self.gst_globally_enabled = False
         self.init_ui()
+        self.refresh_data()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -90,7 +91,7 @@ class SalesView(QWidget):
         top_title_row.addStretch()
         top_layout.addLayout(top_title_row)
 
-        # Top Grid: Single Row: 4 Columns
+        # Top Grid: Single Row: 5 Columns
         top_grid = QGridLayout()
         top_grid.setContentsMargins(0, 0, 0, 0)
         top_grid.setHorizontalSpacing(14)
@@ -99,7 +100,8 @@ class SalesView(QWidget):
         top_grid.setColumnStretch(0, 1)
         top_grid.setColumnStretch(1, 1)
         top_grid.setColumnStretch(2, 2)
-        top_grid.setColumnStretch(3, 1)
+        top_grid.setColumnStretch(3, 2)
+        top_grid.setColumnStretch(4, 1)
 
         # 1. Invoice Number
         self.invoice_input = QLineEdit()
@@ -135,7 +137,29 @@ class SalesView(QWidget):
         cust_layout.addWidget(self.add_customer_btn)
         f_cust = make_field("Customer", cust_widget)
 
-        # 4. Tax Invoice (GST)
+        # 4. Dispatch Godown (combo + add button)
+        self.godown_combo = QComboBox()
+        self.godown_combo.setStyleSheet(input_style)
+        self.godown_combo.setFixedHeight(36)
+        self.godown_combo.currentIndexChanged.connect(self.on_godown_changed)
+
+        self.add_godown_btn = QPushButton("+")
+        self.add_godown_btn.setToolTip("Add new godown")
+        self.add_godown_btn.setProperty("class", "btn-quick-add")
+        self.add_godown_btn.setStyleSheet("min-height: 36px; max-height: 36px; margin: 0px; padding: 0px; font-size: 18px; font-weight: bold; border-radius: 6px;")
+        self.add_godown_btn.setFixedWidth(34)
+        self.add_godown_btn.setCursor(Qt.PointingHandCursor)
+        self.add_godown_btn.clicked.connect(self.handle_add_godown_click)
+
+        godown_widget = QWidget()
+        godown_layout = QHBoxLayout(godown_widget)
+        godown_layout.setContentsMargins(0, 0, 0, 0)
+        godown_layout.setSpacing(4)
+        godown_layout.addWidget(self.godown_combo, 1)
+        godown_layout.addWidget(self.add_godown_btn)
+        f_godown = make_field("Godown (Optional)", godown_widget)
+
+        # 5. Tax Invoice (GST)
         self.gst_enabled_checkbox = QCheckBox("Tax Invoice (GST)")
         self.gst_enabled_checkbox.setStyleSheet("font-size: 12px; font-weight: 500;")
         self.gst_enabled_checkbox.stateChanged.connect(self.on_gst_checkbox_changed)
@@ -153,11 +177,12 @@ class SalesView(QWidget):
         gst_cb_wrap_l.addWidget(self.gst_enabled_checkbox)
         gst_top_vl.addWidget(gst_cb_wrap)
 
-        # Row 0: Invoice Number, Date, Customer, Tax Invoice
+        # Row 0: Invoice Number, Date, Customer, Dispatch Godown, Tax Invoice
         top_grid.addWidget(f_invoice, 0, 0)
         top_grid.addWidget(f_date, 0, 1)
         top_grid.addWidget(f_cust, 0, 2)
-        top_grid.addWidget(self.gst_top_container, 0, 3)
+        top_grid.addWidget(f_godown, 0, 3)
+        top_grid.addWidget(self.gst_top_container, 0, 4)
 
         top_layout.addLayout(top_grid)
         main_layout.addWidget(top_panel)
@@ -531,6 +556,35 @@ class SalesView(QWidget):
         if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_customer_id'):
             self.load_customers(select_customer_id=dlg.saved_customer_id)
 
+    def handle_add_godown_click(self):
+        from ui.masters.godowns import GodownDialog
+        dlg = GodownDialog(parent=self)
+        if dlg.exec() == QDialog.Accepted and hasattr(dlg, 'saved_godown_id'):
+            self.load_godowns(select_godown_id=dlg.saved_godown_id)
+
+    def load_godowns(self, select_godown_id=None):
+        session = Session()
+        try:
+            godowns = session.query(Godown).filter_by(is_active=True).order_by(Godown.name).all()
+            self.godown_combo.blockSignals(True)
+            self.godown_combo.clear()
+            self.godown_combo.addItem("🏬 Main Shop (Default)", None)
+            selected_idx = 0
+            for i, g in enumerate(godowns, start=1):
+                disp = f"🏢 {g.name} ({g.code})"
+                self.godown_combo.addItem(disp, g.id)
+                if select_godown_id and g.id == select_godown_id:
+                    selected_idx = i
+
+            self.godown_combo.setCurrentIndex(selected_idx)
+            self.godown_combo.blockSignals(False)
+            self.on_godown_changed()
+        finally:
+            session.close()
+
+    def on_godown_changed(self):
+        self.update_conversion_hint()
+
     def check_product_match(self):
         text = self.product_combo.currentText().strip()
         if not text or text == "Select Product" or text.startswith("--"):
@@ -627,6 +681,7 @@ class SalesView(QWidget):
 
             self.filter_products_by_category()
             self.load_units()
+            self.load_godowns()
             self.toggle_bank_account()
             
             # Load History
@@ -721,9 +776,18 @@ class SalesView(QWidget):
         session = Session()
         try:
             main_u, sub_u, rate = get_product_unit_info(prod, session)
-            stock_info = format_stock_display(prod.stock_qty, main_u, sub_u, rate)
+            sel_godown_id = self.godown_combo.currentData() if hasattr(self, 'godown_combo') else None
+            loc_stock_qty = get_location_stock(session, sel_godown_id, prod.id)
+            loc_stock_info = format_stock_display(loc_stock_qty, main_u, sub_u, rate)
+            total_stock_info = format_stock_display(prod.stock_qty, main_u, sub_u, rate)
+            if sel_godown_id:
+                godown_name = self.godown_combo.currentText().split(" (")[0].replace("🏢 ", "")
+                stock_summary = f"Available in {godown_name}: {loc_stock_info} (Total Shop Stock: {total_stock_info})"
+            else:
+                stock_summary = f"Available in Shop: {loc_stock_info}"
+
             if not sub_u or rate <= 1:
-                self.conversion_hint_lbl.setText(f"📦 Available Stock: {stock_info}")
+                self.conversion_hint_lbl.setText(f"📦 {stock_summary}")
                 self.conversion_hint_lbl.setVisible(True)
                 return
 
@@ -732,10 +796,10 @@ class SalesView(QWidget):
             base_qty = calculate_base_qty(prod, qty, sel_unit, session)
 
             if sel_unit.lower() == main_u.lower():
-                text = f"🔄 Unit Conversion: {qty:g} {main_u} = {base_qty:g} {sub_u} (Rule: 1 {main_u} = {rate:g} {sub_u}) | Stock deduction: -{base_qty:g} {sub_u} | Available: {stock_info}"
+                text = f"🔄 Unit Conversion: {qty:g} {main_u} = {base_qty:g} {sub_u} (Rule: 1 {main_u} = {rate:g} {sub_u}) | Stock deduction: -{base_qty:g} {sub_u} | 📦 {stock_summary}"
             else:
                 main_equiv = qty / rate if rate > 0 else 0
-                text = f"🔄 Unit Conversion: {qty:g} {sub_u} = {main_equiv:g} {main_u} (Rule: 1 {main_u} = {rate:g} {sub_u}) | Stock deduction: -{qty:g} {sub_u} | Available: {stock_info}"
+                text = f"🔄 Unit Conversion: {qty:g} {sub_u} = {main_equiv:g} {main_u} (Rule: 1 {main_u} = {rate:g} {sub_u}) | Stock deduction: -{qty:g} {sub_u} | 📦 {stock_summary}"
 
             self.conversion_hint_lbl.setText(text)
             self.conversion_hint_lbl.setVisible(True)
@@ -887,14 +951,17 @@ class SalesView(QWidget):
                 for old_item in old_items:
                     original_allocated_base += (old_item.base_qty if old_item.base_qty is not None else old_item.qty)
 
-            effective_stock = (prod_db.stock_qty if prod_db else p_cache.stock_qty) + original_allocated_base
+            sel_godown_id = self.godown_combo.currentData() if hasattr(self, 'godown_combo') else None
+            loc_stock = get_location_stock(session, sel_godown_id, prod_id)
+            effective_stock = loc_stock + original_allocated_base
             if (current_added_base_qty + requested_base_qty) > effective_stock:
                 avail_disp = format_stock_display(effective_stock, main_u, sub_u, conv_rate)
                 req_disp = format_stock_display(current_added_base_qty + requested_base_qty, main_u, sub_u, conv_rate)
+                loc_name = "Main Shop" if not sel_godown_id else self.godown_combo.currentText().split(" (")[0].replace("🏢 ", "")
                 QMessageBox.warning(
                     self, 
                     "Stock Alert", 
-                    f"Insufficient stock for {p_cache.name}!\nAvailable: {avail_disp}\nRequested: {req_disp}"
+                    f"Insufficient stock for {p_cache.name} in '{loc_name}'!\nAvailable: {avail_disp}\nRequested: {req_disp}"
                 )
                 return
         finally:
@@ -1106,6 +1173,8 @@ class SalesView(QWidget):
                     session.flush()
                 cust_id = default_cust.id
 
+            dispatch_godown_id = self.godown_combo.currentData()
+
             if self.editing_sales_id:
                 # 1. Fetch existing invoice
                 sale = session.query(SalesMaster).get(self.editing_sales_id)
@@ -1120,6 +1189,8 @@ class SalesView(QWidget):
                     if prod:
                         old_base = item.base_qty if item.base_qty is not None else item.qty
                         prod.stock_qty += old_base
+                        if sale.godown_id:
+                            adjust_godown_stock(session, sale.godown_id, item.product_id, +old_base)
 
                 # 3. Revert Old Customer Balance
                 old_customer = session.query(Customer).get(sale.customer_id)
@@ -1152,11 +1223,13 @@ class SalesView(QWidget):
 
                 for p_id, req_q in req_qty_by_prod.items():
                     prod = session.query(Product).get(p_id)
-                    if prod and prod.stock_qty < req_q:
+                    loc_stock = get_location_stock(session, dispatch_godown_id, p_id)
+                    if loc_stock < req_q:
                         main_u, sub_u, conv_rate = get_product_unit_info(prod, session)
-                        avail_disp = format_stock_display(prod.stock_qty, main_u, sub_u, conv_rate)
+                        avail_disp = format_stock_display(loc_stock, main_u, sub_u, conv_rate)
                         req_disp = format_stock_display(req_q, main_u, sub_u, conv_rate)
-                        QMessageBox.warning(self, "Stock Level Error", f"Product '{prod.name}' ran out of stock! Available: {avail_disp}, Requested: {req_disp}")
+                        loc_name = "Main Shop" if not dispatch_godown_id else self.godown_combo.currentText().split(" (")[0].replace("🏢 ", "")
+                        QMessageBox.warning(self, "Stock Level Error", f"Product '{prod.name}' ran out of stock in '{loc_name}'!\nAvailable: {avail_disp}, Requested: {req_disp}")
                         session.rollback()
                         session.close()
                         return
@@ -1164,6 +1237,7 @@ class SalesView(QWidget):
                 # 7. Update SalesMaster Details
                 sale.date = bill_date
                 sale.customer_id = cust_id
+                sale.godown_id = dispatch_godown_id
                 sale.total_amount = total
                 sale.paid_amount = paid
                 sale.balance_receivable = balance
@@ -1194,11 +1268,13 @@ class SalesView(QWidget):
 
                 for p_id, req_q in req_qty_by_prod.items():
                     prod = session.query(Product).get(p_id)
-                    if prod and prod.stock_qty < req_q:
+                    loc_stock = get_location_stock(session, dispatch_godown_id, p_id)
+                    if loc_stock < req_q:
                         main_u, sub_u, conv_rate = get_product_unit_info(prod, session)
-                        avail_disp = format_stock_display(prod.stock_qty, main_u, sub_u, conv_rate)
+                        avail_disp = format_stock_display(loc_stock, main_u, sub_u, conv_rate)
                         req_disp = format_stock_display(req_q, main_u, sub_u, conv_rate)
-                        QMessageBox.warning(self, "Stock Level Error", f"Product '{prod.name}' ran out of stock! Available: {avail_disp}, Requested: {req_disp}")
+                        loc_name = "Main Shop" if not dispatch_godown_id else self.godown_combo.currentText().split(" (")[0].replace("🏢 ", "")
+                        QMessageBox.warning(self, "Stock Level Error", f"Product '{prod.name}' ran out of stock in '{loc_name}'!\nAvailable: {avail_disp}, Requested: {req_disp}")
                         session.close()
                         return
 
@@ -1207,6 +1283,7 @@ class SalesView(QWidget):
                     invoice_number=invoice_no,
                     date=bill_date,
                     customer_id=cust_id,
+                    godown_id=dispatch_godown_id,
                     total_amount=total,
                     paid_amount=paid,
                     balance_receivable=balance,
@@ -1261,6 +1338,8 @@ class SalesView(QWidget):
 
                 if prod:
                     prod.stock_qty -= item_base_qty
+                    if dispatch_godown_id:
+                        adjust_godown_stock(session, dispatch_godown_id, prod.id, -item_base_qty)
                     bm = getattr(prod, 'brand_model', None) or getattr(prod, 'brand', '') or ''
                     p_name = f"{prod.name} ({bm})" if bm else prod.name
                 else:
@@ -1509,6 +1588,8 @@ class SalesView(QWidget):
             cust_mobile = sale.customer.mobile if sale.customer else "N/A"
             info_layout.addRow("Customer Name:", QLabel(cust_name))
             info_layout.addRow("Customer Contact:", QLabel(cust_mobile))
+            godown_name = f"{sale.godown.name} ({sale.godown.code})" if sale.godown else "Main Shop (Default)"
+            info_layout.addRow("Dispatch Location:", QLabel(godown_name))
             dlg_layout.addWidget(info_frame)
             
             # Items table
@@ -1683,6 +1764,8 @@ class SalesView(QWidget):
                 if prod:
                     b_qty = item.base_qty if item.base_qty is not None else item.qty
                     prod.stock_qty += b_qty
+                    if sale.godown_id:
+                        adjust_godown_stock(session, sale.godown_id, item.product_id, +b_qty)
                     
             # Revert customer outstanding balance
             customer = session.query(Customer).get(sale.customer_id)
@@ -1761,6 +1844,14 @@ class SalesView(QWidget):
             idx = self.customer_combo.findData(sale.customer_id)
             if idx >= 0:
                 self.customer_combo.setCurrentIndex(idx)
+
+            # Set godown
+            if sale.godown_id:
+                g_idx = self.godown_combo.findData(sale.godown_id)
+                if g_idx >= 0:
+                    self.godown_combo.setCurrentIndex(g_idx)
+            else:
+                self.godown_combo.setCurrentIndex(0)
                 
             # Set payment mode
             cash_tx = session.query(CashTransaction).filter_by(source_type='sale', source_id=sale.id).first()
