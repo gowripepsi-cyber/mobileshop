@@ -9,7 +9,7 @@ from utils.formatters import format_inr
 from database import Session, Setting, adjust_godown_stock, get_default_godown
 from models import Supplier, Product, BankAccount, PurchaseMaster, PurchaseItem, CashTransaction, BankTransaction, Category, Godown
 from utils.pdf_generator import generate_purchase_pdf
-from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox
+from utils.ui_helpers import enable_quick_add_auto_select, enable_auto_clear_and_expand, SearchableProductComboBox, SearchableComboBox, AutoClearSearchableComboBox, setup_wide_completer
 from utils.unit_converter import get_product_unit_info, calculate_base_qty, get_available_product_units, convert_rate_between_units
 
 class PurchaseView(QWidget):
@@ -230,13 +230,13 @@ class PurchaseView(QWidget):
         item_row.setContentsMargins(0, 0, 0, 0)
         item_row.setSpacing(8)
 
-        # 1. Product Code
+        # 1. Product Code (widened for comfortable code entry and full visibility)
         self.product_code_input = QLineEdit()
         self.product_code_input.setPlaceholderText("Code")
         self.product_code_input.setStyleSheet(input_style)
         self.product_code_input.returnPressed.connect(self.handle_product_code_entry)
         self.product_code_input._skip_enter_nav = True
-        f_pcode = make_field("Product Code", self.product_code_input, width=95)
+        f_pcode = make_field("Product Code", self.product_code_input, width=135)
         item_row.addWidget(f_pcode)
 
         # 2. Item Name + Quick Add Button (Expanded across available space)
@@ -660,23 +660,18 @@ class PurchaseView(QWidget):
             for p in products:
                 self.products_cache[p.id] = p
 
-            # Update auto-completer
-            codes = [f"{p.product_code} | {p.name}" for p in products if p.product_code]
-            from PySide6.QtWidgets import QCompleter
-            completer = QCompleter(codes, self)
-            completer.setCaseSensitivity(Qt.CaseInsensitive)
-            completer.setFilterMode(Qt.MatchContains)
-            popup = completer.popup()
-            popup.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-            fm = popup.fontMetrics()
-            max_width = 350
-            for code_str in codes:
-                w = fm.horizontalAdvance(code_str) + 50
-                if w > max_width:
-                    max_width = w
-            popup.setMinimumWidth(max_width)
-            completer.activated.connect(lambda text: self.handle_product_code_entry())
-            self.product_code_input.setCompleter(completer)
+            # Update auto-completer (wide popup so full text is visible without clipping)
+            codes = []
+            for p in products:
+                if p.product_code:
+                    bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
+                    if bm and bm.lower() not in p.name.lower():
+                        codes.append(f"{p.product_code} | {p.name} ({bm})")
+                    else:
+                        codes.append(f"{p.product_code} | {p.name}")
+
+            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=520)
+            completer.activated.connect(self.handle_product_code_entry)
 
             # 2. Block combo box signals during update
             self.supplier_combo.blockSignals(True)
@@ -930,8 +925,8 @@ class PurchaseView(QWidget):
         if hasattr(parent_win, 'switch_view'):
             parent_win.switch_view(12)
 
-    def handle_product_code_entry(self):
-        text = self.product_code_input.text().strip()
+    def handle_product_code_entry(self, selected_text=None):
+        text = (selected_text or self.product_code_input.text()).strip()
         if not text:
             return
         code = text

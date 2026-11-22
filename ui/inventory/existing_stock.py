@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QDate
 from utils.formatters import format_inr
 from database import Session, adjust_godown_stock, get_default_godown
 from models import Product, Category, Unit, ExistingStockMaster, ExistingStockItem, Godown
-from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, AutoClearSearchableComboBox
+from utils.ui_helpers import enable_quick_add_auto_select, SearchableProductComboBox, AutoClearSearchableComboBox, setup_wide_completer
 from utils.unit_converter import calculate_base_qty, format_product_stock, get_available_product_units
 
 
@@ -214,7 +214,7 @@ class ExistingStockView(QWidget):
         btn_w_l.addWidget(lbl_spacer)
         btn_w_l.addWidget(self.add_item_btn)
 
-        f_code = make_field("Product Code", self.product_code_input, width=90)
+        f_code = make_field("Product Code", self.product_code_input, width=135)
         f_cat = make_field("Category", self.category_combo, width=160)
         f_prod = make_field("Item Name *", prod_widget)
         f_prod.setMinimumWidth(160)
@@ -462,6 +462,19 @@ class ExistingStockView(QWidget):
             prods = session.query(Product).order_by(Product.name.asc()).all()
             self.products_cache = {p.id: p for p in prods}
             self.filter_products_by_category()
+
+            # Update auto-completer (wide popup so full text is visible without clipping)
+            codes = []
+            for p in prods:
+                if p.product_code:
+                    bm = getattr(p, 'brand_model', None) or getattr(p, 'brand', '') or ''
+                    if bm and bm.lower() not in p.name.lower():
+                        codes.append(f"{p.product_code} | {p.name} ({bm})")
+                    else:
+                        codes.append(f"{p.product_code} | {p.name}")
+
+            completer = setup_wide_completer(self.product_code_input, codes, self, min_width=520)
+            completer.activated.connect(self.handle_product_code_entry)
         except Exception as e:
             print(f"Error caching products: {e}")
         finally:
@@ -483,10 +496,14 @@ class ExistingStockView(QWidget):
 
         self.product_combo.set_products(filtered)
 
-    def handle_product_code_entry(self):
-        code = self.product_code_input.text().strip()
+    def handle_product_code_entry(self, selected_text=None):
+        code = (selected_text or self.product_code_input.text()).strip()
         if not code:
             return
+        if " | " in code:
+            code = code.split(" | ")[0].strip()
+        elif " - " in code:
+            code = code.split(" - ")[0].strip()
 
         found = None
         for p in self.products_cache.values():

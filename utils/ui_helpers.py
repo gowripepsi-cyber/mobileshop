@@ -975,3 +975,95 @@ def show_modern_alert(parent, title, message, icon_type="warning"):
     """
     dlg = ModernAlertDialog(title, message, icon_type=icon_type, parent=parent)
     return dlg.exec()
+
+
+class WideCompleterPopupFilter(QObject):
+    """
+    Ensures that QCompleter's popup (QAbstractItemView) maintains sufficient width
+    to display full product code and item names without truncation or elision (...),
+    preventing QCompleter from forcefully shrinking the popup to QLineEdit's width
+    on every keystroke.
+    """
+    def __init__(self, target_popup, min_width=520):
+        super().__init__(target_popup)
+        self.target_popup = target_popup
+        self.min_width = min_width
+        self._resizing = False
+
+    def set_min_width(self, w):
+        self.min_width = w
+
+    def eventFilter(self, obj, event):
+        if event.type() in (QEvent.Show, QEvent.Resize):
+            if not self._resizing:
+                curr_w = self.target_popup.width()
+                desired_w = max(self.min_width, curr_w)
+                if curr_w < desired_w or self.target_popup.minimumWidth() < self.min_width:
+                    self._resizing = True
+                    self.target_popup.setMinimumWidth(desired_w)
+                    self.target_popup.resize(desired_w, self.target_popup.height())
+                    self._resizing = False
+        return super().eventFilter(obj, event)
+
+
+def setup_wide_completer(line_edit: QLineEdit, codes: list, parent=None, min_width=520):
+    """
+    Configures a QCompleter on line_edit whose popup expands to comfortably fit full text
+    (e.g., '1001 | Boat headphones [Boat]'), without being truncated or squashed
+    by Qt's default line-edit width constraint.
+    """
+    completer = QCompleter(codes, parent or line_edit)
+    completer.setCaseSensitivity(Qt.CaseInsensitive)
+    completer.setFilterMode(Qt.MatchContains)
+    popup = completer.popup()
+    popup.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    try:
+        popup.setTextElideMode(Qt.ElideNone)
+    except Exception:
+        pass
+
+    # Calculate optimal popup width based on longest string + generous padding
+    fm = popup.fontMetrics()
+    calc_width = min_width
+    for code_str in codes:
+        w = fm.horizontalAdvance(str(code_str)) + 80
+        if w > calc_width:
+            calc_width = w
+
+    # Attach event filter to intercept Show and Resize events
+    filter_obj = WideCompleterPopupFilter(popup, min_width=calc_width)
+    popup.installEventFilter(filter_obj)
+    popup._wide_filter = filter_obj
+    popup.setMinimumWidth(calc_width)
+
+    # Style popup with clean borders, clear selection, and comfortable padding
+    popup.setStyleSheet("""
+        QListView {
+            background-color: #ffffff;
+            border: 1.5px solid #94a3b8;
+            border-radius: 6px;
+            padding: 4px;
+            font-size: 13px;
+            color: #1e293b;
+            outline: none;
+            selection-background-color: #22c55e;
+            selection-color: #ffffff;
+        }
+        QListView::item {
+            padding: 6px 10px;
+            min-height: 24px;
+            border-radius: 4px;
+        }
+        QListView::item:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        QListView::item:selected {
+            background-color: #22c55e;
+            color: #ffffff;
+            font-weight: bold;
+        }
+    """)
+
+    line_edit.setCompleter(completer)
+    return completer
